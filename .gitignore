@@ -38,3 +38,12 @@ next-env.d.ts
 # uploads
 /uploads
 
+# sensitive files
+employee-credentials.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
