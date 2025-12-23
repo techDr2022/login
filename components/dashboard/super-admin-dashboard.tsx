@@ -137,7 +137,7 @@ export async function SuperAdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-lg">Team Attendance</CardTitle>
-                <CardDescription className="text-sm">Today's attendance overview</CardDescription>
+                <CardDescription className="text-sm">Today&apos;s attendance overview</CardDescription>
               </div>
               <Users className="h-5 w-5 text-muted-foreground" />
             </div>

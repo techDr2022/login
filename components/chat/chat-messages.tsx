@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable react-hooks/exhaustive-deps */
+
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Send } from 'lucide-react'

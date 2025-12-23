@@ -148,7 +148,7 @@ export async function EmployeeDashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Today's Attendance</CardTitle>
+                <CardTitle className="text-lg">Today&apos;s Attendance</CardTitle>
                 <CardDescription className="text-sm">Your attendance status for today</CardDescription>
               </div>
               <Timer className="h-5 w-5 text-muted-foreground" />

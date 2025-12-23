@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logActivity } from '@/lib/activity-log'
 import { canManageClients } from '@/lib/rbac'
-import { UserRole, ClientStatus } from '@prisma/client'
+import { UserRole, ClientStatus, Prisma } from '@prisma/client'
 import { encrypt, decrypt } from '@/lib/encryption'
 import {
   clientOnboardingBasicSchema,
@@ -52,7 +52,7 @@ export async function updateClientBasicInfo(clientId: string, data: z.infer<type
       city: validated.city,
       pincode: validated.pincode,
       googleMapLink: validated.googleMapLink || null,
-      workingDays: validated.workingDays || null,
+      workingDays: validated.workingDays ? validated.workingDays : Prisma.JsonNull,
       workingTimings: validated.workingTimings,
       preferredLanguage: validated.preferredLanguage,
     },
@@ -91,7 +91,7 @@ export async function createClientDoctor(clientId: string, data: z.infer<typeof 
     data: {
       clientId,
       ...validated,
-      languagesSpoken: validated.languagesSpoken || null,
+      languagesSpoken: validated.languagesSpoken ? validated.languagesSpoken : Prisma.JsonNull,
     },
   })
 
@@ -106,7 +106,7 @@ export async function updateClientDoctor(id: string, data: z.infer<typeof client
     where: { id },
     data: {
       ...validated,
-      languagesSpoken: validated.languagesSpoken || null,
+      languagesSpoken: validated.languagesSpoken ? validated.languagesSpoken : Prisma.JsonNull,
     },
   })
 
@@ -263,12 +263,12 @@ export async function upsertClientBranding(clientId: string, data: z.infer<typeo
     where: { clientId },
     create: {
       clientId,
-      brandColors: validated.brandColors || null,
+      brandColors: validated.brandColors ? validated.brandColors : Prisma.JsonNull,
       designerName: validated.designerName || null,
       templateBaseCreated: validated.templateBaseCreated,
     },
     update: {
-      brandColors: validated.brandColors || null,
+      brandColors: validated.brandColors ? validated.brandColors : Prisma.JsonNull,
       designerName: validated.designerName || null,
       templateBaseCreated: validated.templateBaseCreated,
     },
@@ -287,15 +287,15 @@ export async function upsertClientTargeting(clientId: string, data: z.infer<type
     create: {
       clientId,
       primaryLocation: validated.primaryLocation || null,
-      nearbyAreas: validated.nearbyAreas || null,
-      mainKeywords: validated.mainKeywords || null,
-      exampleKeywords: validated.exampleKeywords || null,
+      nearbyAreas: validated.nearbyAreas ? validated.nearbyAreas : Prisma.JsonNull,
+      mainKeywords: validated.mainKeywords ? validated.mainKeywords : Prisma.JsonNull,
+      exampleKeywords: validated.exampleKeywords ? validated.exampleKeywords : Prisma.JsonNull,
     },
     update: {
       primaryLocation: validated.primaryLocation || null,
-      nearbyAreas: validated.nearbyAreas || null,
-      mainKeywords: validated.mainKeywords || null,
-      exampleKeywords: validated.exampleKeywords || null,
+      nearbyAreas: validated.nearbyAreas ? validated.nearbyAreas : Prisma.JsonNull,
+      mainKeywords: validated.mainKeywords ? validated.mainKeywords : Prisma.JsonNull,
+      exampleKeywords: validated.exampleKeywords ? validated.exampleKeywords : Prisma.JsonNull,
     },
   })
 
@@ -415,7 +415,7 @@ export async function createClientTask(clientId: string, data: z.infer<typeof cl
     data: {
       clientId,
       ...validated,
-      checklist: validated.checklist || null,
+      checklist: validated.checklist ? validated.checklist : Prisma.JsonNull,
     },
   })
 
@@ -432,7 +432,7 @@ export async function updateClientTask(id: string, data: Partial<z.infer<typeof 
       ...(data.status && { status: data.status }),
       ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId || null }),
       ...(data.dueDate && { dueDate: data.dueDate }),
-      ...(data.checklist !== undefined && { checklist: data.checklist || null }),
+      ...(data.checklist !== undefined && { checklist: data.checklist ? data.checklist : Prisma.JsonNull }),
     },
   })
 

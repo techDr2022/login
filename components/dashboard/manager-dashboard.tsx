@@ -138,7 +138,7 @@ export async function ManagerDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-lg">Team Attendance</CardTitle>
-                <CardDescription className="text-sm">Today's team attendance status</CardDescription>
+                <CardDescription className="text-sm">Today&apos;s team attendance status</CardDescription>
               </div>
               <Users className="h-5 w-5 text-muted-foreground" />
             </div>

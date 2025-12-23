@@ -48,7 +48,7 @@ export function Step1BasicInfo({ clientId, data, onComplete, loading }: Step1Bas
     setFormData({
       ...formData,
       workingDays: formData.workingDays.includes(day)
-        ? formData.workingDays.filter(d => d !== day)
+        ? formData.workingDays.filter((d: number) => d !== day)
         : [...formData.workingDays, day],
     })
   }

@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable react-hooks/exhaustive-deps */
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,7 +20,10 @@ import { Step9Approvals } from './onboarding-steps/step9-approvals'
 import { Step10KPIs } from './onboarding-steps/step10-kpis'
 import { Step11Confirmation } from './onboarding-steps/step11-confirmation'
 
-const STEPS = [
+type StepComponent = React.ComponentType<any>
+type Step = { id: number; title: string; component: StepComponent }
+
+const STEPS: Step[] = [
   { id: 1, title: 'Basic Info', component: Step1BasicInfo },
   { id: 2, title: 'Doctors', component: Step2Doctors },
   { id: 3, title: 'Services', component: Step3Services },

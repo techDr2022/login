@@ -28,16 +28,28 @@ export function Step6Targeting({ clientId, data, onComplete, loading }: Step6Tar
     try {
       await upsertClientTargeting(clientId, {
         primaryLocation: primaryLocation || undefined,
-        nearbyAreas: nearbyAreas ? nearbyAreas.split(',').map(s => s.trim()).filter(s => s) : undefined,
-        mainKeywords: mainKeywords ? mainKeywords.split(',').map(s => s.trim()).filter(s => s) : undefined,
-        exampleKeywords: exampleKeywords ? exampleKeywords.split(',').map(s => s.trim()).filter(s => s) : undefined,
+        nearbyAreas: nearbyAreas
+          ? nearbyAreas.split(',').map((s: string) => s.trim()).filter((s: string) => s)
+          : undefined,
+        mainKeywords: mainKeywords
+          ? mainKeywords.split(',').map((s: string) => s.trim()).filter((s: string) => s)
+          : undefined,
+        exampleKeywords: exampleKeywords
+          ? exampleKeywords.split(',').map((s: string) => s.trim()).filter((s: string) => s)
+          : undefined,
       })
       onComplete({
         targeting: {
           primaryLocation,
-          nearbyAreas: nearbyAreas ? nearbyAreas.split(',').map(s => s.trim()).filter(s => s) : [],
-          mainKeywords: mainKeywords ? mainKeywords.split(',').map(s => s.trim()).filter(s => s) : [],
-          exampleKeywords: exampleKeywords ? exampleKeywords.split(',').map(s => s.trim()).filter(s => s) : [],
+          nearbyAreas: nearbyAreas
+            ? nearbyAreas.split(',').map((s: string) => s.trim()).filter((s: string) => s)
+            : [],
+          mainKeywords: mainKeywords
+            ? mainKeywords.split(',').map((s: string) => s.trim()).filter((s: string) => s)
+            : [],
+          exampleKeywords: exampleKeywords
+            ? exampleKeywords.split(',').map((s: string) => s.trim()).filter((s: string) => s)
+            : [],
         },
       })
     } catch (err: any) {

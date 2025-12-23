@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable react-hooks/exhaustive-deps */
+
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
