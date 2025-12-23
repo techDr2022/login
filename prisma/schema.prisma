@@ -1,0 +1,506 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum AttendanceStatus {
+  Present
+  Late
+  Absent
+}
+
+enum AttendanceMode {
+  OFFICE
+  WFH
+  LEAVE
+}
+
+enum TaskPriority {
+  Low
+  Medium
+  High
+  Urgent
+}
+
+enum TaskStatus {
+  Pending
+  InProgress
+  Review
+  Approved
+  Rejected
+}
+
+enum ChatThreadType {
+  TASK
+  DIRECT
+  TEAM
+}
+
+enum ClientType {
+  CLINIC
+  HOSPITAL
+  DOCTOR
+}
+
+enum ClientStatus {
+  ONBOARDING
+  ACTIVE
+  PAUSED
+}
+
+enum PreferredLanguage {
+  TELUGU
+  ENGLISH
+  BOTH
+}
+
+enum ClientAccessType {
+  GMB
+  WEBSITE
+  FACEBOOK
+  INSTAGRAM
+  WHATSAPP
+}
+
+enum ClientAssetType {
+  LOGO
+  PHOTO
+  VIDEO
+  TEMPLATE
+  DOCUMENT
+}
+
+enum ClientAssetCategory {
+  RECEPTION
+  CONSULTATION
+  OT_LAB_PHARMACY
+  EQUIPMENT
+  OTHER
+}
+
+enum ApprovalMode {
+  WHATSAPP
+  EMAIL
+  BOTH
+}
+
+enum PerformanceTrackingMode {
+  AUTO
+  MANUAL
+}
+
+enum ReportStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+model User {
+  id                   String            @id @default(cuid())
+  name                 String
+  email                String            @unique
+  passwordHash         String
+  role                 UserRole
+  isActive             Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+
+  attendances          Attendance[]
+  assignedTasks        Task[]            @relation("AssignedTo")
+  createdTasks         Task[]            @relation("AssignedBy")
+  managedClients       Client[]
+  activityLogs         ActivityLog[]
+  sentMessages         ChatMessage[]
+  directChatThreads1   ChatThread[]      @relation("User1")
+  directChatThreads2   ChatThread[]      @relation("User2")
+  uploadedAssets       ClientAsset[]     @relation("UploadedAssets")
+  assignedClientTasks  ClientTask[]      @relation("ClientTaskAssignee")
+
+  @@index([role])
+  @@index([isActive])
+}
+
+model Attendance {
+  id          String           @id @default(cuid())
+  userId      String
+  loginTime   DateTime?
+  logoutTime  DateTime?
+  totalHours  Float?
+  date        DateTime         @db.Date
+  status      AttendanceStatus @default(Present)
+  mode        AttendanceMode   @default(OFFICE)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@index([mode])
+  @@map("attendances")
+}
+
+model Client {
+  id                String    @id @default(cuid())
+  name              String
+  doctorOrHospitalName String
+  location          String
+  services          String[]
+  accountManagerId  String?
+  createdAt         DateTime  @default(now())
+  accountManager    User?     @relation(fields: [accountManagerId], references: [id], onDelete: SetNull)
+  tasks             Task[]
+
+  // New onboarding fields
+  type              ClientType?     @default(CLINIC)
+  status            ClientStatus    @default(ONBOARDING)
+  primaryContactName String?
+  phonePrimary      String?
+  phoneWhatsApp     String?
+  email             String?
+  addressLine       String?
+  area              String?
+  city              String?
+  pincode           String?
+  googleMapLink     String?
+  workingDays       Json?
+  workingTimings    String?
+  startDate         DateTime?
+  scopeFinalised    Boolean         @default(false)
+  onboardingCompletedAt DateTime?
+  preferredLanguage PreferredLanguage? @default(ENGLISH)
+
+  // Relations
+  doctors           ClientDoctor[]
+  clientServices    ClientService[]
+  usps              ClientUSP[]
+  accesses          ClientAccess[]
+  assets            ClientAsset[]
+  branding          ClientBranding?
+  targeting         ClientTargeting?
+  competitors       ClientCompetitor[]
+  marketingRequirements ClientMarketingRequirement?
+  approvalSettings  ClientApprovalSettings?
+  kpis              ClientKpiMonthly[]
+  clientTasks       ClientTask[]
+
+  @@index([accountManagerId])
+  @@index([status])
+  @@index([type])
+}
+
+model Task {
+  id                 String       @id @default(cuid())
+  title              String
+  description        String?
+  priority           TaskPriority @default(Medium)
+  status             TaskStatus   @default(Pending)
+  assignedById       String
+  assignedToId       String?
+  clientId           String?
+  dueDate            DateTime?
+  timeSpent          Float?       @default(0)
+  rejectionFeedback  String?
+  createdAt          DateTime     @default(now())
+  assignedBy         User         @relation("AssignedBy", fields: [assignedById], references: [id], onDelete: Cascade)
+  assignedTo         User?        @relation("AssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  client             Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  chatThread         ChatThread?
+
+  @@index([assignedToId])
+  @@index([clientId])
+  @@index([status])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String
+  timestamp  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([timestamp])
+  @@index([entityType, entityId])
+  @@map("activity_logs")
+}
+
+model ChatThread {
+  id        String         @id @default(cuid())
+  type      ChatThreadType
+  taskId    String?        @unique
+  user1Id   String?
+  user2Id   String?
+  createdAt DateTime       @default(now())
+  task      Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user1     User?          @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User?          @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+  unreadCounts ChatUnreadCount[]
+
+  @@unique([user1Id, user2Id])
+  @@index([type])
+  @@index([taskId])
+  @@map("chat_threads")
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  threadId  String
+  senderId  String
+  message   String
+  isDeleted Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  thread    ChatThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender    User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+model ChatUnreadCount {
+  id        String      @id @default(cuid())
+  threadId  String
+  userId    String
+  count     Int         @default(0)
+  thread    ChatThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  
+  @@unique([threadId, userId])
+  @@index([userId])
+  @@map("chat_unread_counts")
+}
+
+model ClientDoctor {
+  id                String   @id @default(cuid())
+  clientId          String
+  fullName          String
+  qualification     String?
+  specialization    String?
+  experienceYears   Int?
+  registrationNumber String?
+  languagesSpoken   Json?
+  photoAssetId      String?
+  createdAt         DateTime @default(now())
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("client_doctors")
+}
+
+model ClientService {
+  id                String   @id @default(cuid())
+  clientId          String
+  name              String
+  isPriority        Boolean  @default(false)
+  priorityRank      Int?
+  createdAt         DateTime @default(now())
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("client_services")
+}
+
+model ClientUSP {
+  id                String   @id @default(cuid())
+  clientId          String
+  uspText           String
+  createdAt         DateTime @default(now())
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("client_usps")
+}
+
+model ClientAccess {
+  id                String           @id @default(cuid())
+  clientId          String
+  type              ClientAccessType
+  loginUrl          String?
+  username          String?
+  passwordEncrypted String?
+  notes             String?
+  createdAt         DateTime         @default(now())
+  client            Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([type])
+  @@map("client_accesses")
+}
+
+model ClientAsset {
+  id                String            @id @default(cuid())
+  clientId          String
+  type              ClientAssetType
+  category          ClientAssetCategory?
+  title             String
+  url               String
+  mimeType          String?
+  size              Int?
+  uploadedById      String
+  createdAt         DateTime          @default(now())
+  client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  uploadedBy        User              @relation("UploadedAssets", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([type])
+  @@index([category])
+  @@map("client_assets")
+}
+
+model ClientBranding {
+  id                String   @id @default(cuid())
+  clientId          String   @unique
+  brandColors       Json?
+  designerName      String?
+  templateBaseCreated Boolean @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_branding")
+}
+
+model ClientTargeting {
+  id                String   @id @default(cuid())
+  clientId          String   @unique
+  primaryLocation   String?
+  nearbyAreas       Json?
+  mainKeywords      Json?
+  exampleKeywords   Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_targeting")
+}
+
+model ClientCompetitor {
+  id                String   @id @default(cuid())
+  clientId          String
+  name              String
+  googleMapLink     String?
+  createdAt         DateTime @default(now())
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("client_competitors")
+}
+
+model ClientMarketingRequirement {
+  id                String   @id @default(cuid())
+  clientId          String   @unique
+  gmbOptimisation   Boolean @default(false)
+  websiteSeo        Boolean @default(false)
+  socialPostsPerWeek Int     @default(0)
+  socialPostsPerMonth Int    @default(0)
+  reelsPerMonth     Int      @default(0)
+  googleAds         Boolean  @default(false)
+  metaAds           Boolean  @default(false)
+  reviewManagement  Boolean  @default(false)
+  posters           Boolean  @default(false)
+  videos            Boolean  @default(false)
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_marketing_requirements")
+}
+
+model ClientApprovalSettings {
+  id                    String                  @id @default(cuid())
+  clientId              String                  @unique
+  pointOfContactName    String?
+  approvalTimeHours     Int?
+  approvalMode          ApprovalMode?
+  performanceTrackingMode PerformanceTrackingMode? @default(MANUAL)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  client                Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_approval_settings")
+}
+
+model ClientKpiMonthly {
+  id                String       @id @default(cuid())
+  clientId          String
+  month             String       // YYYY-MM format
+  gmbCalls          Int          @default(0)
+  directionRequests Int          @default(0)
+  websiteClicks     Int          @default(0)
+  leadsGenerated    Int          @default(0)
+  reportStatus      ReportStatus @default(PENDING)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  client            Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, month])
+  @@index([clientId])
+  @@index([month])
+  @@map("client_kpi_monthly")
+}
+
+model ClientTask {
+  id                  String       @id @default(cuid())
+  clientId            String
+  month               String       // YYYY-MM format
+  title               String
+  status              TaskStatus   @default(Pending)
+  assignedToId        String?
+  dueDate             DateTime?
+  checklist           Json?
+  createdFromTemplate Boolean      @default(false)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  client              Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assignedTo          User?        @relation("ClientTaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([month])
+  @@index([status])
+  @@index([assignedToId])
+  @@map("client_tasks")
+}
+
+model TaskTemplate {
+  id                  String            @id @default(cuid())
+  name                String            @default("Monthly Fixed Template")
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  items               TaskTemplateItem[]
+
+  @@map("task_templates")
+}
+
+model TaskTemplateItem {
+  id                  String       @id @default(cuid())
+  templateId          String
+  title               String
+  description         String?
+  priority            TaskPriority @default(Medium)
+  dueDateOffset       Int?         // Days from month start
+  checklist           Json?
+  order               Int           @default(0)
+  createdAt           DateTime      @default(now())
+  template            TaskTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+  @@index([order])
+  @@map("task_template_items")
+}
+
