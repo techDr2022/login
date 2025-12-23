@@ -9,9 +9,11 @@ import { UserRole, ChatThreadType } from '@prisma/client'
 // GET /api/chat/threads/[id] - Get thread details
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: threadId } = await context.params
+
     const session = await getServerSession(authOptions)
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -19,7 +21,6 @@ export async function GET(
 
     const userId = session.user.id
     const userRole = session.user.role as UserRole
-    const threadId = params.id
 
     const thread = await prisma.chatThread.findUnique({
       where: { id: threadId },

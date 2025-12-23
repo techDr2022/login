@@ -8,17 +8,19 @@ import { existsSync } from 'fs'
 // Serve local files (for local storage adapter)
 export async function GET(
   request: NextRequest,
-  { params }: { params: { key: string } }
+  context: { params: Promise<{ key: string }> }
 ) {
   try {
-    const filePath = join(process.cwd(), 'uploads', 'client-assets', params.key)
+    const { key } = await context.params
+
+    const filePath = join(process.cwd(), 'uploads', 'client-assets', key)
 
     if (!existsSync(filePath)) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
 
     const file = await readFile(filePath)
-    const ext = params.key.split('.').pop()?.toLowerCase()
+    const ext = key.split('.').pop()?.toLowerCase()
     
     // Determine content type
     const contentTypeMap: Record<string, string> = {
