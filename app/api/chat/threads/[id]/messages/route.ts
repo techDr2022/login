@@ -10,9 +10,11 @@ import { sendMessageSchema } from '@/lib/validations'
 // GET /api/chat/threads/[id]/messages - Get messages for a thread
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: threadId } = await context.params
+
     const session = await getServerSession(authOptions)
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -20,7 +22,6 @@ export async function GET(
 
     const userId = session.user.id
     const userRole = session.user.role as UserRole
-    const threadId = params.id
 
     if (!threadId) {
       return NextResponse.json({ error: 'Thread ID is required' }, { status: 400 })
@@ -117,9 +118,11 @@ export async function GET(
 // POST /api/chat/threads/[id]/messages - Send a message
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: threadId } = await context.params
+
     const session = await getServerSession(authOptions)
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -127,7 +130,6 @@ export async function POST(
 
     const userId = session.user.id
     const userRole = session.user.role as UserRole
-    const threadId = params.id
 
     const body = await request.json()
     const validated = sendMessageSchema.parse(body)
