@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckCircle2 } from 'lucide-react'
+import { DatePicker } from '@/components/ui/date-picker'
 
 interface Step11ConfirmationProps {
   clientId: string | null
@@ -16,8 +17,8 @@ interface Step11ConfirmationProps {
 }
 
 export function Step11Confirmation({ clientId, data, onFinalize, loading }: Step11ConfirmationProps) {
-  const [startDate, setStartDate] = useState(
-    data.startDate ? new Date(data.startDate).toISOString().split('T')[0] : ''
+  const [startDate, setStartDate] = useState<Date | null>(
+    data.startDate ? new Date(data.startDate) : null
   )
 
   const handleFinalize = () => {
@@ -25,7 +26,7 @@ export function Step11Confirmation({ clientId, data, onFinalize, loading }: Step
       alert('Please select a start date')
       return
     }
-    onFinalize(new Date(startDate))
+    onFinalize(startDate as Date)
   }
 
   const completionChecklist = [
@@ -79,12 +80,10 @@ export function Step11Confirmation({ clientId, data, onFinalize, loading }: Step
         <CardContent className="space-y-4">
           <div>
             <Label htmlFor="startDate">Start Date *</Label>
-            <Input
-              id="startDate"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              required
+            <DatePicker
+              date={startDate}
+              onSelect={setStartDate}
+              placeholder="Select start date"
             />
             <p className="text-sm text-muted-foreground mt-1">
               This will mark the client as ACTIVE and generate monthly tasks automatically.

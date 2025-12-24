@@ -22,12 +22,12 @@ export async function GET(
     const userId = session.user.id
     const userRole = session.user.role as UserRole
 
-    const thread = await prisma.chatThread.findUnique({
+    const thread = await prisma.chat_threads.findUnique({
       where: { id: threadId },
       include: {
-        user1: { select: { id: true, name: true, email: true, role: true } },
-        user2: { select: { id: true, name: true, email: true, role: true } },
-        unreadCounts: {
+        User_chat_threads_user1IdToUser: { select: { id: true, name: true, email: true, role: true } },
+        User_chat_threads_user2IdToUser: { select: { id: true, name: true, email: true, role: true } },
+        chat_unread_counts: {
           where: { userId },
         },
       },
@@ -54,10 +54,10 @@ export async function GET(
       const hasManagerOrSuperAdmin =
         userRole === UserRole.MANAGER ||
         userRole === UserRole.SUPER_ADMIN ||
-        thread.user1?.role === UserRole.MANAGER ||
-        thread.user1?.role === UserRole.SUPER_ADMIN ||
-        thread.user2?.role === UserRole.MANAGER ||
-        thread.user2?.role === UserRole.SUPER_ADMIN
+        thread.User_chat_threads_user1IdToUser?.role === UserRole.MANAGER ||
+        thread.User_chat_threads_user1IdToUser?.role === UserRole.SUPER_ADMIN ||
+        thread.User_chat_threads_user2IdToUser?.role === UserRole.MANAGER ||
+        thread.User_chat_threads_user2IdToUser?.role === UserRole.SUPER_ADMIN
 
       if (!hasManagerOrSuperAdmin) {
         return NextResponse.json(

@@ -7,6 +7,7 @@ import { createClientSchema, updateClientSchema } from '@/lib/validations'
 import { logActivity } from '@/lib/activity-log'
 import { canManageClients } from '@/lib/rbac'
 import { UserRole } from '@prisma/client'
+import { randomUUID } from 'crypto'
 
 export async function createClient(data: {
   name: string
@@ -33,11 +34,12 @@ export async function createClient(data: {
   
   const client = await prisma.client.create({
     data: {
+      id: randomUUID(),
       name: validated.name,
       doctorOrHospitalName: validated.doctorOrHospitalName,
       location: validated.location,
       services: validated.services,
-      accountManagerId: validated.accountManagerId,
+      ...(validated.accountManagerId && { accountManagerId: validated.accountManagerId }),
       type: data.type || 'CLINIC',
       status: 'ONBOARDING',
     },

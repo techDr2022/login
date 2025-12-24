@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { randomUUID } from 'crypto'
 import { ChatThreadType, UserRole } from '@prisma/client'
 
 // SSE endpoint for real-time updates
@@ -46,26 +47,26 @@ export async function GET(request: NextRequest) {
 
         try {
           // Get threads user has access to - create team thread if doesn't exist
-          let teamThread = await prisma.chatThread.findFirst({
+          let teamThread = await prisma.chat_threads.findFirst({
             where: { type: ChatThreadType.TEAM },
             select: { id: true },
           })
 
           if (!teamThread) {
-            teamThread = await prisma.chatThread.create({
-              data: { type: ChatThreadType.TEAM },
+            teamThread = await prisma.chat_threads.create({
+              data: { id: randomUUID(), type: ChatThreadType.TEAM },
               select: { id: true },
             })
           }
 
-          const directThreads = await prisma.chatThread.findMany({
+          const directThreads = await prisma.chat_threads.findMany({
             where: {
               type: ChatThreadType.DIRECT,
               OR: [{ user1Id: userId }, { user2Id: userId }],
             },
             include: {
-              user1: { select: { role: true } },
-              user2: { select: { role: true } },
+              User_chat_threads_user1IdToUser: { select: { role: true } },
+              User_chat_threads_user2IdToUser: { select: { role: true } },
             },
           })
 
@@ -76,10 +77,10 @@ export async function GET(request: NextRequest) {
             const hasManagerOrSuperAdmin =
               userRole === UserRole.MANAGER ||
               userRole === UserRole.SUPER_ADMIN ||
-              thread.user1?.role === UserRole.MANAGER ||
-              thread.user1?.role === UserRole.SUPER_ADMIN ||
-              thread.user2?.role === UserRole.MANAGER ||
-              thread.user2?.role === UserRole.SUPER_ADMIN
+              thread.User_chat_threads_user1IdToUser?.role === UserRole.MANAGER ||
+              thread.User_chat_threads_user1IdToUser?.role === UserRole.SUPER_ADMIN ||
+              thread.User_chat_threads_user2IdToUser?.role === UserRole.MANAGER ||
+              thread.User_chat_threads_user2IdToUser?.role === UserRole.SUPER_ADMIN
 
             if (hasManagerOrSuperAdmin) {
               accessibleThreadIds.push(thread.id)
@@ -87,15 +88,15 @@ export async function GET(request: NextRequest) {
           }
 
           // Check for new messages
-          const newMessages = await prisma.chatMessage.findMany({
+          const newMessages = await prisma.chat_messages.findMany({
             where: {
               threadId: { in: accessibleThreadIds },
               senderId: { not: userId },
               createdAt: { gt: lastCheck },
             },
             include: {
-              sender: { select: { id: true, name: true, email: true, role: true } },
-              thread: { select: { id: true, type: true } },
+              User: { select: { id: true, name: true, email: true, role: true } },
+              chat_threads: { select: { id: true, type: true } },
             },
             orderBy: { createdAt: 'asc' },
           })
@@ -108,7 +109,7 @@ export async function GET(request: NextRequest) {
                   id: message.id,
                   threadId: message.threadId,
                   message: message.message,
-                  sender: message.sender,
+                  sender: message.User,
                   createdAt: message.createdAt,
                 },
               })
@@ -116,7 +117,7 @@ export async function GET(request: NextRequest) {
           }
 
           // Check for unread count updates (only send if changed)
-          const unreadCounts = await prisma.chatUnreadCount.findMany({
+          const unreadCounts = await prisma.chat_unread_counts.findMany({
             where: {
               userId,
               threadId: { in: accessibleThreadIds },

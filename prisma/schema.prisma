@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,10 +7,400 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  SUPER_ADMIN
-  MANAGER
-  EMPLOYEE
+model Client {
+  id                            String                         @id
+  name                          String
+  doctorOrHospitalName          String
+  location                      String
+  services                      String[]
+  accountManagerId              String?
+  createdAt                     DateTime                       @default(now())
+  type                          ClientType?                    @default(CLINIC)
+  status                        ClientStatus                   @default(ONBOARDING)
+  primaryContactName            String?
+  phonePrimary                  String?
+  phoneWhatsApp                 String?
+  email                         String?
+  addressLine                   String?
+  area                          String?
+  city                          String?
+  pincode                       String?
+  googleMapLink                 String?
+  workingDays                   Json?
+  workingTimings                String?
+  startDate                     DateTime?
+  scopeFinalised                Boolean                        @default(false)
+  onboardingCompletedAt         DateTime?
+  preferredLanguage             PreferredLanguage?             @default(ENGLISH)
+  User                          User?                          @relation(fields: [accountManagerId], references: [id])
+  Task                          Task[]
+  client_accesses               client_accesses[]
+  client_approval_settings      client_approval_settings?
+  client_assets                 client_assets[]
+  client_branding               client_branding?
+  client_competitors            client_competitors[]
+  client_doctors                client_doctors[]
+  client_kpi_monthly            client_kpi_monthly[]
+  client_marketing_requirements client_marketing_requirements?
+  client_services               client_services[]
+  client_targeting              client_targeting?
+  client_tasks                  client_tasks[]
+  client_usps                   client_usps[]
+
+  @@index([accountManagerId])
+  @@index([status])
+  @@index([type])
+}
+
+model Task {
+  id                           String        @id
+  title                        String
+  description                  String?
+  priority                     TaskPriority  @default(Medium)
+  status                       TaskStatus    @default(Pending)
+  assignedById                 String
+  assignedToId                 String?
+  clientId                     String?
+  dueDate                      DateTime?
+  timeSpent                    Float?        @default(0)
+  rejectionFeedback            String?
+  createdAt                    DateTime      @default(now())
+  User_Task_assignedByIdToUser User          @relation("Task_assignedByIdToUser", fields: [assignedById], references: [id], onDelete: Cascade)
+  User_Task_assignedToIdToUser User?         @relation("Task_assignedToIdToUser", fields: [assignedToId], references: [id])
+  Client                       Client?       @relation(fields: [clientId], references: [id])
+  chat_threads                 chat_threads?
+
+  @@index([assignedToId])
+  @@index([clientId])
+  @@index([status])
+}
+
+model User {
+  id                                      String          @id
+  name                                    String
+  email                                   String          @unique
+  passwordHash                            String
+  role                                    UserRole
+  isActive                                Boolean         @default(true)
+  createdAt                               DateTime        @default(now())
+  notifyChatMentions                      Boolean         @default(true)
+  notifyClientChanges                     Boolean         @default(true)
+  notifyTaskUpdates                       Boolean         @default(true)
+  Client                                  Client[]
+  Task_Task_assignedByIdToUser            Task[]          @relation("Task_assignedByIdToUser")
+  Task_Task_assignedToIdToUser            Task[]          @relation("Task_assignedToIdToUser")
+  activity_logs                           activity_logs[]
+  attendances                             attendances[]
+  chat_messages                           chat_messages[]
+  chat_threads_chat_threads_user1IdToUser chat_threads[]  @relation("chat_threads_user1IdToUser")
+  chat_threads_chat_threads_user2IdToUser chat_threads[]  @relation("chat_threads_user2IdToUser")
+  client_assets                           client_assets[]
+  client_tasks                            client_tasks[]
+
+  @@index([isActive])
+  @@index([role])
+}
+
+model activity_logs {
+  id         String   @id
+  userId     String
+  action     String
+  entityType String
+  entityId   String
+  timestamp  DateTime @default(now())
+  User       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId])
+  @@index([timestamp])
+  @@index([userId])
+}
+
+model attendances {
+  id                 String           @id
+  userId             String
+  loginTime          DateTime?
+  logoutTime         DateTime?
+  lunchStart         DateTime?
+  lunchEnd           DateTime?
+  totalHours         Float?
+  date               DateTime         @db.Date
+  status             AttendanceStatus @default(Present)
+  mode               AttendanceMode   @default(OFFICE)
+  earlySignInMinutes Int?
+  lateSignInMinutes  Int?
+  earlyLogoutMinutes Int?
+  lateLogoutMinutes  Int?
+  lastActivityTime   DateTime?
+  wfhActivityPings   Int              @default(0)
+  remark             String?
+  editedBy           String?
+  editedAt           DateTime?
+  ipAddress          String?
+  deviceInfo         String?
+  location           String?
+  User               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([date])
+  @@index([mode])
+  @@index([userId])
+}
+
+model chat_messages {
+  id           String       @id
+  threadId     String
+  senderId     String
+  message      String
+  isDeleted    Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  User         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  chat_threads chat_threads @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([senderId])
+  @@index([threadId])
+}
+
+model chat_threads {
+  id                              String               @id
+  type                            ChatThreadType
+  taskId                          String?              @unique
+  user1Id                         String?
+  user2Id                         String?
+  createdAt                       DateTime             @default(now())
+  chat_messages                   chat_messages[]
+  Task                            Task?                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  User_chat_threads_user1IdToUser User?                @relation("chat_threads_user1IdToUser", fields: [user1Id], references: [id], onDelete: Cascade)
+  User_chat_threads_user2IdToUser User?                @relation("chat_threads_user2IdToUser", fields: [user2Id], references: [id], onDelete: Cascade)
+  chat_unread_counts              chat_unread_counts[]
+
+  @@unique([user1Id, user2Id])
+  @@index([taskId])
+  @@index([type])
+}
+
+model chat_unread_counts {
+  id           String       @id
+  threadId     String
+  userId       String
+  count        Int          @default(0)
+  chat_threads chat_threads @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, userId])
+  @@index([userId])
+}
+
+model client_accesses {
+  id                String           @id
+  clientId          String
+  type              ClientAccessType
+  loginUrl          String?
+  username          String?
+  passwordEncrypted String?
+  notes             String?
+  createdAt         DateTime         @default(now())
+  Client            Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([type])
+}
+
+model client_approval_settings {
+  id                      String                   @id
+  clientId                String                   @unique
+  pointOfContactName      String?
+  approvalTimeHours       Int?
+  approvalMode            ApprovalMode?
+  performanceTrackingMode PerformanceTrackingMode? @default(MANUAL)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime
+  Client                  Client                   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model client_assets {
+  id           String               @id
+  clientId     String
+  type         ClientAssetType
+  category     ClientAssetCategory?
+  title        String
+  url          String
+  mimeType     String?
+  size         Int?
+  uploadedById String
+  createdAt    DateTime             @default(now())
+  Client       Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  User         User                 @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([category])
+  @@index([clientId])
+  @@index([type])
+}
+
+model client_branding {
+  id                  String   @id
+  clientId            String   @unique
+  brandColors         Json?
+  designerName        String?
+  templateBaseCreated Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime
+  Client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model client_competitors {
+  id            String   @id
+  clientId      String
+  name          String
+  googleMapLink String?
+  createdAt     DateTime @default(now())
+  Client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model client_doctors {
+  id                 String   @id
+  clientId           String
+  fullName           String
+  qualification      String?
+  specialization     String?
+  experienceYears    Int?
+  registrationNumber String?
+  languagesSpoken    Json?
+  photoAssetId       String?
+  createdAt          DateTime @default(now())
+  Client             Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model client_kpi_monthly {
+  id                String       @id
+  clientId          String
+  month             String
+  gmbCalls          Int          @default(0)
+  directionRequests Int          @default(0)
+  websiteClicks     Int          @default(0)
+  leadsGenerated    Int          @default(0)
+  reportStatus      ReportStatus @default(PENDING)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime
+  Client            Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, month])
+  @@index([clientId])
+  @@index([month])
+}
+
+model client_marketing_requirements {
+  id                  String   @id
+  clientId            String   @unique
+  gmbOptimisation     Boolean  @default(false)
+  websiteSeo          Boolean  @default(false)
+  socialPostsPerWeek  Int      @default(0)
+  socialPostsPerMonth Int      @default(0)
+  reelsPerMonth       Int      @default(0)
+  googleAds           Boolean  @default(false)
+  metaAds             Boolean  @default(false)
+  reviewManagement    Boolean  @default(false)
+  posters             Boolean  @default(false)
+  videos              Boolean  @default(false)
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime
+  Client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model client_services {
+  id           String   @id
+  clientId     String
+  name         String
+  isPriority   Boolean  @default(false)
+  priorityRank Int?
+  createdAt    DateTime @default(now())
+  Client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model client_targeting {
+  id              String   @id
+  clientId        String   @unique
+  primaryLocation String?
+  nearbyAreas     Json?
+  mainKeywords    Json?
+  exampleKeywords Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
+  Client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model client_tasks {
+  id                  String     @id
+  clientId            String
+  month               String
+  title               String
+  status              TaskStatus @default(Pending)
+  assignedToId        String?
+  dueDate             DateTime?
+  checklist           Json?
+  createdFromTemplate Boolean    @default(false)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime
+  User                User?      @relation(fields: [assignedToId], references: [id])
+  Client              Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([assignedToId])
+  @@index([clientId])
+  @@index([month])
+  @@index([status])
+}
+
+model client_usps {
+  id        String   @id
+  clientId  String
+  uspText   String
+  createdAt DateTime @default(now())
+  Client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model task_template_items {
+  id             String         @id
+  templateId     String
+  title          String
+  description    String?
+  priority       TaskPriority   @default(Medium)
+  dueDateOffset  Int?
+  checklist      Json?
+  order          Int            @default(0)
+  createdAt      DateTime       @default(now())
+  task_templates task_templates @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([order])
+  @@index([templateId])
+}
+
+model task_templates {
+  id                  String                @id
+  name                String                @default("Monthly Fixed Template")
+  isActive            Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  task_template_items task_template_items[]
+}
+
+enum ApprovalMode {
+  WHATSAPP
+  EMAIL
+  BOTH
+}
+
+enum AttendanceMode {
+  OFFICE
+  WFH
+  LEAVE
 }
 
 enum AttendanceStatus {
@@ -22,10 +409,63 @@ enum AttendanceStatus {
   Absent
 }
 
-enum AttendanceMode {
-  OFFICE
-  WFH
-  LEAVE
+enum ChatThreadType {
+  TASK
+  DIRECT
+  TEAM
+}
+
+enum ClientAccessType {
+  GMB
+  WEBSITE
+  FACEBOOK
+  INSTAGRAM
+  WHATSAPP
+}
+
+enum ClientAssetCategory {
+  RECEPTION
+  CONSULTATION
+  OT_LAB_PHARMACY
+  EQUIPMENT
+  OTHER
+}
+
+enum ClientAssetType {
+  LOGO
+  PHOTO
+  VIDEO
+  TEMPLATE
+  DOCUMENT
+}
+
+enum ClientStatus {
+  ONBOARDING
+  ACTIVE
+  PAUSED
+}
+
+enum ClientType {
+  CLINIC
+  HOSPITAL
+  DOCTOR
+}
+
+enum PerformanceTrackingMode {
+  AUTO
+  MANUAL
+}
+
+enum PreferredLanguage {
+  TELUGU
+  ENGLISH
+  BOTH
+}
+
+enum ReportStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
 }
 
 enum TaskPriority {
@@ -43,464 +483,8 @@ enum TaskStatus {
   Rejected
 }
 
-enum ChatThreadType {
-  TASK
-  DIRECT
-  TEAM
+enum UserRole {
+  SUPER_ADMIN
+  MANAGER
+  EMPLOYEE
 }
-
-enum ClientType {
-  CLINIC
-  HOSPITAL
-  DOCTOR
-}
-
-enum ClientStatus {
-  ONBOARDING
-  ACTIVE
-  PAUSED
-}
-
-enum PreferredLanguage {
-  TELUGU
-  ENGLISH
-  BOTH
-}
-
-enum ClientAccessType {
-  GMB
-  WEBSITE
-  FACEBOOK
-  INSTAGRAM
-  WHATSAPP
-}
-
-enum ClientAssetType {
-  LOGO
-  PHOTO
-  VIDEO
-  TEMPLATE
-  DOCUMENT
-}
-
-enum ClientAssetCategory {
-  RECEPTION
-  CONSULTATION
-  OT_LAB_PHARMACY
-  EQUIPMENT
-  OTHER
-}
-
-enum ApprovalMode {
-  WHATSAPP
-  EMAIL
-  BOTH
-}
-
-enum PerformanceTrackingMode {
-  AUTO
-  MANUAL
-}
-
-enum ReportStatus {
-  PENDING
-  IN_PROGRESS
-  DONE
-}
-
-model User {
-  id                   String            @id @default(cuid())
-  name                 String
-  email                String            @unique
-  passwordHash         String
-  role                 UserRole
-  isActive             Boolean           @default(true)
-  createdAt            DateTime          @default(now())
-
-  attendances          Attendance[]
-  assignedTasks        Task[]            @relation("AssignedTo")
-  createdTasks         Task[]            @relation("AssignedBy")
-  managedClients       Client[]
-  activityLogs         ActivityLog[]
-  sentMessages         ChatMessage[]
-  directChatThreads1   ChatThread[]      @relation("User1")
-  directChatThreads2   ChatThread[]      @relation("User2")
-  uploadedAssets       ClientAsset[]     @relation("UploadedAssets")
-  assignedClientTasks  ClientTask[]      @relation("ClientTaskAssignee")
-
-  @@index([role])
-  @@index([isActive])
-}
-
-model Attendance {
-  id          String           @id @default(cuid())
-  userId      String
-  loginTime   DateTime?
-  logoutTime  DateTime?
-  totalHours  Float?
-  date        DateTime         @db.Date
-  status      AttendanceStatus @default(Present)
-  mode        AttendanceMode   @default(OFFICE)
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, date])
-  @@index([userId])
-  @@index([date])
-  @@index([mode])
-  @@map("attendances")
-}
-
-model Client {
-  id                String    @id @default(cuid())
-  name              String
-  doctorOrHospitalName String
-  location          String
-  services          String[]
-  accountManagerId  String?
-  createdAt         DateTime  @default(now())
-  accountManager    User?     @relation(fields: [accountManagerId], references: [id], onDelete: SetNull)
-  tasks             Task[]
-
-  // New onboarding fields
-  type              ClientType?     @default(CLINIC)
-  status            ClientStatus    @default(ONBOARDING)
-  primaryContactName String?
-  phonePrimary      String?
-  phoneWhatsApp     String?
-  email             String?
-  addressLine       String?
-  area              String?
-  city              String?
-  pincode           String?
-  googleMapLink     String?
-  workingDays       Json?
-  workingTimings    String?
-  startDate         DateTime?
-  scopeFinalised    Boolean         @default(false)
-  onboardingCompletedAt DateTime?
-  preferredLanguage PreferredLanguage? @default(ENGLISH)
-
-  // Relations
-  doctors           ClientDoctor[]
-  clientServices    ClientService[]
-  usps              ClientUSP[]
-  accesses          ClientAccess[]
-  assets            ClientAsset[]
-  branding          ClientBranding?
-  targeting         ClientTargeting?
-  competitors       ClientCompetitor[]
-  marketingRequirements ClientMarketingRequirement?
-  approvalSettings  ClientApprovalSettings?
-  kpis              ClientKpiMonthly[]
-  clientTasks       ClientTask[]
-
-  @@index([accountManagerId])
-  @@index([status])
-  @@index([type])
-}
-
-model Task {
-  id                 String       @id @default(cuid())
-  title              String
-  description        String?
-  priority           TaskPriority @default(Medium)
-  status             TaskStatus   @default(Pending)
-  assignedById       String
-  assignedToId       String?
-  clientId           String?
-  dueDate            DateTime?
-  timeSpent          Float?       @default(0)
-  rejectionFeedback  String?
-  createdAt          DateTime     @default(now())
-  assignedBy         User         @relation("AssignedBy", fields: [assignedById], references: [id], onDelete: Cascade)
-  assignedTo         User?        @relation("AssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
-  client             Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  chatThread         ChatThread?
-
-  @@index([assignedToId])
-  @@index([clientId])
-  @@index([status])
-}
-
-model ActivityLog {
-  id         String   @id @default(cuid())
-  userId     String
-  action     String
-  entityType String
-  entityId   String
-  timestamp  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([timestamp])
-  @@index([entityType, entityId])
-  @@map("activity_logs")
-}
-
-model ChatThread {
-  id        String         @id @default(cuid())
-  type      ChatThreadType
-  taskId    String?        @unique
-  user1Id   String?
-  user2Id   String?
-  createdAt DateTime       @default(now())
-  task      Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user1     User?          @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
-  user2     User?          @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
-  messages  ChatMessage[]
-  unreadCounts ChatUnreadCount[]
-
-  @@unique([user1Id, user2Id])
-  @@index([type])
-  @@index([taskId])
-  @@map("chat_threads")
-}
-
-model ChatMessage {
-  id        String      @id @default(cuid())
-  threadId  String
-  senderId  String
-  message   String
-  isDeleted Boolean     @default(false)
-  createdAt DateTime    @default(now())
-  thread    ChatThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  sender    User        @relation(fields: [senderId], references: [id], onDelete: Cascade)
-
-  @@index([threadId])
-  @@index([senderId])
-  @@index([createdAt])
-  @@map("chat_messages")
-}
-
-model ChatUnreadCount {
-  id        String      @id @default(cuid())
-  threadId  String
-  userId    String
-  count     Int         @default(0)
-  thread    ChatThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  
-  @@unique([threadId, userId])
-  @@index([userId])
-  @@map("chat_unread_counts")
-}
-
-model ClientDoctor {
-  id                String   @id @default(cuid())
-  clientId          String
-  fullName          String
-  qualification     String?
-  specialization    String?
-  experienceYears   Int?
-  registrationNumber String?
-  languagesSpoken   Json?
-  photoAssetId      String?
-  createdAt         DateTime @default(now())
-  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@index([clientId])
-  @@map("client_doctors")
-}
-
-model ClientService {
-  id                String   @id @default(cuid())
-  clientId          String
-  name              String
-  isPriority        Boolean  @default(false)
-  priorityRank      Int?
-  createdAt         DateTime @default(now())
-  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@index([clientId])
-  @@map("client_services")
-}
-
-model ClientUSP {
-  id                String   @id @default(cuid())
-  clientId          String
-  uspText           String
-  createdAt         DateTime @default(now())
-  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@index([clientId])
-  @@map("client_usps")
-}
-
-model ClientAccess {
-  id                String           @id @default(cuid())
-  clientId          String
-  type              ClientAccessType
-  loginUrl          String?
-  username          String?
-  passwordEncrypted String?
-  notes             String?
-  createdAt         DateTime         @default(now())
-  client            Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@index([clientId])
-  @@index([type])
-  @@map("client_accesses")
-}
-
-model ClientAsset {
-  id                String            @id @default(cuid())
-  clientId          String
-  type              ClientAssetType
-  category          ClientAssetCategory?
-  title             String
-  url               String
-  mimeType          String?
-  size              Int?
-  uploadedById      String
-  createdAt         DateTime          @default(now())
-  client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  uploadedBy        User              @relation("UploadedAssets", fields: [uploadedById], references: [id], onDelete: Cascade)
-
-  @@index([clientId])
-  @@index([type])
-  @@index([category])
-  @@map("client_assets")
-}
-
-model ClientBranding {
-  id                String   @id @default(cuid())
-  clientId          String   @unique
-  brandColors       Json?
-  designerName      String?
-  templateBaseCreated Boolean @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@map("client_branding")
-}
-
-model ClientTargeting {
-  id                String   @id @default(cuid())
-  clientId          String   @unique
-  primaryLocation   String?
-  nearbyAreas       Json?
-  mainKeywords      Json?
-  exampleKeywords   Json?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@map("client_targeting")
-}
-
-model ClientCompetitor {
-  id                String   @id @default(cuid())
-  clientId          String
-  name              String
-  googleMapLink     String?
-  createdAt         DateTime @default(now())
-  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@index([clientId])
-  @@map("client_competitors")
-}
-
-model ClientMarketingRequirement {
-  id                String   @id @default(cuid())
-  clientId          String   @unique
-  gmbOptimisation   Boolean @default(false)
-  websiteSeo        Boolean @default(false)
-  socialPostsPerWeek Int     @default(0)
-  socialPostsPerMonth Int    @default(0)
-  reelsPerMonth     Int      @default(0)
-  googleAds         Boolean  @default(false)
-  metaAds           Boolean  @default(false)
-  reviewManagement  Boolean  @default(false)
-  posters           Boolean  @default(false)
-  videos            Boolean  @default(false)
-  notes             String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@map("client_marketing_requirements")
-}
-
-model ClientApprovalSettings {
-  id                    String                  @id @default(cuid())
-  clientId              String                  @unique
-  pointOfContactName    String?
-  approvalTimeHours     Int?
-  approvalMode          ApprovalMode?
-  performanceTrackingMode PerformanceTrackingMode? @default(MANUAL)
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  client                Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@map("client_approval_settings")
-}
-
-model ClientKpiMonthly {
-  id                String       @id @default(cuid())
-  clientId          String
-  month             String       // YYYY-MM format
-  gmbCalls          Int          @default(0)
-  directionRequests Int          @default(0)
-  websiteClicks     Int          @default(0)
-  leadsGenerated    Int          @default(0)
-  reportStatus      ReportStatus @default(PENDING)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  client            Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@unique([clientId, month])
-  @@index([clientId])
-  @@index([month])
-  @@map("client_kpi_monthly")
-}
-
-model ClientTask {
-  id                  String       @id @default(cuid())
-  clientId            String
-  month               String       // YYYY-MM format
-  title               String
-  status              TaskStatus   @default(Pending)
-  assignedToId        String?
-  dueDate             DateTime?
-  checklist           Json?
-  createdFromTemplate Boolean      @default(false)
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-  client              Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  assignedTo          User?        @relation("ClientTaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
-
-  @@index([clientId])
-  @@index([month])
-  @@index([status])
-  @@index([assignedToId])
-  @@map("client_tasks")
-}
-
-model TaskTemplate {
-  id                  String            @id @default(cuid())
-  name                String            @default("Monthly Fixed Template")
-  isActive            Boolean           @default(true)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  items               TaskTemplateItem[]
-
-  @@map("task_templates")
-}
-
-model TaskTemplateItem {
-  id                  String       @id @default(cuid())
-  templateId          String
-  title               String
-  description         String?
-  priority            TaskPriority @default(Medium)
-  dueDateOffset       Int?         // Days from month start
-  checklist           Json?
-  order               Int           @default(0)
-  createdAt           DateTime      @default(now())
-  template            TaskTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  @@index([templateId])
-  @@index([order])
-  @@map("task_template_items")
-}
-

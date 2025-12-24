@@ -7,6 +7,7 @@ import { canManageClients } from '@/lib/rbac'
 import { UserRole } from '@prisma/client'
 import { getStorageAdapter } from '@/lib/storage'
 import { prisma } from '@/lib/prisma'
+import { randomUUID } from 'crypto'
 
 export async function POST(request: NextRequest) {
   try {
@@ -109,8 +110,9 @@ export async function POST(request: NextRequest) {
     // Save to database
     let asset
     try {
-      asset = await prisma.clientAsset.create({
+      asset = await prisma.client_assets.create({
         data: {
+          id: randomUUID(),
           clientId,
           type: type as any,
           category: category ? (category as any) : null,
@@ -174,7 +176,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Get asset
-    const asset = await prisma.clientAsset.findUnique({
+    const asset = await prisma.client_assets.findUnique({
       where: { id: assetId },
     })
 
@@ -187,7 +189,7 @@ export async function DELETE(request: NextRequest) {
     await storage.delete(asset.url)
 
     // Delete from database
-    await prisma.clientAsset.delete({
+    await prisma.client_assets.delete({
       where: { id: assetId },
     })
 

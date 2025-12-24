@@ -114,13 +114,13 @@ export function StickyChatButton() {
         <Button
           onClick={handleToggle}
           size="lg"
-          className="h-14 w-14 rounded-full shadow-lg relative"
+          className="h-16 w-16 rounded-full shadow-2xl relative bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 transition-all duration-200 hover:scale-105 active:scale-95"
         >
-          <MessageCircle className="h-6 w-6" />
+          <MessageCircle className="h-7 w-7" />
           {unreadCount > 0 && (
             <Badge
               variant="destructive"
-              className="absolute -top-2 -right-2 h-6 w-6 flex items-center justify-center p-0 rounded-full text-xs"
+              className="absolute -top-1 -right-1 h-7 min-w-7 flex items-center justify-center px-1.5 rounded-full text-xs font-bold shadow-lg animate-pulse"
             >
               {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>

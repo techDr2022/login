@@ -17,17 +17,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    // Fetch all users (employees and managers) for super admin, including inactive ones
     const employees = await prisma.user.findMany({
       where: {
-        role: UserRole.EMPLOYEE,
-        isActive: true,
-      },
-      include: {
-        _count: {
-          select: {
-            assignedTasks: true,
-            attendances: true,
-          },
+        role: {
+          in: [UserRole.EMPLOYEE, UserRole.MANAGER],
         },
       },
       orderBy: { name: 'asc' },
@@ -45,10 +39,18 @@ export async function GET(request: NextRequest) {
         })
 
         // Total tasks
-        const totalTasks = employee._count.assignedTasks
+        const totalTasks = await prisma.task.count({
+          where: {
+            assignedToId: employee.id,
+          },
+        })
 
         // Total attendance records
-        const totalAttendance = employee._count.attendances
+        const totalAttendance = await prisma.attendance.count({
+          where: {
+            userId: employee.id,
+          },
+        })
 
         // Present days (last 30 days)
         const thirtyDaysAgo = new Date()
@@ -82,10 +84,18 @@ export async function GET(request: NextRequest) {
     )
 
     return NextResponse.json({ employees: employeesWithMetrics })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching employees:', error)
+    console.error('Error details:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+    })
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+      },
       { status: 500 }
     )
   }

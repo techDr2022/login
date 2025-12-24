@@ -109,7 +109,7 @@ export async function SuperAdminDashboard() {
                           </Link>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {task.assignedTo?.name || 'Unassigned'}
+                          {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{task.status}</Badge>
@@ -212,7 +212,7 @@ export async function SuperAdminDashboard() {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{client._count.tasks}</Badge>
+                        <Badge variant="outline">{client._count.Task}</Badge>
                       </TableCell>
                     </TableRow>
                   ))}

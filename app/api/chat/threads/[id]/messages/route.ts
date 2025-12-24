@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { randomUUID } from 'crypto'
 import { UserRole, ChatThreadType } from '@prisma/client'
 import { sendMessageSchema } from '@/lib/validations'
 
@@ -28,22 +29,22 @@ export async function GET(
     }
 
     // Verify access to thread
-    let thread = await prisma.chatThread.findUnique({
+    let thread = await prisma.chat_threads.findUnique({
       where: { id: threadId },
       include: {
-        user1: { select: { role: true } },
-        user2: { select: { role: true } },
+        User_chat_threads_user1IdToUser: { select: { role: true } },
+        User_chat_threads_user2IdToUser: { select: { role: true } },
       },
     })
 
     // If thread not found and it's a TEAM thread request, try to find/create team thread
     if (!thread) {
       // Check if this might be a team thread ID issue - try to get the actual team thread
-      const teamThread = await prisma.chatThread.findFirst({
+      const teamThread = await prisma.chat_threads.findFirst({
         where: { type: ChatThreadType.TEAM },
         include: {
-          user1: { select: { role: true } },
-          user2: { select: { role: true } },
+          User_chat_threads_user1IdToUser: { select: { role: true } },
+          User_chat_threads_user2IdToUser: { select: { role: true } },
         },
       })
       
@@ -68,10 +69,10 @@ export async function GET(
       const hasManagerOrSuperAdmin =
         userRole === UserRole.MANAGER ||
         userRole === UserRole.SUPER_ADMIN ||
-        thread.user1?.role === UserRole.MANAGER ||
-        thread.user1?.role === UserRole.SUPER_ADMIN ||
-        thread.user2?.role === UserRole.MANAGER ||
-        thread.user2?.role === UserRole.SUPER_ADMIN
+        thread.User_chat_threads_user1IdToUser?.role === UserRole.MANAGER ||
+        thread.User_chat_threads_user1IdToUser?.role === UserRole.SUPER_ADMIN ||
+        thread.User_chat_threads_user2IdToUser?.role === UserRole.MANAGER ||
+        thread.User_chat_threads_user2IdToUser?.role === UserRole.SUPER_ADMIN
 
       if (!hasManagerOrSuperAdmin) {
         return NextResponse.json(
@@ -96,10 +97,10 @@ export async function GET(
       where.createdAt = { lt: new Date(before) }
     }
 
-    const messages = await prisma.chatMessage.findMany({
+    const messages = await prisma.chat_messages.findMany({
       where,
       include: {
-        sender: { select: { id: true, name: true, email: true, role: true } },
+        User: { select: { id: true, name: true, email: true, role: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -135,11 +136,11 @@ export async function POST(
     const validated = sendMessageSchema.parse(body)
 
     // Verify access to thread
-    const thread = await prisma.chatThread.findUnique({
+    const thread = await prisma.chat_threads.findUnique({
       where: { id: threadId },
       include: {
-        user1: { select: { role: true } },
-        user2: { select: { role: true } },
+        User_chat_threads_user1IdToUser: { select: { role: true } },
+        User_chat_threads_user2IdToUser: { select: { role: true } },
       },
     })
 
@@ -161,10 +162,10 @@ export async function POST(
       const hasManagerOrSuperAdmin =
         userRole === UserRole.MANAGER ||
         userRole === UserRole.SUPER_ADMIN ||
-        thread.user1?.role === UserRole.MANAGER ||
-        thread.user1?.role === UserRole.SUPER_ADMIN ||
-        thread.user2?.role === UserRole.MANAGER ||
-        thread.user2?.role === UserRole.SUPER_ADMIN
+        thread.User_chat_threads_user1IdToUser?.role === UserRole.MANAGER ||
+        thread.User_chat_threads_user1IdToUser?.role === UserRole.SUPER_ADMIN ||
+        thread.User_chat_threads_user2IdToUser?.role === UserRole.MANAGER ||
+        thread.User_chat_threads_user2IdToUser?.role === UserRole.SUPER_ADMIN
 
       if (!hasManagerOrSuperAdmin) {
         return NextResponse.json(
@@ -177,14 +178,15 @@ export async function POST(
     }
 
     // Create message
-    const message = await prisma.chatMessage.create({
+    const message = await prisma.chat_messages.create({
       data: {
+        id: randomUUID(),
         threadId,
         senderId: userId,
         message: validated.message,
       },
       include: {
-        sender: { select: { id: true, name: true, email: true, role: true } },
+        User: { select: { id: true, name: true, email: true, role: true } },
       },
     })
 
@@ -207,7 +209,7 @@ export async function POST(
     const recipients = participants.filter((id) => id !== userId)
 
     for (const recipientId of recipients) {
-      await prisma.chatUnreadCount.upsert({
+      await prisma.chat_unread_counts.upsert({
         where: {
           threadId_userId: {
             threadId,
@@ -218,6 +220,7 @@ export async function POST(
           count: { increment: 1 },
         },
         create: {
+          id: randomUUID(),
           threadId,
           userId: recipientId,
           count: 1,

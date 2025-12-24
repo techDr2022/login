@@ -24,22 +24,22 @@ export async function GET(
     const client = await prisma.client.findUnique({
       where: { id: params.id },
       include: {
-        accountManager: {
+        User: {
           select: {
             id: true,
             name: true,
             email: true,
           },
         },
-        tasks: {
+        Task: {
           include: {
-            assignedTo: {
+            User_Task_assignedToIdToUser: {
               select: {
                 id: true,
                 name: true,
               },
             },
-            assignedBy: {
+            User_Task_assignedByIdToUser: {
               select: {
                 id: true,
                 name: true,
@@ -48,34 +48,34 @@ export async function GET(
           },
           orderBy: { createdAt: 'desc' },
         },
-        doctors: {
+        client_doctors: {
           orderBy: { createdAt: 'asc' },
         },
-        clientServices: {
+        client_services: {
           orderBy: { createdAt: 'asc' },
         },
-        usps: {
+        client_usps: {
           orderBy: { createdAt: 'asc' },
         },
-        accesses: {
+        client_accesses: {
           orderBy: { type: 'asc' },
         },
-        assets: {
+        client_assets: {
           orderBy: { createdAt: 'desc' },
         },
-        branding: true,
-        targeting: true,
-        competitors: {
+        client_branding: true,
+        client_targeting: true,
+        client_competitors: {
           orderBy: { createdAt: 'asc' },
         },
-        marketingRequirements: true,
-        approvalSettings: true,
-        kpis: {
+        client_marketing_requirements: true,
+        client_approval_settings: true,
+        client_kpi_monthly: {
           orderBy: { month: 'desc' },
         },
-        clientTasks: {
+        client_tasks: {
           include: {
-            assignedTo: {
+            User: {
               select: {
                 id: true,
                 name: true,

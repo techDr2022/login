@@ -78,6 +78,147 @@ export async function ManagerDashboard() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
+        {/* Active Tasks (In Progress) */}
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Active Tasks</CardTitle>
+                <CardDescription className="text-sm">Tasks currently in progress</CardDescription>
+              </div>
+              <Clock className="h-5 w-5 text-blue-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!data.activeTasks || data.activeTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">No active tasks</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Assigned To</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(data.activeTasks || []).map((task) => (
+                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/tasks/${task.id}`}>
+                        <TableCell>
+                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
+                            {task.title}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                            {task.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="pt-2">
+                  <Link href="/tasks">
+                    <Button variant="ghost" className="w-full rounded-xl">
+                      View All Tasks
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Tasks Assigned Today */}
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Tasks Assigned Today</CardTitle>
+                <CardDescription className="text-sm">Tasks you assigned today</CardDescription>
+              </div>
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!data.tasksAssignedToday || data.tasksAssignedToday.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">No tasks assigned today</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Assigned To</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(data.tasksAssignedToday || []).map((task) => (
+                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/tasks/${task.id}`}>
+                        <TableCell>
+                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
+                            {task.title}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              task.status === 'Approved'
+                                ? 'outline'
+                                : task.status === 'Rejected'
+                                ? 'outline'
+                                : task.status === 'Review'
+                                ? 'secondary'
+                                : task.status === 'InProgress'
+                                ? 'secondary'
+                                : 'outline'
+                            }
+                            className={
+                              task.status === 'Approved'
+                                ? 'bg-green-100 text-green-800 border-green-200'
+                                : task.status === 'Rejected'
+                                ? 'bg-red-100 text-red-800 border-red-200'
+                                : task.status === 'InProgress'
+                                ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                : ''
+                            }
+                          >
+                            {task.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="pt-2">
+                  <Link href="/tasks">
+                    <Button variant="ghost" className="w-full rounded-xl">
+                      View All Tasks
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Pending Approvals */}
         <Card className="rounded-xl border shadow-sm">
           <CardHeader>
@@ -106,14 +247,14 @@ export async function ManagerDashboard() {
                   </TableHeader>
                   <TableBody>
                     {data.pendingApprovalsList.map((task) => (
-                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
+                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/tasks/${task.id}`}>
                         <TableCell>
                           <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
                             {task.title}
                           </Link>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {task.assignedTo?.name || 'Unassigned'}
+                          {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -131,7 +272,9 @@ export async function ManagerDashboard() {
             )}
           </CardContent>
         </Card>
+      </div>
 
+      <div className="grid gap-6 md:grid-cols-2">
         {/* Team Attendance */}
         <Card className="rounded-xl border shadow-sm">
           <CardHeader>
@@ -162,7 +305,7 @@ export async function ManagerDashboard() {
                   <TableBody>
                     {data.teamAttendance.map((attendance) => (
                       <TableRow key={attendance.id}>
-                        <TableCell className="font-medium">{attendance.user.name}</TableCell>
+                        <TableCell className="font-medium">{attendance.User.name}</TableCell>
                         <TableCell>
                           <Badge variant={
                             attendance.status === 'Present' ? 'default' : 'secondary'
@@ -198,6 +341,86 @@ export async function ManagerDashboard() {
         </Card>
       </div>
 
+      {/* Recent Assigned Tasks (Last 7 Days) */}
+      {data.recentAssignedTasks && data.recentAssignedTasks.length > 0 && (
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Recent Assigned Tasks</CardTitle>
+                <CardDescription className="text-sm">Tasks you assigned in the last 7 days</CardDescription>
+              </div>
+              <Briefcase className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Assigned To</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.recentAssignedTasks.map((task) => (
+                    <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50" onClick={() => window.location.href = `/tasks/${task.id}`}>
+                      <TableCell>
+                        <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
+                          {task.title}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            task.status === 'Approved'
+                              ? 'outline'
+                              : task.status === 'Rejected'
+                              ? 'outline'
+                              : task.status === 'Review'
+                              ? 'secondary'
+                              : task.status === 'InProgress'
+                              ? 'secondary'
+                              : 'outline'
+                          }
+                          className={
+                            task.status === 'Approved'
+                              ? 'bg-green-100 text-green-800 border-green-200'
+                              : task.status === 'Rejected'
+                              ? 'bg-red-100 text-red-800 border-red-200'
+                              : task.status === 'InProgress'
+                              ? 'bg-blue-100 text-blue-800 border-blue-200'
+                              : ''
+                          }
+                        >
+                          {task.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {new Date(task.createdAt).toLocaleDateString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="pt-2">
+                <Link href="/tasks">
+                  <Button variant="ghost" className="w-full rounded-xl">
+                    View All Tasks
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Missed Deadlines Alerts */}
       {data.missedDeadlinesList.length > 0 && (
         <Card className="rounded-xl border-red-200 bg-red-50/50 dark:bg-red-950/10 shadow-sm">
@@ -227,7 +450,7 @@ export async function ManagerDashboard() {
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {task.assignedTo?.name || 'Unassigned'}
+                      {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm">

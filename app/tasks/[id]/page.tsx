@@ -9,16 +9,18 @@ import { TaskDetail } from '@/components/tasks/task-detail'
 export default async function TaskDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
   const session = await getServerSession(authOptions)
   if (!session) {
     redirect('/login')
   }
 
+  const { id } = await params
+
   return (
     <LayoutWrapper>
-      <TaskDetail taskId={params.id} />
+      <TaskDetail taskId={id} />
     </LayoutWrapper>
   )
 }

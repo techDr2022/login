@@ -18,6 +18,7 @@ import { canManageTasks } from '@/lib/rbac'
 import { useRouter } from 'next/navigation'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { DatePicker } from '@/components/ui/date-picker'
 
 interface Task {
   id: string
@@ -54,6 +55,7 @@ export function TasksList() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
+  const [assignedByMeFilter, setAssignedByMeFilter] = useState(false)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -80,11 +82,10 @@ export function TasksList() {
 
   useEffect(() => {
     fetchTasks()
-    if (canManage) {
-      fetchClients()
-      fetchEmployees()
-    }
-  }, [page, search, statusFilter, priorityFilter, canManage])
+    // Everyone can fetch clients and employees for task assignment
+    fetchClients()
+    fetchEmployees()
+  }, [page, search, statusFilter, priorityFilter, assignedByMeFilter])
 
   const fetchClients = async () => {
     try {
@@ -98,11 +99,12 @@ export function TasksList() {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch('/api/users?role=EMPLOYEE')
+      // Fetch all users so tasks can be assigned to anyone
+      const res = await fetch('/api/users')
       const data = await res.json()
       setEmployees(data.users || [])
     } catch (err) {
-      console.error('Failed to fetch employees:', err)
+      console.error('Failed to fetch users:', err)
     }
   }
 
@@ -115,6 +117,7 @@ export function TasksList() {
         ...(search && { search }),
         ...(statusFilter && { status: statusFilter }),
         ...(priorityFilter && { priority: priorityFilter }),
+        ...(assignedByMeFilter && session?.user?.id && { assignedById: session.user.id }),
       })
       const res = await fetch(`/api/tasks?${params}`)
       const data = await res.json()
@@ -231,9 +234,9 @@ export function TasksList() {
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'Approved':
-        return 'default'
+        return 'outline'
       case 'Rejected':
-        return 'destructive'
+        return 'outline'
       case 'Review':
         return 'secondary'
       default:
@@ -318,16 +321,37 @@ export function TasksList() {
           </SelectContent>
         </Select>
         {canManage && (
-          <Dialog open={dialogOpen} onOpenChange={(open) => {
-            setDialogOpen(open)
-            if (!open) resetForm()
-          }}>
-            <DialogTrigger asChild>
-              <Button onClick={() => resetForm()} className="rounded-xl">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Task
-              </Button>
-            </DialogTrigger>
+          <Button
+            variant={assignedByMeFilter ? "default" : "outline"}
+            onClick={() => {
+              setAssignedByMeFilter(!assignedByMeFilter)
+              setPage(1)
+            }}
+            className="rounded-xl"
+          >
+            {assignedByMeFilter ? (
+              <>
+                <CheckSquare2 className="w-4 h-4 mr-2" />
+                Assigned by You
+              </>
+            ) : (
+              <>
+                <CheckSquare2 className="w-4 h-4 mr-2" />
+                Show Assigned by You
+              </>
+            )}
+          </Button>
+        )}
+        <Dialog open={dialogOpen} onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) resetForm()
+        }}>
+          <DialogTrigger asChild>
+            <Button onClick={() => resetForm()} className="rounded-xl">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Task
+            </Button>
+          </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <form onSubmit={handleSubmit}>
                 <DialogHeader>
@@ -377,10 +401,10 @@ export function TasksList() {
                       <Label htmlFor="assignedToId">Assigned To</Label>
                       <Select
                         value={formData.assignedToId || undefined}
-                        onValueChange={(value) => setFormData({ ...formData, assignedToId: value || '' })}
+                        onValueChange={(value) => setFormData({ ...formData, assignedToId: value })}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select employee" />
+                          <SelectValue placeholder="Select employee (optional)" />
                         </SelectTrigger>
                         <SelectContent>
                           {employees.map((e) => (
@@ -396,10 +420,10 @@ export function TasksList() {
                     <Label htmlFor="clientId">Client</Label>
                       <Select
                         value={formData.clientId || undefined}
-                        onValueChange={(value) => setFormData({ ...formData, clientId: value || '' })}
+                        onValueChange={(value) => setFormData({ ...formData, clientId: value })}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select client" />
+                          <SelectValue placeholder="Select client (optional)" />
                         </SelectTrigger>
                         <SelectContent>
                           {clients.map((c) => (
@@ -413,11 +437,10 @@ export function TasksList() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="dueDate">Due Date</Label>
-                      <Input
-                        id="dueDate"
-                        type="date"
-                        value={formData.dueDate}
-                        onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                      <DatePicker
+                        date={formData.dueDate ? new Date(formData.dueDate) : null}
+                        onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString().split('T')[0] : '' })}
+                        placeholder="Select due date"
                       />
                     </div>
                     <div>
@@ -441,7 +464,6 @@ export function TasksList() {
               </form>
             </DialogContent>
           </Dialog>
-        )}
       </div>
 
       <Card className="rounded-xl border shadow-sm">
@@ -451,6 +473,7 @@ export function TasksList() {
               <TableRow>
                 <TableHead>Title</TableHead>
                 <TableHead>Assigned To</TableHead>
+                {canManage && <TableHead>Assigned By</TableHead>}
                 <TableHead>Client</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Status</TableHead>
@@ -461,15 +484,13 @@ export function TasksList() {
             <TableBody>
               {tasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 7 : 6} className="h-24 text-center">
+                  <TableCell colSpan={canManage ? 8 : 6} className="h-24 text-center">
                     <div className="flex flex-col items-center justify-center py-8">
                       <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
                       <p className="text-sm font-medium text-muted-foreground">No tasks found</p>
-                      {canManage && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Get started by creating a new task
-                        </p>
-                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Get started by creating a new task
+                      </p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -484,6 +505,11 @@ export function TasksList() {
                     <TableCell className="text-muted-foreground">
                       {task.assignedTo?.name || 'Unassigned'}
                     </TableCell>
+                    {canManage && (
+                      <TableCell className="text-muted-foreground">
+                        {task.assignedBy?.name || '-'}
+                      </TableCell>
+                    )}
                     <TableCell className="text-muted-foreground">{task.client?.name || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={getPriorityBadgeVariant(task.priority)}>
@@ -491,7 +517,16 @@ export function TasksList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getStatusBadgeVariant(task.status)}>
+                      <Badge
+                        variant={getStatusBadgeVariant(task.status)}
+                        className={
+                          task.status === 'Approved'
+                            ? 'bg-green-100 text-green-800 border-green-200'
+                            : task.status === 'Rejected'
+                            ? 'bg-red-100 text-red-800 border-red-200'
+                            : ''
+                        }
+                      >
                         {task.status}
                       </Badge>
                     </TableCell>

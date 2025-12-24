@@ -34,9 +34,10 @@ async function main() {
 
   const passwordHash = await bcrypt.hash('password123', 10)
 
-  // Create Super Admins (Managers)
+  // Create Super Admins
   const superAdmin1 = await prisma.user.create({
     data: {
+      id: crypto.randomUUID(),
       name: 'Raviteja Pendari',
       email: 'raviteja@techdr.in',
       passwordHash,
@@ -46,16 +47,13 @@ async function main() {
 
   const superAdmin2 = await prisma.user.create({
     data: {
+      id: crypto.randomUUID(),
       name: 'Abhista',
       email: 'abhista@techdr.in',
       passwordHash,
       role: UserRole.SUPER_ADMIN,
     },
   })
-
-  // Use super admins as managers for client assignment
-  const manager1 = superAdmin1
-  const manager2 = superAdmin2
 
   // Create Employees
   const employeeData = [
@@ -72,6 +70,7 @@ async function main() {
   for (const empData of employeeData) {
     const emp = await prisma.user.create({
       data: {
+        id: crypto.randomUUID(),
         name: empData.name,
         email: empData.email,
         passwordHash,
@@ -128,6 +127,10 @@ async function main() {
   const services = ['Consultation', 'Surgery', 'Diagnostics', 'Treatment', 'Follow-up', 'Emergency Care', 'Social Media Management', 'Content Creation', 'Graphic Design', 'Website Development']
 
   const clients = []
+
+  // Define dedicated account managers for clients
+  const accountManagerNames = ['Gouthami', 'Jagadeesh', 'Shaheena']
+  const accountManagers = employees.filter((e) => accountManagerNames.includes(e.name))
   for (let i = 0; i < clientData.length; i++) {
     const clientInfo = clientData[i]
     
@@ -138,16 +141,17 @@ async function main() {
       clientServices.push(services[Math.floor(Math.random() * services.length)])
     }
 
-    // Alternate account managers
-    const accountManagerId = i % 2 === 0 ? manager1.id : manager2.id
+    // Rotate between the defined account managers
+    const accountManager = accountManagers[i % accountManagers.length]
 
     const client = await prisma.client.create({
       data: {
+        id: crypto.randomUUID(),
         name: clientInfo.name,
         doctorOrHospitalName: clientInfo.doctorOrHospitalName,
         location: clientInfo.location,
         services: clientServices,
-        accountManagerId,
+        accountManagerId: accountManager?.id,
       },
     })
     clients.push(client)
@@ -161,12 +165,13 @@ async function main() {
   for (let i = 0; i < 30; i++) {
     const client = clients[i % clients.length]
     const assignedTo = employees[i % employees.length]
-    const assignedBy = i % 3 === 0 ? superAdmin1 : (i % 3 === 1 ? manager1 : manager2)
+    const assignedBy = i % 2 === 0 ? superAdmin1 : superAdmin2
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + Math.floor(Math.random() * 30))
 
     const task = await prisma.task.create({
       data: {
+        id: crypto.randomUUID(),
         title: `Task ${i + 1}: ${client.name}`,
         description: `Task description for client ${client.name}`,
         priority: priorities[i % priorities.length],
@@ -203,6 +208,7 @@ async function main() {
 
         await prisma.attendance.create({
           data: {
+            id: crypto.randomUUID(),
             userId: employee.id,
             date,
             loginTime,
@@ -218,6 +224,7 @@ async function main() {
   // Create a TEAM chat thread
   const teamThread = await prisma.chatThread.create({
     data: {
+      id: crypto.randomUUID(),
       type: ChatThreadType.TEAM,
     },
   })
@@ -225,6 +232,7 @@ async function main() {
   // Create a sample client with full onboarding data
   const sampleClient = await prisma.client.create({
     data: {
+      id: crypto.randomUUID(),
       name: 'Sample Medical Clinic',
       doctorOrHospitalName: 'Dr. Sample Clinic',
       location: 'Hyderabad',
@@ -243,13 +251,15 @@ async function main() {
       workingDays: [1, 2, 3, 4, 5],
       workingTimings: '9:00 AM - 6:00 PM',
       preferredLanguage: 'BOTH' as any,
-      accountManagerId: manager1.id,
+      // Assign a default account manager from the dedicated list
+      accountManagerId: accountManagers[0]?.id,
     },
   })
 
   // Add doctors
   await prisma.clientDoctor.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
       fullName: 'Dr. Sample Doctor',
       qualification: 'MBBS, MD',
@@ -263,6 +273,7 @@ async function main() {
   // Add services
   await prisma.clientService.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
       name: 'General Consultation',
       isPriority: true,
@@ -272,6 +283,7 @@ async function main() {
 
   await prisma.clientService.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
       name: 'Health Checkup',
       isPriority: false,
@@ -281,6 +293,7 @@ async function main() {
   // Add USPs
   await prisma.clientUSP.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
       uspText: 'Experienced doctors with modern facilities',
     },
@@ -289,6 +302,7 @@ async function main() {
   // Add access credentials
   await prisma.clientAccess.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
       type: 'GMB' as any,
       loginUrl: 'https://business.google.com',
@@ -301,7 +315,9 @@ async function main() {
   // Add branding
   await prisma.clientBranding.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
+      updatedAt: new Date(),
       brandColors: {
         primary: '#0066CC',
         secondary: '#00CC66',
@@ -315,7 +331,9 @@ async function main() {
   // Add targeting
   await prisma.clientTargeting.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
+      updatedAt: new Date(),
       primaryLocation: 'Hitech City, Hyderabad',
       nearbyAreas: ['Gachibowli', 'Madhapur', 'Kondapur'],
       mainKeywords: ['general medicine', 'clinic', 'doctor'],
@@ -326,6 +344,7 @@ async function main() {
   // Add competitors
   await prisma.clientCompetitor.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
       name: 'Competitor Clinic A',
       googleMapLink: 'https://maps.google.com/?q=Competitor+Clinic',
@@ -335,7 +354,9 @@ async function main() {
   // Add marketing requirements
   await prisma.clientMarketingRequirement.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
+      updatedAt: new Date(),
       gmbOptimisation: true,
       websiteSeo: true,
       socialPostsPerWeek: 5,
@@ -353,7 +374,9 @@ async function main() {
   // Add approval settings
   await prisma.clientApprovalSettings.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
+      updatedAt: new Date(),
       pointOfContactName: 'Dr. Sample',
       approvalTimeHours: 24,
       approvalMode: 'WHATSAPP' as any,
@@ -366,8 +389,10 @@ async function main() {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   await prisma.clientKpiMonthly.create({
     data: {
+      id: crypto.randomUUID(),
       clientId: sampleClient.id,
       month: currentMonth,
+      updatedAt: new Date(),
       gmbCalls: 50,
       directionRequests: 30,
       websiteClicks: 200,
@@ -377,7 +402,7 @@ async function main() {
   })
 
   console.log('Seed data created successfully!')
-  console.log(`- 2 Super Admins (Managers): Raviteja, Abhista`)
+  console.log(`- 2 Super Admins: Raviteja, Abhista`)
   console.log(`- 7 Employees:`)
   console.log(`  * Social Media Managers: Gouthami, Jagadeesh`)
   console.log(`  * Content Writer: Shaheena`)

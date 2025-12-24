@@ -6,6 +6,28 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode, AttendanceStatus } from '@prisma/client'
 
+// Public holiday configuration (dates in YYYY-MM-DD format).
+// Add or update these dates based on your company's holiday calendar.
+// Current list is for the 2025 calendar year.
+const PUBLIC_HOLIDAYS: string[] = [
+  '2025-01-14', // Sankranthi
+  '2025-01-26', // Republic Day
+  '2025-03-14', // Holi
+  '2025-03-30', // Ugadhi
+  '2025-03-31', // Ramadan
+  '2025-06-07', // Bakrid
+  '2025-08-09', // Ganesh Chaturthi
+  '2025-08-15', // Independence Day
+  '2025-10-02', // Dussera
+  '2025-10-21', // Diwali
+  '2025-12-25', // Christmas
+]
+
+function isPublicHoliday(date: Date): boolean {
+  const isoDate = date.toISOString().split('T')[0]
+  return PUBLIC_HOLIDAYS.includes(isoDate)
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -52,8 +74,30 @@ export async function GET(request: NextRequest) {
     const [attendances, total] = await Promise.all([
       prisma.attendance.findMany({
         where,
-        include: {
-          user: {
+        select: {
+          id: true,
+          userId: true,
+          loginTime: true,
+          logoutTime: true,
+          lunchStart: true,
+          lunchEnd: true,
+          totalHours: true,
+          date: true,
+          status: true,
+          mode: true,
+          earlySignInMinutes: true,
+          lateSignInMinutes: true,
+          earlyLogoutMinutes: true,
+          lateLogoutMinutes: true,
+          lastActivityTime: true,
+          wfhActivityPings: true,
+          remark: true,
+          editedBy: true,
+          editedAt: true,
+          ipAddress: true,
+          deviceInfo: true,
+          location: true,
+          User: {
             select: {
               id: true,
               name: true,
@@ -127,28 +171,33 @@ export async function GET(request: NextRequest) {
             existingAttendances.map((a) => `${a.userId}-${a.date.toISOString().split('T')[0]}`)
           )
 
-          // Add absent records for employees without attendance
+          // Add derived records for employees without explicit attendance.
+          // On public holidays we do NOT mark employees as absent.
           for (const employee of allEmployees) {
             const currentDate = new Date(start)
             while (currentDate <= end) {
-              const dateKey = `${employee.id}-${currentDate.toISOString().split('T')[0]}`
+              const isoDate = currentDate.toISOString().split('T')[0]
+              const dateKey = `${employee.id}-${isoDate}`
               
               if (!existingMap.has(dateKey) && !attendanceMap.has(dateKey)) {
                 const dateOnly = new Date(currentDate)
                 dateOnly.setHours(0, 0, 0, 0)
-                
-                attendances.push({
-                  id: `absent-${employee.id}-${dateOnly.toISOString().split('T')[0]}`,
-                  userId: employee.id,
-                  loginTime: null,
-                  logoutTime: null,
-                  totalHours: null,
-                  date: dateOnly,
-                  status: AttendanceStatus.Absent,
-                  mode: AttendanceMode.OFFICE,
-                  user: employee,
-                  createdAt: dateOnly,
-                } as any)
+
+                // Skip creating Absent records on public holidays
+                if (!isPublicHoliday(dateOnly)) {
+                  attendances.push({
+                    id: `absent-${employee.id}-${isoDate}`,
+                    userId: employee.id,
+                    loginTime: null,
+                    logoutTime: null,
+                    totalHours: null,
+                    date: dateOnly,
+                    status: AttendanceStatus.Absent,
+                    mode: AttendanceMode.OFFICE,
+                    User: employee,
+                    createdAt: dateOnly,
+                  } as any)
+                }
               }
 
               currentDate.setDate(currentDate.getDate() + 1)

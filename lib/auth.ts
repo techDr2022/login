@@ -47,6 +47,7 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user }) {
+      // Initial sign in
       if (user) {
         token.id = user.id
         token.role = user.role
@@ -54,9 +55,32 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string
-        session.user.role = token.role as string
+      if (session.user && token.id) {
+        // Verify user still exists in database and is active
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { id: true, role: true, isActive: true },
+          })
+          
+          // If user doesn't exist or is inactive, clear the user id to invalidate session
+          if (!dbUser || !dbUser.isActive) {
+            // Clear user id to invalidate session (will fail validation in server actions)
+            session.user.id = ''
+            session.user.role = ''
+            return session
+          }
+          
+          // Use fresh data from database
+          session.user.id = dbUser.id
+          session.user.role = dbUser.role
+        } catch (error) {
+          console.error('Error verifying user in session callback:', error)
+          // Clear user id on error
+          session.user.id = ''
+          session.user.role = ''
+          return session
+        }
       }
       return session
     },

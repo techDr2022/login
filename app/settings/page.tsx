@@ -5,12 +5,10 @@ import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { LayoutWrapper } from '@/components/layout-wrapper'
 import { Card } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
 import { ChangePasswordForm } from '@/components/settings/change-password-form'
+import { NotificationsSettings } from '@/components/settings/notifications-settings'
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions)
@@ -43,43 +41,7 @@ export default async function SettingsPage() {
         </Card>
 
         <Card className="p-6 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold">Notifications</h2>
-            <p className="text-sm text-muted-foreground">
-              Control which alerts you receive. (Non-functional demo toggles)
-            </p>
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Task updates</p>
-                <p className="text-xs text-muted-foreground">
-                  Get notified when tasks assigned to you change.
-                </p>
-              </div>
-              <Checkbox aria-label="Task updates" />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Client changes</p>
-                <p className="text-xs text-muted-foreground">
-                  Alerts for new clients or major onboarding updates.
-                </p>
-              </div>
-              <Checkbox aria-label="Client changes" />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Chat mentions</p>
-                <p className="text-xs text-muted-foreground">
-                  Notifications when someone mentions you in team chat.
-                </p>
-              </div>
-              <Checkbox aria-label="Chat mentions" />
-            </div>
-          </div>
+          <NotificationsSettings />
         </Card>
 
         <Card className="p-6 space-y-4">

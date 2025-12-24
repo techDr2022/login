@@ -285,14 +285,14 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
               </CardContent>
             </Card>
 
-            {client.accountManager && (
+            {client.User && (
               <Card>
                 <CardHeader>
                   <CardTitle>Account Manager</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="font-medium">{client.accountManager.name}</p>
-                  <p className="text-sm text-muted-foreground">{client.accountManager.email}</p>
+                  <p className="font-medium">{client.User.name}</p>
+                  <p className="text-sm text-muted-foreground">{client.User.email}</p>
                 </CardContent>
               </Card>
             )}

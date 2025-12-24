@@ -25,7 +25,7 @@ interface Client {
   location: string
   services: string[]
   accountManagerId?: string
-  accountManager?: {
+  User?: {
     id: string
     name: string
     email: string
@@ -66,7 +66,9 @@ export function ClientsList() {
 
   const fetchManagers = async () => {
     try {
-      const res = await fetch('/api/users?role=MANAGER')
+      // For client account managers, we use employees as the primary contacts.
+      // This fetches all active employees so they can be assigned as account managers.
+      const res = await fetch('/api/users?role=EMPLOYEE')
       const data = await res.json()
       setManagers(data.users || [])
     } catch (err) {
@@ -328,7 +330,7 @@ export function ClientsList() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{client.accountManager?.name || '-'}</TableCell>
+                  <TableCell className="text-muted-foreground">{client.User?.name || '-'}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{client._count?.tasks || 0}</Badge>
                   </TableCell>

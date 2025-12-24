@@ -3,6 +3,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { randomUUID } from 'crypto'
 import { createTaskSchema, updateTaskSchema, updateTaskStatusSchema } from '@/lib/validations'
 import { logActivity } from '@/lib/activity-log'
 import { canManageTasks, canApproveTasks } from '@/lib/rbac'
@@ -20,23 +21,79 @@ export async function createTask(data: {
   rejectionFeedback?: string
 }) {
   const session = await getServerSession(authOptions)
-  if (!session) throw new Error('Unauthorized')
-
-  if (!canManageTasks(session.user.role as UserRole)) {
-    throw new Error('Forbidden')
+  if (!session) {
+    throw new Error('Unauthorized: No session found')
   }
 
-  const validated = createTaskSchema.parse(data)
-  
-  const task = await prisma.task.create({
-    data: {
-      ...validated,
-      assignedById: session.user.id,
-      status: 'Pending', // Always start with Pending
-    },
+  if (!session.user) {
+    throw new Error('Unauthorized: No user in session')
+  }
+
+  const userId = session.user.id
+
+  // Check if user ID exists and is not empty
+  if (!userId || userId.trim() === '') {
+    // This usually means the user was deleted or deactivated
+    // The session callback in auth.ts sets user.id to '' for invalid users
+    throw new Error('Unauthorized: Session user is invalid. Please log out and log back in.')
+  }
+
+  // Verify user exists and is active
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, isActive: true },
   })
 
-  await logActivity(session.user.id, 'CREATE', 'Task', task.id)
+  if (!user || !user.isActive) {
+    throw new Error('User not found or inactive')
+  }
+
+  // Validate assignedToId if provided
+  if (data.assignedToId) {
+    const assignedToUser = await prisma.user.findUnique({
+      where: { id: data.assignedToId },
+      select: { id: true, isActive: true },
+    })
+    if (!assignedToUser || !assignedToUser.isActive) {
+      throw new Error('Assigned user not found or inactive')
+    }
+  }
+
+  // Validate clientId if provided
+  if (data.clientId) {
+    const client = await prisma.client.findUnique({
+      where: { id: data.clientId },
+      select: { id: true },
+    })
+    if (!client) {
+      throw new Error('Client not found')
+    }
+  }
+
+  // All authenticated users can create tasks
+  const validated = createTaskSchema.parse(data)
+  
+  // Convert empty string to undefined for optional fields
+  const taskData: any = {
+    id: randomUUID(),
+    ...validated,
+    assignedById: userId,
+    status: 'Pending', // Always start with Pending
+  }
+  
+  // Handle empty strings for optional fields
+  if (taskData.assignedToId === '') {
+    taskData.assignedToId = null
+  }
+  if (taskData.clientId === '') {
+    taskData.clientId = null
+  }
+  
+  const task = await prisma.task.create({
+    data: taskData,
+  })
+
+  await logActivity(userId, 'CREATE', 'Task', task.id)
 
   return task
 }
@@ -60,6 +117,23 @@ export async function updateTask(id: string, data: {
   })
 
   if (!task) throw new Error('Task not found')
+
+  // Validate assignedToId if provided
+  if (data.assignedToId !== undefined) {
+    if (data.assignedToId) {
+      const assignedToUser = await prisma.user.findUnique({
+        where: { id: data.assignedToId },
+        select: { id: true, isActive: true },
+      })
+      if (!assignedToUser || !assignedToUser.isActive) {
+        throw new Error('Assigned user not found or inactive')
+      }
+    }
+    // If assignedToId is empty string, convert to null to unassign
+    if (data.assignedToId === '') {
+      data.assignedToId = null as any
+    }
+  }
 
   // Check if user can approve/reject
   if (data.status === 'Approved' || data.status === 'Rejected') {
@@ -96,14 +170,27 @@ export async function updateTaskStatus(id: string, data: {
 
   if (!task) throw new Error('Task not found')
 
+  const userRole = session.user.role as UserRole
+  const isEmployee = userRole === UserRole.EMPLOYEE
+
+  // Employees can only update tasks assigned to them
+  if (isEmployee && task.assignedToId !== session.user.id) {
+    throw new Error('You can only update tasks assigned to you')
+  }
+
   // Check if user can approve/reject
   if (data.status === 'Approved' || data.status === 'Rejected') {
-    if (!canApproveTasks(session.user.role as UserRole)) {
+    if (!canApproveTasks(userRole)) {
       throw new Error('Only managers and admins can approve/reject tasks')
     }
     if (data.status === 'Rejected' && !data.rejectionFeedback) {
       throw new Error('Rejection feedback is required when rejecting a task')
     }
+  }
+
+  // Employees can only set status to Pending, InProgress, or Review
+  if (isEmployee && (data.status === 'Approved' || data.status === 'Rejected')) {
+    throw new Error('Employees cannot approve or reject tasks. Please set status to Review when complete.')
   }
 
   const validated = updateTaskStatusSchema.parse(data)

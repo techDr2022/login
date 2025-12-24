@@ -17,8 +17,11 @@ import { createEmployee } from '@/app/actions/employee-actions'
 import { useSession } from 'next-auth/react'
 import { UserRole } from '@prisma/client'
 import { canClockInOut } from '@/lib/rbac'
-import { LogIn, LogOut, Clock, Calendar, Timer, TrendingUp, Home, Plus } from 'lucide-react'
+import { LogIn, LogOut, Clock, Calendar, Timer, TrendingUp, Home, Plus, Info } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
+import { EmployeeAttendanceDashboard } from './employee-attendance-dashboard'
+import { SuperAdminAttendancePanel } from './super-admin-attendance-panel'
 
 // AttendanceMode enum values (matching Prisma schema)
 const AttendanceMode = {
@@ -38,6 +41,10 @@ interface AttendanceRecord {
   date: string
   status: string
   mode?: string
+  earlySignInMinutes?: number | null
+  lateSignInMinutes?: number | null
+  earlyLogoutMinutes?: number | null
+  lateLogoutMinutes?: number | null
   user?: {
     id: string
     name: string
@@ -54,8 +61,7 @@ export function AttendancePage() {
   const [success, setSuccess] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date } | undefined>(undefined)
   const [selectedUserId, setSelectedUserId] = useState('')
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null)
@@ -80,7 +86,7 @@ export function AttendancePage() {
     if (!isEmployee) {
       fetchUsers()
     }
-  }, [page, startDate, endDate, selectedUserId, isEmployee])
+  }, [page, dateRange, selectedUserId, isEmployee])
 
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -150,8 +156,8 @@ export function AttendancePage() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '10',
-        ...(startDate && { startDate }),
-        ...(endDate && { endDate }),
+        ...(dateRange?.from && { startDate: dateRange.from.toISOString().split('T')[0] }),
+        ...(dateRange?.to && { endDate: dateRange.to.toISOString().split('T')[0] }),
         ...(selectedUserId && !isEmployee && { userId: selectedUserId }),
       })
       const res = await fetch(`/api/attendance?${params}`)
@@ -211,6 +217,16 @@ export function AttendancePage() {
       default:
         return 'outline'
     }
+  }
+
+  // Show employee dashboard for employees
+  if (isEmployee) {
+    return <EmployeeAttendanceDashboard />
+  }
+
+  // Show super admin panel for super admins
+  if (isSuperAdmin) {
+    return <SuperAdminAttendancePanel />
   }
 
   return (
@@ -349,6 +365,21 @@ export function AttendancePage() {
                 )}
               </div>
             </div>
+            {todayAttendance?.loginTime && !todayAttendance?.logoutTime && (
+              <Alert className="bg-blue-50 border-blue-200">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-800">
+                  <div className="space-y-2">
+                    <p className="font-medium">Important: Keep Your Tab Open</p>
+                    <ul className="list-disc list-inside text-sm space-y-1 ml-2">
+                      <li>Keep this browser tab open while you work (you can minimize it, but don&apos;t close it)</li>
+                      <li>If you close the tab or minimize it for too long, the system will detect inactivity</li>
+                      <li>Remember to clock out when you&apos;re done for the day</li>
+                    </ul>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
             {todayAttendance && (
               <div className="space-y-4 pt-4 border-t">
                 <div className="grid grid-cols-2 gap-4">
@@ -408,6 +439,46 @@ export function AttendancePage() {
                     </div>
                   </div>
                 )}
+                {todayAttendance.loginTime && todayAttendance.mode === 'OFFICE' && (
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    {todayAttendance.earlySignInMinutes !== null && todayAttendance.earlySignInMinutes !== undefined && todayAttendance.earlySignInMinutes > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Early Sign In</p>
+                        <p className="text-base font-semibold text-green-600">
+                          {todayAttendance.earlySignInMinutes} min
+                        </p>
+                      </div>
+                    )}
+                    {todayAttendance.lateSignInMinutes !== null && todayAttendance.lateSignInMinutes !== undefined && todayAttendance.lateSignInMinutes > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Late Sign In</p>
+                        <p className="text-base font-semibold text-red-600">
+                          {todayAttendance.lateSignInMinutes} min
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {todayAttendance.logoutTime && todayAttendance.mode === 'OFFICE' && (
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    {todayAttendance.earlyLogoutMinutes !== null && todayAttendance.earlyLogoutMinutes !== undefined && todayAttendance.earlyLogoutMinutes > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Early Logout</p>
+                        <p className="text-base font-semibold text-orange-600">
+                          {todayAttendance.earlyLogoutMinutes} min
+                        </p>
+                      </div>
+                    )}
+                    {todayAttendance.lateLogoutMinutes !== null && todayAttendance.lateLogoutMinutes !== undefined && todayAttendance.lateLogoutMinutes > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Late Logout</p>
+                        <p className="text-base font-semibold text-blue-600">
+                          {todayAttendance.lateLogoutMinutes} min
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -442,30 +513,16 @@ export function AttendancePage() {
             </Select>
           </div>
         )}
-        <div>
-          <Label htmlFor="startDate">Start Date</Label>
-          <Input
-            id="startDate"
-            type="date"
-            value={startDate}
-            onChange={(e) => {
-              setStartDate(e.target.value)
+        <div className="flex-1">
+          <Label>Date Range</Label>
+          <DateRangePicker
+            dateRange={dateRange}
+            onSelect={(range) => {
+              setDateRange(range)
               setPage(1)
             }}
           />
         </div>
-        <div>
-          <Label htmlFor="endDate">End Date</Label>
-          <Input
-            id="endDate"
-            type="date"
-            value={endDate}
-            onChange={(e) => {
-              setEndDate(e.target.value)
-              setPage(1)
-            }}
-          />
-          </div>
           </div>
         </CardContent>
       </Card>
@@ -523,14 +580,16 @@ export function AttendancePage() {
                   <TableHead>Mode</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Login Time</TableHead>
+                  <TableHead>Early/Late Sign In</TableHead>
                   <TableHead>Logout Time</TableHead>
+                  <TableHead>Early/Late Logout</TableHead>
                   <TableHead>Total Hours</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {attendances.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isEmployee ? 6 : 7} className="h-24 text-center">
+                    <TableCell colSpan={isEmployee ? 8 : 9} className="h-24 text-center">
                       <div className="flex flex-col items-center justify-center py-8">
                         <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
                         <p className="text-sm font-medium text-muted-foreground">No attendance records found</p>
@@ -572,10 +631,54 @@ export function AttendancePage() {
                           ? new Date(attendance.loginTime).toLocaleString()
                           : '-'}
                       </TableCell>
+                      <TableCell>
+                        {attendance.mode === 'OFFICE' && attendance.loginTime ? (
+                          <div className="space-y-1">
+                            {attendance.earlySignInMinutes !== null && attendance.earlySignInMinutes !== undefined && attendance.earlySignInMinutes > 0 && (
+                              <span className="text-xs text-green-600 font-medium">
+                                Early: {attendance.earlySignInMinutes} min
+                              </span>
+                            )}
+                            {attendance.lateSignInMinutes !== null && attendance.lateSignInMinutes !== undefined && attendance.lateSignInMinutes > 0 && (
+                              <span className="text-xs text-red-600 font-medium">
+                                Late: {attendance.lateSignInMinutes} min
+                              </span>
+                            )}
+                            {(!attendance.earlySignInMinutes || attendance.earlySignInMinutes === 0) && 
+                             (!attendance.lateSignInMinutes || attendance.lateSignInMinutes === 0) && (
+                              <span className="text-xs text-muted-foreground">On time</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {attendance.logoutTime
                           ? new Date(attendance.logoutTime).toLocaleString()
                           : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {attendance.mode === 'OFFICE' && attendance.logoutTime ? (
+                          <div className="space-y-1">
+                            {attendance.earlyLogoutMinutes !== null && attendance.earlyLogoutMinutes !== undefined && attendance.earlyLogoutMinutes > 0 && (
+                              <span className="text-xs text-orange-600 font-medium">
+                                Early: {attendance.earlyLogoutMinutes} min
+                              </span>
+                            )}
+                            {attendance.lateLogoutMinutes !== null && attendance.lateLogoutMinutes !== undefined && attendance.lateLogoutMinutes > 0 && (
+                              <span className="text-xs text-blue-600 font-medium">
+                                Late: {attendance.lateLogoutMinutes} min
+                              </span>
+                            )}
+                            {(!attendance.earlyLogoutMinutes || attendance.earlyLogoutMinutes === 0) && 
+                             (!attendance.lateLogoutMinutes || attendance.lateLogoutMinutes === 0) && (
+                              <span className="text-xs text-muted-foreground">On time</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="font-medium">
                         {attendance.totalHours

@@ -1,14 +1,17 @@
 import { prisma } from './prisma'
+import { randomUUID } from 'crypto'
 
 export async function logActivity(
   userId: string,
   action: string,
   entityType: string,
-  entityId: string
+  entityId: string,
+  description?: string
 ) {
   try {
     await prisma.activityLog.create({
       data: {
+        id: randomUUID(),
         userId,
         action,
         entityType,

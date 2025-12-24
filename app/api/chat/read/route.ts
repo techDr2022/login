@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { markReadSchema } from '@/lib/validations'
+import { randomUUID } from 'crypto'
 
 // POST /api/chat/read - Mark thread as read
 export async function POST(request: NextRequest) {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     const validated = markReadSchema.parse(body)
 
     // Verify user has access to thread
-    const thread = await prisma.chatThread.findUnique({
+    const thread = await prisma.chat_threads.findUnique({
       where: { id: validated.threadId },
     })
 
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Reset unread count to 0
-    await prisma.chatUnreadCount.upsert({
+    await prisma.chat_unread_counts.upsert({
       where: {
         threadId_userId: {
           threadId: validated.threadId,
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
         count: 0,
       },
       create: {
+        id: randomUUID(),
         threadId: validated.threadId,
         userId,
         count: 0,

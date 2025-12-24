@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { randomUUID } from 'crypto'
 import { UserRole, ChatThreadType } from '@prisma/client'
 import { createChatThreadSchema } from '@/lib/validations'
 
@@ -19,15 +20,15 @@ export async function GET(request: NextRequest) {
     const userRole = session.user.role as UserRole
 
     // Get TEAM thread (single global thread) - create if doesn't exist
-    let teamThread = await prisma.chatThread.findFirst({
+    let teamThread = await prisma.chat_threads.findFirst({
       where: { type: ChatThreadType.TEAM },
       include: {
-        messages: {
-          take: 1,
-          orderBy: { createdAt: 'desc' },
-          include: { sender: { select: { id: true, name: true, email: true } } },
-        },
-        unreadCounts: {
+          chat_messages: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            include: { User: { select: { id: true, name: true, email: true } } },
+          },
+        chat_unread_counts: {
           where: { userId },
         },
       },
@@ -35,15 +36,15 @@ export async function GET(request: NextRequest) {
 
     // Auto-create team thread if it doesn't exist
     if (!teamThread) {
-      teamThread = await prisma.chatThread.create({
-        data: { type: ChatThreadType.TEAM },
+      teamThread = await prisma.chat_threads.create({
+        data: { id: randomUUID(), type: ChatThreadType.TEAM },
         include: {
-          messages: {
+          chat_messages: {
             take: 1,
             orderBy: { createdAt: 'desc' },
-            include: { sender: { select: { id: true, name: true, email: true } } },
+            include: { User: { select: { id: true, name: true, email: true } } },
           },
-          unreadCounts: {
+          chat_unread_counts: {
             where: { userId },
           },
         },
@@ -51,20 +52,20 @@ export async function GET(request: NextRequest) {
     }
 
     // Get DIRECT threads where user is a participant
-    const directThreads = await prisma.chatThread.findMany({
+    const directThreads = await prisma.chat_threads.findMany({
       where: {
         type: ChatThreadType.DIRECT,
         OR: [{ user1Id: userId }, { user2Id: userId }],
       },
       include: {
-        user1: { select: { id: true, name: true, email: true, role: true } },
-        user2: { select: { id: true, name: true, email: true, role: true } },
-        messages: {
-          take: 1,
-          orderBy: { createdAt: 'desc' },
-          include: { sender: { select: { id: true, name: true, email: true } } },
-        },
-        unreadCounts: {
+          User_chat_threads_user1IdToUser: { select: { id: true, name: true, email: true, role: true } },
+          User_chat_threads_user2IdToUser: { select: { id: true, name: true, email: true, role: true } },
+          chat_messages: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            include: { User: { select: { id: true, name: true, email: true } } },
+          },
+        chat_unread_counts: {
           where: { userId },
         },
       },
@@ -75,17 +76,17 @@ export async function GET(request: NextRequest) {
     const formattedThreads = []
 
     if (teamThread) {
-      const unreadCount = teamThread.unreadCounts[0]?.count || 0
+      const unreadCount = teamThread.chat_unread_counts[0]?.count || 0
       formattedThreads.push({
         id: teamThread.id,
         type: teamThread.type,
         unreadCount,
-        lastMessage: teamThread.messages[0]
+        lastMessage: teamThread.chat_messages[0]
           ? {
-              id: teamThread.messages[0].id,
-              message: teamThread.messages[0].message,
-              sender: teamThread.messages[0].sender,
-              createdAt: teamThread.messages[0].createdAt,
+              id: teamThread.chat_messages[0].id,
+              message: teamThread.chat_messages[0].message,
+              sender: teamThread.chat_messages[0].User,
+              createdAt: teamThread.chat_messages[0].createdAt,
             }
           : null,
         participants: [],
@@ -93,19 +94,19 @@ export async function GET(request: NextRequest) {
     }
 
     for (const thread of directThreads) {
-      const unreadCount = thread.unreadCounts[0]?.count || 0
-      const otherUser = thread.user1Id === userId ? thread.user2 : thread.user1
+      const unreadCount = thread.chat_unread_counts[0]?.count || 0
+      const otherUser = thread.user1Id === userId ? thread.User_chat_threads_user2IdToUser : thread.User_chat_threads_user1IdToUser
 
       formattedThreads.push({
         id: thread.id,
         type: thread.type,
         unreadCount,
-        lastMessage: thread.messages[0]
+        lastMessage: thread.chat_messages[0]
           ? {
-              id: thread.messages[0].id,
-              message: thread.messages[0].message,
-              sender: thread.messages[0].sender,
-              createdAt: thread.messages[0].createdAt,
+              id: thread.chat_messages[0].id,
+              message: thread.chat_messages[0].message,
+              sender: thread.chat_messages[0].User,
+              createdAt: thread.chat_messages[0].createdAt,
             }
           : null,
         participants: otherUser ? [otherUser] : [],
@@ -138,13 +139,13 @@ export async function POST(request: NextRequest) {
 
     // TEAM thread creation - check if one exists, create if not
     if (validated.type === ChatThreadType.TEAM) {
-      let teamThread = await prisma.chatThread.findFirst({
+      let teamThread = await prisma.chat_threads.findFirst({
         where: { type: ChatThreadType.TEAM },
       })
 
       if (!teamThread) {
-        teamThread = await prisma.chatThread.create({
-          data: { type: ChatThreadType.TEAM },
+        teamThread = await prisma.chat_threads.create({
+          data: { id: randomUUID(), type: ChatThreadType.TEAM },
         })
       }
 
@@ -182,7 +183,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Check if thread already exists
-      const existingThread = await prisma.chatThread.findFirst({
+      const existingThread = await prisma.chat_threads.findFirst({
         where: {
           type: ChatThreadType.DIRECT,
           OR: [
@@ -197,15 +198,16 @@ export async function POST(request: NextRequest) {
       }
 
       // Create new DIRECT thread
-      const thread = await prisma.chatThread.create({
+      const thread = await prisma.chat_threads.create({
         data: {
+          id: randomUUID(),
           type: ChatThreadType.DIRECT,
           user1Id: userId,
           user2Id: validated.targetUserId,
         },
         include: {
-          user1: { select: { id: true, name: true, email: true, role: true } },
-          user2: { select: { id: true, name: true, email: true, role: true } },
+          User_chat_threads_user1IdToUser: { select: { id: true, name: true, email: true, role: true } },
+          User_chat_threads_user2IdToUser: { select: { id: true, name: true, email: true, role: true } },
         },
       })
 

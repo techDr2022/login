@@ -4,11 +4,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ArrowLeft, UserCog } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { UserRole } from '@prisma/client'
 import Link from 'next/link'
 
 interface EmployeeDetailProps {
@@ -17,8 +20,13 @@ interface EmployeeDetailProps {
 
 export function EmployeeDetail({ employeeId }: EmployeeDetailProps) {
   const router = useRouter()
+  const { data: session } = useSession()
   const [employee, setEmployee] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [roleUpdating, setRoleUpdating] = useState(false)
+  const [error, setError] = useState('')
+  
+  const isSuperAdmin = session?.user.role === UserRole.SUPER_ADMIN
 
   useEffect(() => {
     fetchEmployee()
@@ -55,18 +63,80 @@ export function EmployeeDetail({ employeeId }: EmployeeDetailProps) {
     }
   }
 
+  const handleRoleChange = async (newRole: 'EMPLOYEE' | 'MANAGER') => {
+    if (!employee || employee.role === newRole) return
+    
+    setRoleUpdating(true)
+    setError('')
+    
+    try {
+      const res = await fetch(`/api/employees/${employeeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      })
+      
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update role')
+      }
+      
+      const data = await res.json()
+      setEmployee({ ...employee, role: data.user.role })
+    } catch (err: any) {
+      setError(err.message || 'Failed to update role')
+    } finally {
+      setRoleUpdating(false)
+    }
+  }
+
   if (loading) return <div>Loading...</div>
   if (!employee) return <div>Employee not found</div>
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => router.back()}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
-        </Button>
-        <h1 className="text-3xl font-bold">{employee.name}</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">{employee.name}</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant={employee.role === 'MANAGER' ? 'default' : 'secondary'}>
+                {employee.role === 'MANAGER' ? 'Manager' : 'Employee'}
+              </Badge>
+              {!employee.isActive && (
+                <Badge variant="destructive">Inactive</Badge>
+              )}
+            </div>
+          </div>
+        </div>
+        {isSuperAdmin && employee.role !== 'SUPER_ADMIN' && (
+          <div className="flex items-center gap-2">
+            <Select
+              value={employee.role}
+              onValueChange={(value: 'EMPLOYEE' | 'MANAGER') => handleRoleChange(value)}
+              disabled={roleUpdating}
+            >
+              <SelectTrigger className="w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="EMPLOYEE">Employee</SelectItem>
+                <SelectItem value="MANAGER">Manager</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
+
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-md">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>

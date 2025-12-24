@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       prisma.client.findMany({
         where,
         include: {
-          accountManager: {
+          User: {
             select: {
               id: true,
               name: true,
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
           },
           _count: {
             select: {
-              tasks: true,
+              Task: true,
             },
           },
         },

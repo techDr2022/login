@@ -23,19 +23,23 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-select": "^2.0.0",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.0.4",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@types/react-datepicker": "^6.2.0",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "date-fns": "^4.1.0",
     "lucide-react": "^0.427.0",
     "next": "^16.1.1",
     "next-auth": "^4.24.7",
     "react": "^19.2.3",
+    "react-datepicker": "^9.1.0",
     "react-dom": "^19.2.3",
     "tailwind-merge": "^2.4.0",
     "tailwindcss-animate": "^1.0.7",
@@ -55,5 +59,8 @@
     "tsx": "^4.16.2",
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.50.1"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

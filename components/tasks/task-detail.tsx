@@ -35,18 +35,40 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
   const [error, setError] = useState('')
 
   const canApprove = session?.user.role && canApproveTasks(session.user.role as UserRole)
+  const isEmployee = session?.user.role === UserRole.EMPLOYEE
+  const isAssignedToMe = task && task.assignedToId === session?.user.id
 
   useEffect(() => {
-    fetchTask()
+    if (taskId) {
+      fetchTask()
+    } else {
+      setError('Invalid task ID')
+      setLoading(false)
+    }
   }, [taskId])
 
   const fetchTask = async () => {
+    if (!taskId) {
+      setError('Task ID is required')
+      setLoading(false)
+      return
+    }
+    
     try {
       const res = await fetch(`/api/tasks/${taskId}`)
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch task' }))
+        setError(errorData.error || `Failed to load task: ${res.status} ${res.statusText}`)
+        setTask(null)
+        return
+      }
       const data = await res.json()
       setTask(data)
+      setError('')
     } catch (err) {
       console.error('Failed to fetch task:', err)
+      setError('Failed to fetch task. Please try again.')
+      setTask(null)
     } finally {
       setLoading(false)
     }
@@ -73,12 +95,24 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
     }
   }
 
+  const handleQuickStatusUpdate = async (newStatus: 'Pending' | 'InProgress' | 'Review') => {
+    setError('')
+    try {
+      await updateTaskStatus(taskId, {
+        status: newStatus,
+      })
+      fetchTask()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update task status')
+    }
+  }
+
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'Approved':
-        return 'default'
+        return 'outline'
       case 'Rejected':
-        return 'destructive'
+        return 'outline'
       case 'Review':
         return 'secondary'
       default:
@@ -98,7 +132,31 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
   }
 
   if (loading) return <div>Loading...</div>
-  if (!task) return <div>Task not found</div>
+  if (!task) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center space-y-2">
+              <h2 className="text-xl font-semibold">Task not found</h2>
+              {error && (
+                <p className="text-sm text-red-600">{error}</p>
+              )}
+              <p className="text-sm text-gray-500">
+                The task you're looking for doesn't exist or you don't have permission to view it.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -110,17 +168,40 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
           </Button>
           <h1 className="text-3xl font-bold">{task.title}</h1>
         </div>
-        {canApprove && (
-          <Button onClick={() => {
-            setStatusFormData({
-              status: task.status as any,
-              rejectionFeedback: task.rejectionFeedback || '',
-            })
-            setStatusDialogOpen(true)
-          }}>
-            Update Status
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Employee quick actions */}
+          {isEmployee && isAssignedToMe && task.status !== 'Approved' && task.status !== 'Rejected' && (
+            <>
+              {task.status === 'Pending' && (
+                <Button onClick={() => handleQuickStatusUpdate('InProgress')} className="bg-blue-600 hover:bg-blue-700">
+                  Start Task
+                </Button>
+              )}
+              {task.status === 'InProgress' && (
+                <Button onClick={() => handleQuickStatusUpdate('Review')} className="bg-green-600 hover:bg-green-700">
+                  Mark as Complete
+                </Button>
+              )}
+              {task.status === 'Review' && (
+                <Button variant="outline" disabled>
+                  Awaiting Review
+                </Button>
+              )}
+            </>
+          )}
+          {/* Manager/Admin full status update */}
+          {canApprove && (
+            <Button onClick={() => {
+              setStatusFormData({
+                status: task.status as any,
+                rejectionFeedback: task.rejectionFeedback || '',
+              })
+              setStatusDialogOpen(true)
+            }}>
+              Update Status
+            </Button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -137,7 +218,16 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
           <CardContent className="space-y-4">
             <div>
               <p className="text-sm text-gray-500">Status</p>
-              <Badge variant={getStatusBadgeVariant(task.status)} className="mt-1">
+              <Badge
+                variant={getStatusBadgeVariant(task.status)}
+                className={
+                  task.status === 'Approved'
+                    ? 'mt-1 bg-green-100 text-green-800 border-green-200'
+                    : task.status === 'Rejected'
+                    ? 'mt-1 bg-red-100 text-red-800 border-red-200'
+                    : 'mt-1'
+                }
+              >
                 {task.status}
               </Badge>
             </div>
@@ -236,8 +326,12 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                     <SelectItem value="Pending">Pending</SelectItem>
                     <SelectItem value="InProgress">In Progress</SelectItem>
                     <SelectItem value="Review">Review</SelectItem>
-                    <SelectItem value="Approved">Approved</SelectItem>
-                    <SelectItem value="Rejected">Rejected</SelectItem>
+                    {canApprove && (
+                      <>
+                        <SelectItem value="Approved">Approved</SelectItem>
+                        <SelectItem value="Rejected">Rejected</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

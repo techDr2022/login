@@ -16,10 +16,10 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id
 
     // Get all unread counts for user
-    const unreadCounts = await prisma.chatUnreadCount.findMany({
+    const unreadCounts = await prisma.chat_unread_counts.findMany({
       where: { userId },
       include: {
-        thread: {
+        chat_threads: {
           select: {
             id: true,
             type: true,
@@ -35,11 +35,11 @@ export async function GET(request: NextRequest) {
 
     for (const unread of unreadCounts) {
       // For TEAM thread, always count
-      if (unread.thread.type === 'TEAM') {
+      if (unread.chat_threads.type === 'TEAM') {
         totalUnread += unread.count
-      } else if (unread.thread.type === 'DIRECT') {
+      } else if (unread.chat_threads.type === 'DIRECT') {
         // For DIRECT thread, verify user is participant
-        if (unread.thread.user1Id === userId || unread.thread.user2Id === userId) {
+        if (unread.chat_threads.user1Id === userId || unread.chat_threads.user2Id === userId) {
           totalUnread += unread.count
         }
       }

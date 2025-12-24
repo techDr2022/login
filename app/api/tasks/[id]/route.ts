@@ -20,21 +20,21 @@ export async function GET(
     const task = await prisma.task.findUnique({
       where: { id },
       include: {
-        assignedTo: {
+        User_Task_assignedToIdToUser: {
           select: {
             id: true,
             name: true,
             email: true,
           },
         },
-        assignedBy: {
+        User_Task_assignedByIdToUser: {
           select: {
             id: true,
             name: true,
             email: true,
           },
         },
-        client: {
+        Client: {
           select: {
             id: true,
             name: true,
@@ -48,11 +48,41 @@ export async function GET(
     }
 
     // Employees can only see their own tasks
-    if (session.user.role === UserRole.EMPLOYEE && task.assignedToId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    // If task is not assigned (assignedToId is null), employees cannot see it
+    if (session.user.role === UserRole.EMPLOYEE) {
+      // Debug logging in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Task access check:', {
+          taskId: task.id,
+          taskAssignedToId: task.assignedToId,
+          sessionUserId: session.user.id,
+          userIdsMatch: task.assignedToId === session.user.id,
+          taskAssignedTo: task.User_Task_assignedToIdToUser?.name || 'N/A',
+        })
+      }
+      
+      if (!task.assignedToId) {
+        return NextResponse.json({ 
+          error: 'This task is not assigned to anyone. Please contact your manager to assign it.' 
+        }, { status: 403 })
+      }
+      
+      if (task.assignedToId !== session.user.id) {
+        return NextResponse.json({ 
+          error: `You do not have permission to view this task. This task is assigned to ${task.User_Task_assignedToIdToUser?.name || 'another user'}.` 
+        }, { status: 403 })
+      }
     }
 
-    return NextResponse.json(task)
+    // Transform task to map Prisma relation names to expected field names
+    const transformedTask = {
+      ...task,
+      assignedTo: task.User_Task_assignedToIdToUser || null,
+      assignedBy: task.User_Task_assignedByIdToUser || null,
+      client: task.Client || null,
+    }
+
+    return NextResponse.json(transformedTask)
   } catch (error) {
     console.error('Error fetching task:', error)
     return NextResponse.json(
