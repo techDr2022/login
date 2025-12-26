@@ -23,13 +23,13 @@ const prisma = new PrismaClient()
 
 async function main() {
   // Clear existing data
-  await prisma.chatUnreadCount.deleteMany()
-  await prisma.chatMessage.deleteMany()
-  await prisma.chatThread.deleteMany()
-  await prisma.activityLog.deleteMany()
+  await prisma.chat_unread_counts.deleteMany()
+  await prisma.chat_messages.deleteMany()
+  await prisma.chat_threads.deleteMany()
+  await prisma.activity_logs.deleteMany()
   await prisma.task.deleteMany()
   await prisma.client.deleteMany()
-  await prisma.attendance.deleteMany()
+  await prisma.attendances.deleteMany()
   await prisma.user.deleteMany()
 
   const passwordHash = await bcrypt.hash('password123', 10)
@@ -206,7 +206,7 @@ async function main() {
         
         const totalHours = (logoutTime.getTime() - loginTime.getTime()) / (1000 * 60 * 60)
 
-        await prisma.attendance.create({
+        await prisma.attendances.create({
           data: {
             id: crypto.randomUUID(),
             userId: employee.id,
@@ -222,7 +222,7 @@ async function main() {
   }
 
   // Create a TEAM chat thread
-  const teamThread = await prisma.chatThread.create({
+  const teamThread = await prisma.chat_threads.create({
     data: {
       id: crypto.randomUUID(),
       type: ChatThreadType.TEAM,
@@ -257,7 +257,7 @@ async function main() {
   })
 
   // Add doctors
-  await prisma.clientDoctor.create({
+  await prisma.client_doctors.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -271,7 +271,7 @@ async function main() {
   })
 
   // Add services
-  await prisma.clientService.create({
+  await prisma.client_services.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -281,7 +281,7 @@ async function main() {
     },
   })
 
-  await prisma.clientService.create({
+  await prisma.client_services.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -291,7 +291,7 @@ async function main() {
   })
 
   // Add USPs
-  await prisma.clientUSP.create({
+  await prisma.client_usps.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -300,7 +300,7 @@ async function main() {
   })
 
   // Add access credentials
-  await prisma.clientAccess.create({
+  await prisma.client_accesses.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -313,7 +313,7 @@ async function main() {
   })
 
   // Add branding
-  await prisma.clientBranding.create({
+  await prisma.client_branding.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -329,7 +329,7 @@ async function main() {
   })
 
   // Add targeting
-  await prisma.clientTargeting.create({
+  await prisma.client_targeting.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -342,7 +342,7 @@ async function main() {
   })
 
   // Add competitors
-  await prisma.clientCompetitor.create({
+  await prisma.client_competitors.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -352,7 +352,7 @@ async function main() {
   })
 
   // Add marketing requirements
-  await prisma.clientMarketingRequirement.create({
+  await prisma.client_marketing_requirements.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -372,7 +372,7 @@ async function main() {
   })
 
   // Add approval settings
-  await prisma.clientApprovalSettings.create({
+  await prisma.client_approval_settings.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,
@@ -387,7 +387,7 @@ async function main() {
   // Add KPI for current month
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  await prisma.clientKpiMonthly.create({
+  await prisma.client_kpi_monthly.create({
     data: {
       id: crypto.randomUUID(),
       clientId: sampleClient.id,

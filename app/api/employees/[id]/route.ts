@@ -56,7 +56,7 @@ export async function GET(
 
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const presentDays = await prisma.attendance.count({
+    const presentDays = await prisma.attendances.count({
       where: {
         userId: employee.id,
         status: 'Present',

@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [attendances, total] = await Promise.all([
-      prisma.attendance.findMany({
+      prisma.attendances.findMany({
         where,
         select: {
           id: true,
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
         take: limit,
         orderBy: { date: 'desc' },
       }),
-      prisma.attendance.count({ where }),
+      prisma.attendances.count({ where }),
     ])
 
     // For managers/admin, also include absent employees for the date range
@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
           )
 
           // Get all existing attendances for the date range in one query
-          const existingAttendances = await prisma.attendance.findMany({
+          const existingAttendances = await prisma.attendances.findMany({
             where: {
               userId: userId ? userId : undefined,
               date: {
@@ -225,7 +225,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Office Lates: COUNT(attendance WHERE mode = OFFICE AND status = Late)
-    const officeLates = await prisma.attendance.count({
+    const officeLates = await prisma.attendances.count({
       where: {
         ...summaryWhere,
         mode: AttendanceMode.OFFICE,
@@ -234,7 +234,7 @@ export async function GET(request: NextRequest) {
     })
 
     // WFH Days: COUNT(attendance WHERE mode = WFH AND status = Present)
-    const wfhDays = await prisma.attendance.count({
+    const wfhDays = await prisma.attendances.count({
       where: {
         ...summaryWhere,
         mode: AttendanceMode.WFH,

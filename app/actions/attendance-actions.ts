@@ -44,7 +44,7 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
   today.setHours(0, 0, 0, 0)
 
   // Check if already clocked in today
-  const existing = await prisma.attendance.findUnique({
+  const existing = await prisma.attendances.findUnique({
     where: {
       userId_date: {
         userId: session.user.id,
@@ -101,7 +101,7 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
     lateSignInMinutes = null
   }
 
-  const attendance = await prisma.attendance.upsert({
+  const attendance = await prisma.attendances.upsert({
     where: {
       userId_date: {
         userId: session.user.id,
@@ -166,7 +166,7 @@ export async function clockOut() {
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
-  const attendance = await prisma.attendance.findUnique({
+  const attendance = await prisma.attendances.findUnique({
     where: {
       userId_date: {
         userId: session.user.id,
@@ -230,7 +230,7 @@ export async function clockOut() {
   // For OFFICE mode, status was already set on clock in (Present or Late)
   // For LEAVE mode, status remains Present
 
-  const updated = await prisma.attendance.update({
+  const updated = await prisma.attendances.update({
     where: { id: attendance.id },
     data: {
       logoutTime: now,
@@ -262,7 +262,7 @@ export async function startLunchBreak() {
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
-  const attendance = await prisma.attendance.findUnique({
+  const attendance = await prisma.attendances.findUnique({
     where: {
       userId_date: {
         userId: session.user.id,
@@ -279,7 +279,7 @@ export async function startLunchBreak() {
     throw new Error('Lunch break already started')
   }
 
-  const updated = await prisma.attendance.update({
+  const updated = await prisma.attendances.update({
     where: { id: attendance.id },
     data: {
       lunchStart: now,
@@ -307,7 +307,7 @@ export async function endLunchBreak() {
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
-  const attendance = await prisma.attendance.findUnique({
+  const attendance = await prisma.attendances.findUnique({
     where: {
       userId_date: {
         userId: session.user.id,
@@ -328,7 +328,7 @@ export async function endLunchBreak() {
     throw new Error('Lunch break already ended')
   }
 
-  const updated = await prisma.attendance.update({
+  const updated = await prisma.attendances.update({
     where: { id: attendance.id },
     data: {
       lunchEnd: now,
@@ -356,7 +356,7 @@ export async function pingWFHActivity() {
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
-  const attendance = await prisma.attendance.findUnique({
+  const attendance = await prisma.attendances.findUnique({
     where: {
       userId_date: {
         userId: session.user.id,
@@ -373,7 +373,7 @@ export async function pingWFHActivity() {
     throw new Error('Already clocked out')
   }
 
-  const updated = await prisma.attendance.update({
+  const updated = await prisma.attendances.update({
     where: { id: attendance.id },
     data: {
       lastActivityTime: now,

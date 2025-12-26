@@ -9,7 +9,7 @@ export async function logActivity(
   description?: string
 ) {
   try {
-    await prisma.activityLog.create({
+    await prisma.activity_logs.create({
       data: {
         id: randomUUID(),
         userId,

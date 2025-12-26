@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         })
 
         // Total attendance records
-        const totalAttendance = await prisma.attendance.count({
+        const totalAttendance = await prisma.attendances.count({
           where: {
             userId: employee.id,
           },
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
         // Present days (last 30 days)
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        const presentDays = await prisma.attendance.count({
+        const presentDays = await prisma.attendances.count({
           where: {
             userId: employee.id,
             status: 'Present',
