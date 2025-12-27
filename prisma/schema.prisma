@@ -83,6 +83,8 @@ model User {
   role                                    UserRole
   isActive                                Boolean         @default(true)
   createdAt                               DateTime        @default(now())
+  joiningDate                             DateTime?
+  adminNotes                              String?
   notifyChatMentions                      Boolean         @default(true)
   notifyClientChanges                     Boolean         @default(true)
   notifyTaskUpdates                       Boolean         @default(true)

@@ -37,7 +37,7 @@ const navItems: NavItem[] = [
   { href: '/employees', label: 'Employees', icon: UserCog, roles: [UserRole.SUPER_ADMIN] },
   { href: '/attendance', label: 'Attendance', icon: Clock },
   { href: '/chat', label: 'Team Chat', icon: MessageCircle },
-  { href: '/reports', label: 'Reports', icon: BarChart3, roles: [UserRole.MANAGER, UserRole.SUPER_ADMIN] },
+  { href: '/reports', label: 'Reports', icon: BarChart3, roles: [UserRole.SUPER_ADMIN] },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 

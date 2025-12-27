@@ -55,30 +55,7 @@ async function main() {
     },
   })
 
-  // Create Employees
-  const employeeData = [
-    { name: 'Gouthami', email: 'gouthami@techdr.in', role: 'Social Media Manager' },
-    { name: 'Jagadeesh', email: 'jagadeesh@techdr.in', role: 'Social Media Manager' },
-    { name: 'Shaheena', email: 'shaheena@techdr.in', role: 'Content Writer' },
-    { name: 'Rohith', email: 'rohith@techdr.in', role: 'Graphic Designer' },
-    { name: 'Chaithanya', email: 'chaithanya@techdr.in', role: 'Graphic Designer' },
-    { name: 'Shiva Prasad', email: 'shivaprasad@techdr.in', role: 'Full Stack Developer' },
-    { name: 'Raghu', email: 'raghu@techdr.in', role: 'Full Stack Developer' },
-  ]
-
-  const employees = []
-  for (const empData of employeeData) {
-    const emp = await prisma.user.create({
-      data: {
-        id: crypto.randomUUID(),
-        name: empData.name,
-        email: empData.email,
-        passwordHash,
-        role: UserRole.EMPLOYEE,
-      },
-    })
-    employees.push(emp)
-  }
+  // Employees removed - only super admins exist now
 
   // Create Clients (Real Client List)
   const clientData = [
@@ -128,9 +105,7 @@ async function main() {
 
   const clients = []
 
-  // Define dedicated account managers for clients
-  const accountManagerNames = ['Gouthami', 'Jagadeesh', 'Shaheena']
-  const accountManagers = employees.filter((e) => accountManagerNames.includes(e.name))
+  // Create clients without account managers (employees removed)
   for (let i = 0; i < clientData.length; i++) {
     const clientInfo = clientData[i]
     
@@ -141,8 +116,8 @@ async function main() {
       clientServices.push(services[Math.floor(Math.random() * services.length)])
     }
 
-    // Rotate between the defined account managers
-    const accountManager = accountManagers[i % accountManagers.length]
+    // Rotate between super admins as account managers
+    const accountContact = i % 2 === 0 ? superAdmin1 : superAdmin2
 
     const client = await prisma.client.create({
       data: {
@@ -151,21 +126,21 @@ async function main() {
         doctorOrHospitalName: clientInfo.doctorOrHospitalName,
         location: clientInfo.location,
         services: clientServices,
-        accountManagerId: accountManager?.id,
+        accountManagerId: accountContact.id,
       },
     })
     clients.push(client)
   }
 
-  // Create 30 Tasks
+  // Create 30 Tasks (assigned to super admins only)
   const tasks = []
   const priorities = [TaskPriority.Low, TaskPriority.Medium, TaskPriority.High, TaskPriority.Urgent]
   const taskStatuses = [TaskStatus.Pending, TaskStatus.InProgress, TaskStatus.Review, TaskStatus.Approved, TaskStatus.Rejected]
   
   for (let i = 0; i < 30; i++) {
     const client = clients[i % clients.length]
-    const assignedTo = employees[i % employees.length]
     const assignedBy = i % 2 === 0 ? superAdmin1 : superAdmin2
+    const assignedTo = i % 2 === 0 ? superAdmin2 : superAdmin1 // Assign between super admins
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + Math.floor(Math.random() * 30))
 
@@ -186,15 +161,16 @@ async function main() {
     tasks.push(task)
   }
 
-  // Create 7 days of attendance records
+  // Create 7 days of attendance records for super admins
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
+  const superAdmins = [superAdmin1, superAdmin2]
   for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
     const date = new Date(today)
     date.setDate(date.getDate() - dayOffset)
     
-    for (const employee of employees) {
+    for (const admin of superAdmins) {
       const hasAttendance = Math.random() > 0.2 // 80% attendance rate
       if (hasAttendance) {
         const loginTime = new Date(date)
@@ -209,7 +185,7 @@ async function main() {
         await prisma.attendances.create({
           data: {
             id: crypto.randomUUID(),
-            userId: employee.id,
+            userId: admin.id,
             date,
             loginTime,
             logoutTime,
@@ -251,8 +227,8 @@ async function main() {
       workingDays: [1, 2, 3, 4, 5],
       workingTimings: '9:00 AM - 6:00 PM',
       preferredLanguage: 'BOTH' as any,
-      // Assign a default account manager from the dedicated list
-      accountManagerId: accountManagers[0]?.id,
+      // Assign a default account contact from the dedicated list
+      accountManagerId: accountContacts[0]?.id,
     },
   })
 
@@ -404,7 +380,7 @@ async function main() {
   console.log('Seed data created successfully!')
   console.log(`- 2 Super Admins: Raviteja, Abhista`)
   console.log(`- 7 Employees:`)
-  console.log(`  * Social Media Managers: Gouthami, Jagadeesh`)
+  console.log(`  * Social Media: Gouthami, Jagadeesh`)
   console.log(`  * Content Writer: Shaheena`)
   console.log(`  * Graphic Designers: Rohith, Chaithanya`)
   console.log(`  * Full Stack Developers: Shiva Prasad, Raghu`)

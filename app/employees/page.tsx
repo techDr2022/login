@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { LayoutWrapper } from '@/components/layout-wrapper'
-import { EmployeesList } from '@/components/employees/employees-list'
+import { EmployeesManagementPage } from '@/components/employees/employees-management-page'
 import { UserRole } from '@prisma/client'
 
 export default async function EmployeesPage() {
@@ -13,19 +13,16 @@ export default async function EmployeesPage() {
     redirect('/login')
   }
 
-  if (session.user.role !== UserRole.SUPER_ADMIN) {
+  const role = session.user.role as UserRole
+
+  // Only Super Admin can access
+  if (role !== UserRole.SUPER_ADMIN) {
     redirect('/dashboard')
   }
 
   return (
     <LayoutWrapper>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
-          <p className="text-muted-foreground mt-2">Manage your team members</p>
-        </div>
-        <EmployeesList />
-      </div>
+      <EmployeesManagementPage />
     </LayoutWrapper>
   )
 }

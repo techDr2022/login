@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@prisma/client'
 
-// GET /api/chat/users - Get users for direct chat (only for Managers/Super Admins)
+// GET /api/chat/users - Get users for direct chat (only for Super Admins)
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -16,10 +16,10 @@ export async function GET(request: NextRequest) {
 
     const userRole = session.user.role as UserRole
 
-    // Only MANAGER/SUPER_ADMIN can list users for direct chat
-    if (userRole !== UserRole.MANAGER && userRole !== UserRole.SUPER_ADMIN) {
+    // Only SUPER_ADMIN can list users for direct chat
+    if (userRole !== UserRole.SUPER_ADMIN) {
       return NextResponse.json(
-        { error: 'Only Managers and Super Admins can list users for direct chat' },
+        { error: 'Only Super Admins can list users for direct chat' },
         { status: 403 }
       )
     }
@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     const users = await prisma.user.findMany({
       where: {
         isActive: true,
+        role: UserRole.SUPER_ADMIN,
         id: { not: session.user.id }, // Exclude current user
       },
       select: {

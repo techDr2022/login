@@ -74,15 +74,12 @@ export async function GET(request: NextRequest) {
           if (teamThread) accessibleThreadIds.push(teamThread.id)
 
           for (const thread of directThreads) {
-            const hasManagerOrSuperAdmin =
-              userRole === UserRole.MANAGER ||
+            const hasSuperAdmin =
               userRole === UserRole.SUPER_ADMIN ||
-              thread.User_chat_threads_user1IdToUser?.role === UserRole.MANAGER ||
               thread.User_chat_threads_user1IdToUser?.role === UserRole.SUPER_ADMIN ||
-              thread.User_chat_threads_user2IdToUser?.role === UserRole.MANAGER ||
               thread.User_chat_threads_user2IdToUser?.role === UserRole.SUPER_ADMIN
 
-            if (hasManagerOrSuperAdmin) {
+            if (hasSuperAdmin) {
               accessibleThreadIds.push(thread.id)
             }
           }

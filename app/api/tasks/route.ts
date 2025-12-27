@@ -45,17 +45,12 @@ export async function GET(request: NextRequest) {
       where.clientId = clientId
     }
 
-    // Employees can only see their own tasks
-    if (session.user.role === UserRole.EMPLOYEE) {
-      where.assignedToId = session.user.id
-    } else {
-      // Managers/Admins can filter by assignedToId or assignedById
-      if (assignedToId) {
-        where.assignedToId = assignedToId
-      }
-      if (assignedById) {
-        where.assignedById = assignedById
-      }
+    // Super admins can filter by assignedToId or assignedById
+    if (assignedToId) {
+      where.assignedToId = assignedToId
+    }
+    if (assignedById) {
+      where.assignedById = assignedById
     }
 
     const [tasks, total] = await Promise.all([

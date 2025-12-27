@@ -50,7 +50,7 @@ export function TasksList() {
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
-  const [employees, setEmployees] = useState<Array<{ id: string; name: string }>>([])
+  const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -78,13 +78,12 @@ export function TasksList() {
   const [error, setError] = useState('')
 
   const canManage = session?.user.role && canManageTasks(session.user.role as UserRole)
-  const isEmployee = session?.user.role === UserRole.EMPLOYEE
 
   useEffect(() => {
     fetchTasks()
-    // Everyone can fetch clients and employees for task assignment
+    // Fetch clients and users for task assignment
     fetchClients()
-    fetchEmployees()
+    fetchUsers()
   }, [page, search, statusFilter, priorityFilter, assignedByMeFilter])
 
   const fetchClients = async () => {
@@ -97,12 +96,12 @@ export function TasksList() {
     }
   }
 
-  const fetchEmployees = async () => {
+  const fetchUsers = async () => {
     try {
       // Fetch all users so tasks can be assigned to anyone
       const res = await fetch('/api/users')
       const data = await res.json()
-      setEmployees(data.users || [])
+      setUsers(data.users || [])
     } catch (err) {
       console.error('Failed to fetch users:', err)
     }
@@ -404,12 +403,12 @@ export function TasksList() {
                         onValueChange={(value) => setFormData({ ...formData, assignedToId: value })}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select employee (optional)" />
+                          <SelectValue placeholder="Select user (optional)" />
                         </SelectTrigger>
                         <SelectContent>
-                          {employees.map((e) => (
-                            <SelectItem key={e.id} value={e.id}>
-                              {e.name}
+                          {users.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -536,15 +535,13 @@ export function TasksList() {
                     {canManage && (
                       <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
                         <div className="flex justify-end gap-2">
-                          {!isEmployee && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleStatusUpdate(task)}
-                            >
-                              Update Status
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleStatusUpdate(task)}
+                          >
+                            Update Status
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"

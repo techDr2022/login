@@ -154,10 +154,10 @@ export async function POST(request: NextRequest) {
 
     // DIRECT thread creation - STRICT PERMISSIONS
     if (validated.type === ChatThreadType.DIRECT) {
-      // Only MANAGER/SUPER_ADMIN can create DIRECT threads
-      if (userRole !== UserRole.MANAGER && userRole !== UserRole.SUPER_ADMIN) {
+      // Only SUPER_ADMIN can create DIRECT threads
+      if (userRole !== UserRole.SUPER_ADMIN) {
         return NextResponse.json(
-          { error: 'Only Managers and Super Admins can create direct threads' },
+          { error: 'Only Super Admins can create direct threads' },
           { status: 403 }
         )
       }

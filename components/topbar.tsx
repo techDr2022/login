@@ -92,8 +92,6 @@ export function TopBar() {
     switch (role) {
       case UserRole.SUPER_ADMIN:
         return 'default'
-      case UserRole.MANAGER:
-        return 'secondary'
       default:
         return 'outline'
     }

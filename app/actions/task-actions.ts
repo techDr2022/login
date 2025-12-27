@@ -138,7 +138,7 @@ export async function updateTask(id: string, data: {
   // Check if user can approve/reject
   if (data.status === 'Approved' || data.status === 'Rejected') {
     if (!canApproveTasks(session.user.role as UserRole)) {
-      throw new Error('Only managers and admins can approve/reject tasks')
+      throw new Error('Only admins can approve/reject tasks')
     }
     if (data.status === 'Rejected' && !data.rejectionFeedback) {
       throw new Error('Rejection feedback is required when rejecting a task')
@@ -181,7 +181,7 @@ export async function updateTaskStatus(id: string, data: {
   // Check if user can approve/reject
   if (data.status === 'Approved' || data.status === 'Rejected') {
     if (!canApproveTasks(userRole)) {
-      throw new Error('Only managers and admins can approve/reject tasks')
+      throw new Error('Only admins can approve/reject tasks')
     }
     if (data.status === 'Rejected' && !data.rejectionFeedback) {
       throw new Error('Rejection feedback is required when rejecting a task')

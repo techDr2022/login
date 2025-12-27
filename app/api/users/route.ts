@@ -13,16 +13,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const searchParams = request.nextUrl.searchParams
-    const role = searchParams.get('role') as UserRole | null
-
-    const where: any = { isActive: true }
-    if (role) {
-      where.role = role
-    }
-
+    // Only return super admins
     const users = await prisma.user.findMany({
-      where,
+      where: {
+        isActive: true,
+        role: UserRole.SUPER_ADMIN,
+      },
       select: {
         id: true,
         name: true,

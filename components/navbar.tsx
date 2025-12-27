@@ -25,8 +25,6 @@ export function Navbar() {
   if (!session) return null
 
   const role = session.user.role as UserRole
-  const isEmployee = role === UserRole.EMPLOYEE
-  const isManager = role === UserRole.MANAGER
   const isSuperAdmin = role === UserRole.SUPER_ADMIN
 
   const navItems = [
@@ -34,7 +32,6 @@ export function Navbar() {
     { href: '/clients', label: 'Clients', icon: Users },
     { href: '/tasks', label: 'Tasks', icon: CheckSquare },
     { href: '/attendance', label: 'Attendance', icon: Clock },
-    ...(isSuperAdmin ? [{ href: '/employees', label: 'Employees', icon: User }] : []),
   ]
 
   const getInitials = (name: string) => {
@@ -50,8 +47,6 @@ export function Navbar() {
     switch (role) {
       case UserRole.SUPER_ADMIN:
         return 'default'
-      case UserRole.MANAGER:
-        return 'secondary'
       default:
         return 'outline'
     }

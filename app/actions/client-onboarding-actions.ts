@@ -244,7 +244,7 @@ export async function deleteClientAccess(id: string) {
   return { success: true }
 }
 
-// Helper to decrypt password (only for Admin/Manager)
+// Helper to decrypt password (only for Admin)
 export async function getClientAccessWithPassword(id: string) {
   const session = await checkAuth()
   const access = await prisma.client_accesses.findUnique({

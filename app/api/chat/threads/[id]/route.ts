@@ -50,18 +50,15 @@ export async function GET(
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
       }
 
-      // Check if user is MANAGER/SUPER_ADMIN OR thread has MANAGER/SUPER_ADMIN participant
-      const hasManagerOrSuperAdmin =
-        userRole === UserRole.MANAGER ||
+      // Check if user is SUPER_ADMIN OR thread has SUPER_ADMIN participant
+      const hasSuperAdmin =
         userRole === UserRole.SUPER_ADMIN ||
-        thread.User_chat_threads_user1IdToUser?.role === UserRole.MANAGER ||
         thread.User_chat_threads_user1IdToUser?.role === UserRole.SUPER_ADMIN ||
-        thread.User_chat_threads_user2IdToUser?.role === UserRole.MANAGER ||
         thread.User_chat_threads_user2IdToUser?.role === UserRole.SUPER_ADMIN
 
-      if (!hasManagerOrSuperAdmin) {
+      if (!hasSuperAdmin) {
         return NextResponse.json(
-          { error: 'Access denied: Direct threads require Manager or Super Admin participation' },
+          { error: 'Access denied: Direct threads require Super Admin participation' },
           { status: 403 }
         )
       }

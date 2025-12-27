@@ -35,7 +35,6 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
   const [error, setError] = useState('')
 
   const canApprove = session?.user.role && canApproveTasks(session.user.role as UserRole)
-  const isEmployee = session?.user.role === UserRole.EMPLOYEE
   const isAssignedToMe = task && task.assignedToId === session?.user.id
 
   useEffect(() => {
@@ -169,27 +168,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
           <h1 className="text-3xl font-bold">{task.title}</h1>
         </div>
         <div className="flex items-center gap-2">
-          {/* Employee quick actions */}
-          {isEmployee && isAssignedToMe && task.status !== 'Approved' && task.status !== 'Rejected' && (
-            <>
-              {task.status === 'Pending' && (
-                <Button onClick={() => handleQuickStatusUpdate('InProgress')} className="bg-blue-600 hover:bg-blue-700">
-                  Start Task
-                </Button>
-              )}
-              {task.status === 'InProgress' && (
-                <Button onClick={() => handleQuickStatusUpdate('Review')} className="bg-green-600 hover:bg-green-700">
-                  Mark as Complete
-                </Button>
-              )}
-              {task.status === 'Review' && (
-                <Button variant="outline" disabled>
-                  Awaiting Review
-                </Button>
-              )}
-            </>
-          )}
-          {/* Manager/Admin full status update */}
+          {/* Admin full status update */}
           {canApprove && (
             <Button onClick={() => {
               setStatusFormData({

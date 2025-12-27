@@ -41,7 +41,7 @@ export function ChatPageContent() {
 
   const userRole = session?.user.role as UserRole
   const isManagerOrSuperAdmin =
-    userRole === UserRole.MANAGER || userRole === UserRole.SUPER_ADMIN
+    userRole === UserRole.SUPER_ADMIN
 
   const fetchThreads = useCallback(async () => {
     try {
