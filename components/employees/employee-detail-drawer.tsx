@@ -144,6 +144,31 @@ export function EmployeeDetailDrawer({
       }, [])
     : []
 
+  const handleReactivate = async () => {
+    if (!employee) return
+
+    try {
+      const res = await fetch(`/api/admin/employees/${employee.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: true }),
+      })
+      
+      if (res.ok) {
+        alert('Employee reactivated successfully')
+        onOpenChange(false)
+        // Refresh the employee list
+        window.location.reload()
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Failed to reactivate employee')
+      }
+    } catch (error) {
+      console.error('Failed to reactivate employee:', error)
+      alert('Failed to reactivate employee')
+    }
+  }
+
   const handleDelete = async () => {
     if (!employee) return
 
@@ -195,6 +220,16 @@ export function EmployeeDetailDrawer({
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
               </Button>
+              {!employee.isActive && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleReactivate}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Reactivate
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"

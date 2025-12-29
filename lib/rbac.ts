@@ -25,6 +25,6 @@ export function canViewAllTasks(userRole: UserRole): boolean {
 }
 
 export function canClockInOut(userRole: UserRole): boolean {
-  return userRole === UserRole.SUPER_ADMIN
+  return userRole === UserRole.EMPLOYEE
 }
 

@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
 import { CheckCircle2, Copy, AlertCircle } from 'lucide-react'
 import { UserRole } from '@prisma/client'
 
@@ -51,6 +52,7 @@ export function AddEmployeeDialog({
     confirmPassword: '',
     joiningDate: new Date().toISOString().split('T')[0],
     adminNotes: '',
+    isActive: true,
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -69,6 +71,7 @@ export function AddEmployeeDialog({
           ? new Date(employee.joiningDate).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
         adminNotes: employee.adminNotes || '',
+        isActive: employee.isActive,
       })
       setPasswordGenerated(false)
     } else {
@@ -85,6 +88,7 @@ export function AddEmployeeDialog({
       confirmPassword: '',
       joiningDate: new Date().toISOString().split('T')[0],
       adminNotes: '',
+      isActive: true,
     })
     setError('')
     setCredentials(null)
@@ -138,6 +142,7 @@ export function AddEmployeeDialog({
           role: formData.role,
           joiningDate: formData.joiningDate,
           adminNotes: formData.adminNotes || null,
+          isActive: formData.isActive,
         }
 
         const res = await fetch(`/api/admin/employees/${employee.id}`, {
@@ -363,6 +368,21 @@ export function AddEmployeeDialog({
                   className="rounded-xl"
                 />
               </div>
+            </div>
+          )}
+
+          {employee && (
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isActive"
+                checked={formData.isActive}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, isActive: checked === true })
+                }
+              />
+              <Label htmlFor="isActive" className="text-sm font-normal cursor-pointer">
+                Active Employee
+              </Label>
             </div>
           )}
 

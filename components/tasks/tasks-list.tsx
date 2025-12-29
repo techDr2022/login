@@ -50,7 +50,7 @@ export function TasksList() {
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
-  const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
+  const [users, setUsers] = useState<Array<{ id: string; name: string; email?: string }>>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -101,7 +101,13 @@ export function TasksList() {
       // Fetch all users so tasks can be assigned to anyone
       const res = await fetch('/api/users')
       const data = await res.json()
-      setUsers(data.users || [])
+      const fetchedUsers = data.users || []
+      setUsers(fetchedUsers)
+      
+      // Debug logging to help troubleshoot
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Fetched users for task assignment:', fetchedUsers)
+      }
     } catch (err) {
       console.error('Failed to fetch users:', err)
     }
@@ -400,19 +406,30 @@ export function TasksList() {
                       <Label htmlFor="assignedToId">Assigned To</Label>
                       <Select
                         value={formData.assignedToId || undefined}
-                        onValueChange={(value) => setFormData({ ...formData, assignedToId: value })}
+                        onValueChange={(value) => setFormData({ ...formData, assignedToId: value === 'unassigned' ? '' : value })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select user (optional)" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
                           {users.map((u) => (
                             <SelectItem key={u.id} value={u.id}>
-                              {u.name}
+                              <div className="flex flex-col">
+                                <span className="font-medium">{u.name}</span>
+                                {u.email && (
+                                  <span className="text-xs text-muted-foreground">{u.email}</span>
+                                )}
+                              </div>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      {users.length === 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          No users available. Make sure employees are active in the system.
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div>

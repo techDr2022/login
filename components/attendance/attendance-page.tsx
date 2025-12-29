@@ -3,16 +3,22 @@
 import { useSession } from 'next-auth/react'
 import { UserRole } from '@prisma/client'
 import { SuperAdminAttendancePanel } from './super-admin-attendance-panel'
+import { EmployeeAttendancePanel } from './employee-attendance-panel'
 
 export function AttendancePage() {
   const { data: session } = useSession()
-  const isSuperAdmin = session?.user.role === UserRole.SUPER_ADMIN
+  const role = session?.user.role as UserRole
 
   // Show super admin panel for super admins
-  if (isSuperAdmin) {
+  if (role === UserRole.SUPER_ADMIN) {
     return <SuperAdminAttendancePanel />
   }
 
-  // Return empty for non-super admins (shouldn't happen with proper auth)
+  // Show employee panel for employees
+  if (role === UserRole.EMPLOYEE) {
+    return <EmployeeAttendancePanel />
+  }
+
+  // Return empty for other roles (shouldn't happen with proper auth)
   return null
 }

@@ -7,6 +7,7 @@ import ReactDatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 interface DatePickerProps {
   date?: Date | null
@@ -26,34 +27,33 @@ export function DatePicker({
   const [isOpen, setIsOpen] = React.useState(false)
 
   return (
-    <div className={cn('relative', className)}>
-      <Button
-        variant="outline"
-        className={cn(
-          'w-full justify-start text-left font-normal',
-          !date && 'text-muted-foreground'
-        )}
-        disabled={disabled}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-      >
-        <CalendarIcon className="mr-2 h-4 w-4" />
-        {date ? format(date, 'PPP') : <span>{placeholder}</span>}
-      </Button>
-      {isOpen && (
-        <div className="absolute z-50 mt-1 bg-white border rounded-md shadow-lg">
-          <ReactDatePicker
-            selected={date || null}
-            onChange={(selectedDate: Date | null) => {
-              onSelect?.(selectedDate)
-              if (selectedDate) {
-                setIsOpen(false)
-              }
-            }}
-            inline
-            calendarClassName="!border-0 !shadow-none"
-          />
-        </div>
-      )}
-    </div>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn(
+            'w-full justify-start text-left font-normal',
+            !date && 'text-muted-foreground'
+          )}
+          disabled={disabled}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {date ? format(date, 'PPP') : <span>{placeholder}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <ReactDatePicker
+          selected={date || null}
+          onChange={(selectedDate: Date | null) => {
+            onSelect?.(selectedDate)
+            if (selectedDate) {
+              setIsOpen(false)
+            }
+          }}
+          inline
+          calendarClassName="!border-0 !shadow-none"
+        />
+      </PopoverContent>
+    </Popover>
   )
 }
