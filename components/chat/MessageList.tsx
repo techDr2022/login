@@ -124,12 +124,9 @@ export function MessageList() {
           markMessagesAsProcessed(messageIds)
           wasAtBottomRef.current = true
 
-          // Mark thread as read
-          fetch('/api/chat/read', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ threadId: selectedThreadId }),
-          }).catch((err) => console.error('Error marking as read:', err))
+          // Mark thread as read (both API and sessionStorage)
+          const { markThreadAsReadAPI } = await import('@/lib/socket/chatSocket')
+          markThreadAsReadAPI(selectedThreadId)
         }
       } catch (error) {
         console.error('Error loading messages:', error)

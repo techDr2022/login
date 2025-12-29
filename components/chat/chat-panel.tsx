@@ -121,12 +121,10 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   const handleThreadSelect = useCallback((threadId: string, type: 'TEAM' | 'DIRECT') => {
     setSelectedThreadId(threadId)
     setActiveTab(type === 'TEAM' ? 'team' : 'direct')
-    // Mark as read
-    fetch('/api/chat/read', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId }),
-    }).catch((err) => console.error('Error marking as read:', err))
+    // Mark as read (both API and sessionStorage)
+    import('@/lib/socket/chatSocket').then(({ markThreadAsReadAPI }) => {
+      markThreadAsReadAPI(threadId)
+    })
     // Update local state optimistically
     setThreads((prev) =>
       prev.map((t) =>
@@ -247,11 +245,9 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
               threadType="TEAM"
               onMessageSent={() => {
                 fetchThreads()
-                fetch('/api/chat/read', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ threadId: teamThread.id }),
-                }).catch((err) => console.error('Error marking as read:', err))
+                import('@/lib/socket/chatSocket').then(({ markThreadAsReadAPI }) => {
+                  markThreadAsReadAPI(teamThread.id)
+                })
               }}
             />
           ) : (
@@ -305,11 +301,9 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
                       threadType="DIRECT"
                       onMessageSent={() => {
                         fetchThreads()
-                        fetch('/api/chat/read', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ threadId: selectedThreadId }),
-                        }).catch((err) => console.error('Error marking as read:', err))
+                        import('@/lib/socket/chatSocket').then(({ markThreadAsReadAPI }) => {
+                          markThreadAsReadAPI(selectedThreadId)
+                        })
                       }}
                     />
                   </div>

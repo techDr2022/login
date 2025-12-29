@@ -9,6 +9,7 @@ const MAX_RECONNECT_ATTEMPTS = 5
 // Track processed message IDs to avoid playing sound for duplicate/replayed messages
 // Use sessionStorage to persist across page refreshes
 const STORAGE_KEY = 'chat_processed_message_ids'
+const READ_THREADS_KEY = 'chat_read_thread_ids'
 const STORAGE_MAX_AGE = 24 * 60 * 60 * 1000 // 24 hours
 
 function getProcessedMessageIds(): Set<string> {
@@ -78,12 +79,95 @@ const processedMessageIds = getProcessedMessageIds()
 // Track when messages were received to prevent sounds for old messages when switching tabs
 const messageReceivedTimes = new Map<string, number>()
 
+// Track read threads in sessionStorage
+function getReadThreadIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  
+  try {
+    const stored = sessionStorage.getItem(READ_THREADS_KEY)
+    if (stored) {
+      const data = JSON.parse(stored)
+      const now = Date.now()
+      
+      // Clean up old entries (older than 24 hours)
+      const validIds = data.threadIds.filter((entry: { id: string; timestamp: number }) => 
+        now - entry.timestamp < STORAGE_MAX_AGE
+      )
+      
+      // Update storage with cleaned data
+      if (validIds.length !== data.threadIds.length) {
+        sessionStorage.setItem(READ_THREADS_KEY, JSON.stringify({ threadIds: validIds }))
+      }
+      
+      return new Set(validIds.map((entry: { id: string }) => entry.id))
+    }
+  } catch (error) {
+    console.error('Error reading read thread IDs from storage:', error)
+  }
+  
+  return new Set()
+}
+
+function addReadThreadId(threadId: string) {
+  if (typeof window === 'undefined') return
+  
+  try {
+    const stored = sessionStorage.getItem(READ_THREADS_KEY)
+    const now = Date.now()
+    let data: { threadIds: Array<{ id: string; timestamp: number }> } = { threadIds: [] }
+    
+    if (stored) {
+      try {
+        data = JSON.parse(stored)
+        // Clean up old entries
+        data.threadIds = data.threadIds.filter(entry => now - entry.timestamp < STORAGE_MAX_AGE)
+      } catch (e) {
+        // Invalid data, start fresh
+        data = { threadIds: [] }
+      }
+    }
+    
+    // Add new thread ID if not already present
+    if (!data.threadIds.some(entry => entry.id === threadId)) {
+      data.threadIds.push({ id: threadId, timestamp: now })
+      sessionStorage.setItem(READ_THREADS_KEY, JSON.stringify(data))
+    }
+  } catch (error) {
+    console.error('Error storing read thread ID:', error)
+  }
+}
+
+const readThreadIds = getReadThreadIds()
+
 // Export function to mark messages as processed (used when loading messages from database)
 export function markMessagesAsProcessed(messageIds: string[]) {
   messageIds.forEach(id => {
     addProcessedMessageId(id)
     processedMessageIds.add(id)
   })
+}
+
+// Export function to mark thread as read (used when thread is marked as read)
+export function markThreadAsRead(threadId: string) {
+  addReadThreadId(threadId)
+  readThreadIds.add(threadId)
+}
+
+// Helper function to mark thread as read via API and sessionStorage
+export async function markThreadAsReadAPI(threadId: string) {
+  // Mark in sessionStorage immediately
+  markThreadAsRead(threadId)
+  
+  // Also mark via API
+  try {
+    await fetch('/api/chat/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId }),
+    })
+  } catch (err) {
+    console.error('Error marking thread as read:', err)
+  }
 }
 
 interface SocketMessage {
@@ -191,8 +275,11 @@ export function connectSocket(userId: string, token?: string) {
     const isExistingMessage = existingMessages.some(m => m.id === data.id)
     
     // Check if thread is marked as read (unread count = 0)
+    // Check both the store and sessionStorage (which persists across refreshes)
     const thread = store.threads.find(t => t.id === data.threadId)
-    const isThreadRead = thread?.unreadCount === 0
+    const isThreadReadInStore = thread?.unreadCount === 0
+    const isThreadReadInStorage = readThreadIds.has(data.threadId)
+    const isThreadRead = isThreadReadInStore || isThreadReadInStorage
 
     // If this is our own message, it might be replacing an optimistic one
     // The addMessage function will handle replacing temp messages automatically
@@ -201,7 +288,8 @@ export function connectSocket(userId: string, token?: string) {
     // Mark as seen if viewing the thread
     if (isOpen && selectedThreadId === data.threadId && !isOwnMessage) {
       markMessageAsSeen(data.threadId, message.id)
-      // Mark thread as read
+      // Mark thread as read (both in API and sessionStorage)
+      markThreadAsRead(data.threadId)
       fetch('/api/chat/read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,14 +299,19 @@ export function connectSocket(userId: string, token?: string) {
 
     // Only play sound and show notification for NEW messages from another user (not existing/replayed messages)
     // Also skip if thread is already marked as read (prevents sounds for already-read messages on refresh)
-    if (!isOwnMessage && !isExistingMessage && !isThreadRead) {
+    if (!isOwnMessage && !isExistingMessage) {
+      // If thread is marked as read (unreadCount = 0), don't play sounds
+      if (isThreadRead) {
+        return // Don't play sound for messages in read threads
+      }
+      
       const messageTimestamp = new Date(data.createdAt).getTime()
       const now = Date.now()
       const messageAge = now - messageTimestamp
       
-      // Only process messages that are less than 30 seconds old (prevents replay on tab switch)
-      // This ensures we only notify about truly new messages, not old ones when switching tabs
-      const isRecentMessage = messageAge < 30000
+      // Only process messages that are less than 5 minutes old (prevents replay on tab switch/refresh)
+      // This ensures we only notify about truly new messages, not old ones when switching tabs or refreshing
+      const isRecentMessage = messageAge < 5 * 60 * 1000 // 5 minutes
       
       // Play sound and show notification if:
       // 1. Chat is closed OR message is in a different thread

@@ -35,6 +35,18 @@ export async function GET(request: NextRequest) {
       // Send initial connection message
       sendEvent({ type: 'connected', userId })
 
+      // Track last known task statuses for detecting changes
+      const taskStatusMap = new Map<string, string>()
+      
+      // Initialize task status map
+      const initialTasks = await prisma.task.findMany({
+        select: { id: true, status: true },
+        take: 100, // Track up to 100 most recent tasks
+      })
+      initialTasks.forEach((task) => {
+        taskStatusMap.set(task.id, task.status)
+      })
+
       // Poll for new tasks every 2 seconds
       let lastCheck = new Date()
       let lastTaskCount = 0
@@ -146,6 +158,88 @@ export async function GET(request: NextRequest) {
           if (unreadTasksCount !== lastTaskCount) {
             sendEvent({ type: 'task_count_update', count: unreadTasksCount })
             lastTaskCount = unreadTasksCount
+          }
+
+          // Check for status changes
+          const recentTaskUpdates = await prisma.activity_logs.findMany({
+            where: {
+              entityType: 'Task',
+              action: 'UPDATE',
+              timestamp: { gt: lastCheck },
+            },
+            include: {
+              User: {
+                select: { id: true, name: true },
+              },
+            },
+            orderBy: { timestamp: 'desc' },
+            take: 10,
+          })
+
+          // Check each updated task for status changes
+          for (const update of recentTaskUpdates) {
+            const task = await prisma.task.findUnique({
+              where: { id: update.entityId },
+              select: { id: true, title: true, status: true },
+            })
+
+            if (task) {
+              const oldStatus = taskStatusMap.get(task.id)
+              const newStatus = task.status
+
+              // If status changed, send event
+              if (oldStatus && oldStatus !== newStatus) {
+                sendEvent({
+                  type: 'status_change',
+                  statusChange: {
+                    id: update.id,
+                    taskId: task.id,
+                    taskTitle: task.title,
+                    oldStatus,
+                    newStatus,
+                    changedBy: update.userId,
+                    changedByName: update.User.name,
+                    timestamp: update.timestamp.toISOString(),
+                  },
+                })
+              }
+
+              // Update status map
+              taskStatusMap.set(task.id, newStatus)
+            }
+          }
+
+          // Also send task_update event for any task changes
+          if (recentTaskUpdates.length > 0) {
+            const updatedTaskIds = [...new Set(recentTaskUpdates.map((u) => u.entityId))]
+            const updatedTasks = await prisma.task.findMany({
+              where: { id: { in: updatedTaskIds } },
+              include: {
+                User_Task_assignedByIdToUser: {
+                  select: { id: true, name: true, email: true },
+                },
+                User_Task_assignedToIdToUser: {
+                  select: { id: true, name: true, email: true },
+                },
+                Client: {
+                  select: { id: true, name: true },
+                },
+              },
+            })
+
+            for (const task of updatedTasks) {
+              sendEvent({
+                type: 'task_update',
+                task: {
+                  id: task.id,
+                  title: task.title,
+                  status: task.status,
+                  assignedTo: task.User_Task_assignedToIdToUser,
+                  assignedBy: task.User_Task_assignedByIdToUser,
+                  client: task.Client,
+                },
+              })
+            }
           }
 
           lastCheck = new Date()

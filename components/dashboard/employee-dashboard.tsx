@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { CheckSquare2, Clock, Calendar, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
+import { TaskStatusTimeline } from './task-status-timeline'
 
 interface Task {
   id: string
@@ -37,6 +38,7 @@ interface AttendanceSummary {
 export function EmployeeDashboard() {
   const { data: session } = useSession()
   const [tasks, setTasks] = useState<Task[]>([])
+  const [assignedByMeTasks, setAssignedByMeTasks] = useState<Task[]>([])
   const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -47,6 +49,11 @@ export function EmployeeDashboard() {
         const tasksRes = await fetch('/api/tasks?assignedToId=' + session?.user?.id)
         const tasksData = await tasksRes.json()
         setTasks(tasksData.tasks?.slice(0, 5) || [])
+
+        // Fetch tasks assigned by me
+        const assignedByMeRes = await fetch('/api/tasks?assignedById=' + session?.user?.id)
+        const assignedByMeData = await assignedByMeRes.json()
+        setAssignedByMeTasks(assignedByMeData.tasks?.slice(0, 5) || [])
 
         // Fetch today's attendance
         const today = new Date().toISOString().split('T')[0]
@@ -251,6 +258,63 @@ export function EmployeeDashboard() {
           </CardContent>
         </Card>
 
+        {/* Assigned by Me */}
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Assigned by Me</CardTitle>
+                <CardDescription className="text-sm">Tasks I assigned to others</CardDescription>
+              </div>
+              <CheckSquare2 className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {assignedByMeTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">No tasks assigned by you</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Priority</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {assignedByMeTasks.map((task) => (
+                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
+                        <TableCell>
+                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
+                            {task.title}
+                          </Link>
+                          {task.client && (
+                            <p className="text-xs text-muted-foreground">{task.client.name}</p>
+                          )}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(task.status)}</TableCell>
+                        <TableCell>{getPriorityBadge(task.priority)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="pt-2">
+                  <Link href="/tasks?assignedByMe=true">
+                    <Button variant="ghost" className="w-full rounded-xl">
+                      View All Tasks
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Today's Attendance */}
         <Card className="rounded-xl border shadow-sm">
           <CardHeader>
@@ -322,6 +386,9 @@ export function EmployeeDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Task Status Timeline */}
+      <TaskStatusTimeline />
     </div>
   )
 }

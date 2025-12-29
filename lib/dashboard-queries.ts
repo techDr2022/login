@@ -1,7 +1,7 @@
 import { prisma } from './prisma'
 import { AttendanceStatus, AttendanceMode } from '@prisma/client'
 
-export async function getSuperAdminDashboardData() {
+export async function getSuperAdminDashboardData(userId?: string) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const tomorrow = new Date(today)
@@ -95,6 +95,31 @@ export async function getSuperAdminDashboardData() {
     },
   })
 
+  // Tasks assigned by me (if userId provided)
+  const assignedByMeTasks = userId
+    ? await prisma.task.findMany({
+        where: {
+          assignedById: userId,
+        },
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          User_Task_assignedToIdToUser: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          Client: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      })
+    : []
+
   return {
     loggedInToday,
     tasksCompletedToday,
@@ -104,5 +129,6 @@ export async function getSuperAdminDashboardData() {
     recentTasks,
     clientWorkload,
     teamAttendance,
+    assignedByMeTasks,
   }
 }

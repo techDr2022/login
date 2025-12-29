@@ -97,6 +97,18 @@ export const useChatStore = create<ChatState>()(
         })
         
         set({ threads, unreadCounts, totalUnread })
+        
+        // Mark read threads (unreadCount = 0) in sessionStorage to prevent sounds on refresh
+        // This handles the case where threads are loaded and some are already read
+        if (typeof window !== 'undefined') {
+          const { markThreadAsRead } = require('@/lib/socket/chatSocket')
+          threads.forEach((thread) => {
+            if (thread.unreadCount === 0) {
+              // Mark thread as read in sessionStorage
+              markThreadAsRead(thread.id)
+            }
+          })
+        }
       },
 
       setSelectedThread: (threadId) => {
@@ -290,6 +302,12 @@ export const useChatStore = create<ChatState>()(
             thread.id === threadId ? { ...thread, unreadCount: 0 } : thread
           ),
         }))
+        
+        // Also mark in sessionStorage to persist across page refreshes
+        if (typeof window !== 'undefined') {
+          const { markThreadAsRead: markThreadAsReadStorage } = require('@/lib/socket/chatSocket')
+          markThreadAsReadStorage(threadId)
+        }
       },
 
       setIsOpen: (isOpen) => set({ isOpen }),

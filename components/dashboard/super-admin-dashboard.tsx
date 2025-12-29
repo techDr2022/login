@@ -1,3 +1,5 @@
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { getSuperAdminDashboardData } from '@/lib/dashboard-queries'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -6,9 +8,11 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Users, CheckSquare2, Clock, AlertCircle, Briefcase, ArrowRight, Calendar, TrendingUp, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { TaskStatusTimeline } from './task-status-timeline'
 
 export async function SuperAdminDashboard() {
-  const data = await getSuperAdminDashboardData()
+  const session = await getServerSession(authOptions)
+  const data = await getSuperAdminDashboardData(session?.user?.id)
 
   return (
     <div className="space-y-6">
@@ -175,6 +179,67 @@ export async function SuperAdminDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Assigned by Me */}
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Assigned by Me</CardTitle>
+                <CardDescription className="text-sm">Tasks I assigned to others</CardDescription>
+              </div>
+              <CheckSquare2 className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {data.assignedByMeTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">No tasks assigned by you</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Assigned To</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.assignedByMeTasks.map((task) => (
+                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
+                        <TableCell>
+                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
+                            {task.title}
+                          </Link>
+                          {task.Client && (
+                            <p className="text-xs text-muted-foreground">{task.Client.name}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{task.status}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="pt-2">
+                  <Link href="/tasks?assignedByMe=true">
+                    <Button variant="ghost" className="w-full rounded-xl">
+                      View All Tasks
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Client Workload */}
@@ -230,6 +295,9 @@ export async function SuperAdminDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Task Status Timeline */}
+      <TaskStatusTimeline />
     </div>
   )
 }
