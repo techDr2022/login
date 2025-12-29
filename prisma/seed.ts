@@ -227,8 +227,8 @@ async function main() {
       workingDays: [1, 2, 3, 4, 5],
       workingTimings: '9:00 AM - 6:00 PM',
       preferredLanguage: 'BOTH' as any,
-      // Assign a default account contact from the dedicated list
-      accountManagerId: accountContacts[0]?.id,
+      // Assign a default account contact (use superAdmin1)
+      accountManagerId: superAdmin1.id,
     },
   })
 
