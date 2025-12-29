@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
-import { StickyChatButton } from './chat/sticky-chat-button'
+import { StickyChatButton } from './chat/StickyChatButton'
 import { initChatSound } from '@/lib/chat-sound'
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {

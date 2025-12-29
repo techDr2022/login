@@ -168,6 +168,41 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
           <h1 className="text-3xl font-bold">{task.title}</h1>
         </div>
         <div className="flex items-center gap-2">
+          {/* Employee quick status updates */}
+          {isAssignedToMe && !canApprove && (
+            <>
+              {task.status === 'Pending' && (
+                <Button 
+                  onClick={() => handleQuickStatusUpdate('InProgress')}
+                  className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                >
+                  Start Task
+                </Button>
+              )}
+              {task.status === 'InProgress' && (
+                <Button 
+                  onClick={() => handleQuickStatusUpdate('Review')}
+                  className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                >
+                  Mark as Complete
+                </Button>
+              )}
+              {(task.status === 'Pending' || task.status === 'InProgress') && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setStatusFormData({
+                      status: task.status as any,
+                      rejectionFeedback: '',
+                    })
+                    setStatusDialogOpen(true)
+                  }}
+                >
+                  Update Status
+                </Button>
+              )}
+            </>
+          )}
           {/* Admin full status update */}
           {canApprove && (
             <Button onClick={() => {
@@ -309,6 +344,11 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                       <>
                         <SelectItem value="Approved">Approved</SelectItem>
                         <SelectItem value="Rejected">Rejected</SelectItem>
+                      </>
+                    )}
+                    {isAssignedToMe && !canApprove && (
+                      <>
+                        {/* Employees can only select these statuses */}
                       </>
                     )}
                   </SelectContent>

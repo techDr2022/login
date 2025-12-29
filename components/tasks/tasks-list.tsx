@@ -494,13 +494,13 @@ export function TasksList() {
                 <TableHead>Priority</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Due Date</TableHead>
-                {canManage && <TableHead className="text-right">Actions</TableHead>}
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {tasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 8 : 6} className="h-24 text-center">
+                  <TableCell colSpan={canManage ? 8 : 7} className="h-24 text-center">
                     <div className="flex flex-col items-center justify-center py-8">
                       <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
                       <p className="text-sm font-medium text-muted-foreground">No tasks found</p>
@@ -549,33 +549,82 @@ export function TasksList() {
                     <TableCell className="text-muted-foreground">
                       {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
                     </TableCell>
-                    {canManage && (
-                      <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleStatusUpdate(task)}
-                          >
-                            Update Status
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(task)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(task.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
+                    <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
+                      <div className="flex justify-end gap-2">
+                        {/* Employee quick actions for tasks assigned to them */}
+                        {!canManage && task.assignedToId === session?.user?.id && (
+                          <>
+                            {task.status === 'Pending' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    await updateTaskStatus(task.id, { status: 'InProgress' })
+                                    fetchTasks()
+                                  } catch (err: any) {
+                                    setError(err.message || 'Failed to update task status')
+                                  }
+                                }}
+                                className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                              >
+                                Start
+                              </Button>
+                            )}
+                            {task.status === 'InProgress' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    await updateTaskStatus(task.id, { status: 'Review' })
+                                    fetchTasks()
+                                  } catch (err: any) {
+                                    setError(err.message || 'Failed to update task status')
+                                  }
+                                }}
+                                className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                              >
+                                Mark Complete
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleStatusUpdate(task)}
+                            >
+                              Update Status
+                            </Button>
+                          </>
+                        )}
+                        {/* Admin actions */}
+                        {canManage && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleStatusUpdate(task)}
+                            >
+                              Update Status
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(task)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(task.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -615,8 +664,12 @@ export function TasksList() {
                     <SelectItem value="Pending">Pending</SelectItem>
                     <SelectItem value="InProgress">In Progress</SelectItem>
                     <SelectItem value="Review">Review</SelectItem>
-                    <SelectItem value="Approved">Approved</SelectItem>
-                    <SelectItem value="Rejected">Rejected</SelectItem>
+                    {canManage && (
+                      <>
+                        <SelectItem value="Approved">Approved</SelectItem>
+                        <SelectItem value="Rejected">Rejected</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

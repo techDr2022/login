@@ -8,6 +8,7 @@ import { Send, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { markMessagesAsProcessed } from '@/lib/socket/chatSocket'
 
 interface Message {
   id: string
@@ -63,6 +64,12 @@ export function ChatMessages({
           sender: msg.sender || msg.User || null,
         })).filter((msg: any) => msg.sender !== null) // Filter out messages without sender
         setMessages(transformedMessages)
+        
+        // Mark loaded messages as processed to prevent sound on reconnect/refresh
+        // These are existing messages from database, not new ones
+        const messageIds = transformedMessages.map((msg: any) => msg.id)
+        markMessagesAsProcessed(messageIds)
+        
         scrollToBottom(false)
       } else {
         const errorData = await res.json().catch(() => ({}))
