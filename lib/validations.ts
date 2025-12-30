@@ -22,6 +22,7 @@ export const createTaskSchema = z.object({
   status: z.enum(['Pending', 'InProgress', 'Review', 'Approved', 'Rejected']).optional(),
   assignedToId: z.string().optional(),
   clientId: z.string().optional(),
+  taskType: z.string().optional(),
   dueDate: z.date().optional(),
   timeSpent: z.number().optional(),
   rejectionFeedback: z.string().optional(),

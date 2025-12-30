@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+export const revalidate = 30 // Revalidate every 30 seconds for better caching
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -6,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { TaskStatus, TaskPriority, UserRole } from '@prisma/client'
 import { createTask } from '@/app/actions/task-actions'
+import { canViewAllTasks } from '@/lib/rbac'
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,33 +26,57 @@ export async function GET(request: NextRequest) {
     const assignedToId = searchParams.get('assignedToId') || undefined
     const assignedById = searchParams.get('assignedById') || undefined
 
+    const userRole = session.user.role as UserRole
+    const userId = session.user.id
+    const canViewAll = canViewAllTasks(userRole)
+
     const where: any = {}
+    const andConditions: any[] = []
     
+    // For non-admin users, only show tasks assigned to them or assigned by them
+    if (!canViewAll && userId) {
+      andConditions.push({
+        OR: [
+          { assignedToId: userId },
+          { assignedById: userId },
+        ]
+      })
+    }
+    
+    // Add search filter
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ]
+      andConditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ]
+      })
     }
 
+    // Add other filters
     if (status) {
-      where.status = status
+      andConditions.push({ status })
     }
 
     if (priority) {
-      where.priority = priority
+      andConditions.push({ priority })
     }
 
     if (clientId) {
-      where.clientId = clientId
+      andConditions.push({ clientId })
     }
 
     // Super admins can filter by assignedToId or assignedById
-    if (assignedToId) {
-      where.assignedToId = assignedToId
+    if (assignedToId && canViewAll) {
+      andConditions.push({ assignedToId })
     }
-    if (assignedById) {
-      where.assignedById = assignedById
+    if (assignedById && canViewAll) {
+      andConditions.push({ assignedById })
+    }
+
+    // Combine all conditions with AND
+    if (andConditions.length > 0) {
+      where.AND = andConditions
     }
 
     const [tasks, total] = await Promise.all([

@@ -57,14 +57,19 @@ export function EmployeesTable({
 
   const fetchTodayTasks = async () => {
     try {
+      // Fetch all tasks in parallel for better performance
+      const taskPromises = employees.map(employee =>
+        fetch(`/api/admin/tasks?employeeId=${employee.id}&todayOnly=true`)
+          .then(res => res.json())
+          .then(data => ({ employeeId: employee.id, tasks: data.tasks || [] }))
+          .catch(() => ({ employeeId: employee.id, tasks: [] }))
+      )
+      
+      const results = await Promise.all(taskPromises)
       const tasksByEmployee: Record<string, any[]> = {}
-      for (const employee of employees) {
-        const res = await fetch(
-          `/api/admin/tasks?employeeId=${employee.id}&todayOnly=true`
-        )
-        const data = await res.json()
-        tasksByEmployee[employee.id] = data.tasks || []
-      }
+      results.forEach(({ employeeId, tasks }) => {
+        tasksByEmployee[employeeId] = tasks
+      })
       setTodayTasks(tasksByEmployee)
     } catch (error) {
       console.error('Failed to fetch today tasks:', error)

@@ -386,3 +386,112 @@ export async function pingWFHActivity() {
   return updated
 }
 
+export async function markAllAttendanceForDay(date: Date, mode: AttendanceMode = AttendanceMode.OFFICE) {
+  const session = await getServerSession(authOptions)
+  if (!session) throw new Error('Unauthorized')
+
+  if (!session.user?.id) {
+    throw new Error('Invalid session: user ID not found')
+  }
+
+  if (session.user.role !== UserRole.SUPER_ADMIN) {
+    throw new Error('Only super admin can mark all attendance')
+  }
+
+  // Set the date to start of day
+  const targetDate = new Date(date)
+  targetDate.setHours(0, 0, 0, 0)
+
+  // Get all active employees
+  const employees = await prisma.user.findMany({
+    where: {
+      role: UserRole.EMPLOYEE,
+      isActive: true,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (employees.length === 0) {
+    throw new Error('No active employees found')
+  }
+
+  // Get office start and end times for the target date
+  const officeStartTime = getOfficeStartTime(targetDate)
+  const officeEndTime = new Date(targetDate)
+  officeEndTime.setHours(ATTENDANCE_CONFIG.OFFICE_END_HOUR, ATTENDANCE_CONFIG.OFFICE_END_MINUTE, 0, 0)
+
+  // Calculate total hours (excluding lunch break)
+  const totalHours = (officeEndTime.getTime() - officeStartTime.getTime()) / (1000 * 60 * 60) - (ATTENDANCE_CONFIG.LUNCH_DURATION_MINUTES / 60)
+
+  const results = []
+  const errors = []
+
+  // Mark attendance for each employee
+  for (const employee of employees) {
+    try {
+      // Check if attendance already exists
+      const existing = await prisma.attendances.findUnique({
+        where: {
+          userId_date: {
+            userId: employee.id,
+            date: targetDate,
+          },
+        },
+      })
+
+      const attendanceData = {
+        loginTime: officeStartTime,
+        logoutTime: officeEndTime,
+        status: AttendanceStatus.Present,
+        mode: mode,
+        earlySignInMinutes: 0,
+        lateSignInMinutes: 0,
+        earlyLogoutMinutes: 0,
+        lateLogoutMinutes: 0,
+        totalHours: mode === AttendanceMode.OFFICE ? totalHours : null,
+        editedBy: session.user.id,
+        editedAt: new Date(),
+      }
+
+      let attendanceId: string
+      if (existing) {
+        // Update existing attendance
+        const updated = await prisma.attendances.update({
+          where: { id: existing.id },
+          data: attendanceData,
+        })
+        attendanceId = updated.id
+        results.push({ userId: employee.id, action: 'updated', attendanceId: updated.id })
+      } else {
+        // Create new attendance
+        const created = await prisma.attendances.create({
+          data: {
+            id: randomUUID(),
+            userId: employee.id,
+            date: targetDate,
+            ...attendanceData,
+          },
+        })
+        attendanceId = created.id
+        results.push({ userId: employee.id, action: 'created', attendanceId: created.id })
+      }
+
+      // Log activity
+      await logActivity(session.user.id, existing ? 'UPDATE' : 'CREATE', 'Attendance', attendanceId)
+    } catch (error) {
+      errors.push({ userId: employee.id, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  }
+
+  return {
+    success: true,
+    totalEmployees: employees.length,
+    processed: results.length,
+    errorCount: errors.length,
+    results,
+    errors: errors.length > 0 ? errors : undefined,
+  }
+}
+

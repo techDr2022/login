@@ -44,30 +44,33 @@ export function EmployeeDashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!session?.user?.id) return
+      
       try {
-        // Fetch employee's tasks
-        const tasksRes = await fetch('/api/tasks?assignedToId=' + session?.user?.id)
-        const tasksData = await tasksRes.json()
-        setTasks(tasksData.tasks?.slice(0, 5) || [])
-
-        // Fetch tasks assigned by me
-        const assignedByMeRes = await fetch('/api/tasks?assignedById=' + session?.user?.id)
-        const assignedByMeData = await assignedByMeRes.json()
-        setAssignedByMeTasks(assignedByMeData.tasks?.slice(0, 5) || [])
-
-        // Fetch today's attendance
         const today = new Date().toISOString().split('T')[0]
-        const attendanceRes = await fetch(`/api/attendance?userId=${session?.user?.id}&startDate=${today}&endDate=${today}`)
-        const attendanceData = await attendanceRes.json()
-        
-        const todayAttendance = attendanceData.attendances?.[0]
-        
-        // Fetch this month's attendance summary
         const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
         const lastDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
-        const monthRes = await fetch(`/api/attendance?userId=${session?.user?.id}&startDate=${firstDayOfMonth}&endDate=${lastDayOfMonth}`)
-        const monthData = await monthRes.json()
-        
+        const userId = session.user.id
+
+        // Fetch all data in parallel for better performance
+        const [tasksRes, assignedByMeRes, attendanceRes, monthRes] = await Promise.all([
+          fetch(`/api/tasks?assignedToId=${userId}&limit=5`),
+          fetch(`/api/tasks?assignedById=${userId}&limit=5`),
+          fetch(`/api/attendance?userId=${userId}&startDate=${today}&endDate=${today}`),
+          fetch(`/api/attendance?userId=${userId}&startDate=${firstDayOfMonth}&endDate=${lastDayOfMonth}`),
+        ])
+
+        const [tasksData, assignedByMeData, attendanceData, monthData] = await Promise.all([
+          tasksRes.json(),
+          assignedByMeRes.json(),
+          attendanceRes.json(),
+          monthRes.json(),
+        ])
+
+        setTasks(tasksData.tasks?.slice(0, 5) || [])
+        setAssignedByMeTasks(assignedByMeData.tasks?.slice(0, 5) || [])
+
+        const todayAttendance = attendanceData.attendances?.[0]
         const monthAttendances = monthData.attendances || []
         const presentCount = monthAttendances.filter((a: any) => a.status === 'Present').length
         const lateCount = monthAttendances.filter((a: any) => a.status === 'Late').length
@@ -90,10 +93,8 @@ export function EmployeeDashboard() {
       }
     }
 
-    if (session?.user?.id) {
-      fetchData()
-    }
-  }, [session])
+    fetchData()
+  }, [session?.user?.id])
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {

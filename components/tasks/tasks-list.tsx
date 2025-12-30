@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -11,7 +11,9 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Search, Trash2, Edit, CheckSquare2 } from 'lucide-react'
-import { createTask, updateTask, deleteTask, updateTaskStatus } from '@/app/actions/task-actions'
+import { createTask, updateTask, deleteTask, updateTaskStatus, deleteTasks } from '@/app/actions/task-actions'
+import { getAllTaskTemplates } from '@/app/actions/task-template-actions'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useSession } from 'next-auth/react'
 import { UserRole } from '@prisma/client'
 import { canManageTasks } from '@/lib/rbac'
@@ -51,6 +53,7 @@ export function TasksList() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
   const [users, setUsers] = useState<Array<{ id: string; name: string; email?: string }>>([])
+  const [taskTemplates, setTaskTemplates] = useState<Array<{ taskType: string; durationHours: number; isActive: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -68,6 +71,7 @@ export function TasksList() {
     priority: 'Medium' as 'Low' | 'Medium' | 'High' | 'Urgent',
     assignedToId: '',
     clientId: '',
+    taskType: '',
     dueDate: '',
     timeSpent: 0,
   })
@@ -76,6 +80,7 @@ export function TasksList() {
     rejectionFeedback: '',
   })
   const [error, setError] = useState('')
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set())
 
   const canManage = session?.user.role && canManageTasks(session.user.role as UserRole)
 
@@ -84,7 +89,13 @@ export function TasksList() {
     // Fetch clients and users for task assignment
     fetchClients()
     fetchUsers()
+    fetchTaskTemplates()
   }, [page, search, statusFilter, priorityFilter, assignedByMeFilter])
+
+  useEffect(() => {
+    // Clear selection when tasks change (e.g., after deletion or filter change)
+    setSelectedTasks(new Set())
+  }, [tasks])
 
   const fetchClients = async () => {
     try {
@@ -110,6 +121,15 @@ export function TasksList() {
       }
     } catch (err) {
       console.error('Failed to fetch users:', err)
+    }
+  }
+
+  const fetchTaskTemplates = async () => {
+    try {
+      const templates = await getAllTaskTemplates()
+      setTaskTemplates(templates.filter(t => t.isActive))
+    } catch (err) {
+      console.error('Failed to fetch task templates:', err)
     }
   }
 
@@ -140,14 +160,19 @@ export function TasksList() {
     setError('')
 
     try {
-      const taskData = {
+      const taskData: any = {
         title: formData.title,
         description: formData.description || undefined,
         priority: formData.priority,
         assignedToId: formData.assignedToId || undefined,
         clientId: formData.clientId || undefined,
-        dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+        taskType: formData.taskType || undefined,
         timeSpent: formData.timeSpent,
+      }
+
+      // Only include dueDate if taskType is not provided (backward compatibility)
+      if (!formData.taskType && formData.dueDate) {
+        taskData.dueDate = new Date(formData.dueDate)
       }
 
       if (editingTask) {
@@ -194,10 +219,45 @@ export function TasksList() {
     try {
       await deleteTask(id)
       fetchTasks()
+      setSelectedTasks(new Set())
     } catch (err: any) {
       setError(err.message || 'Failed to delete task')
     }
   }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedTasks(new Set(tasks.map(task => task.id)))
+    } else {
+      setSelectedTasks(new Set())
+    }
+  }
+
+  const handleSelectTask = (taskId: string, checked: boolean) => {
+    const newSelected = new Set(selectedTasks)
+    if (checked) {
+      newSelected.add(taskId)
+    } else {
+      newSelected.delete(taskId)
+    }
+    setSelectedTasks(newSelected)
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedTasks.size === 0) return
+    
+    const count = selectedTasks.size
+    if (!confirm(`Are you sure you want to delete ${count} task${count > 1 ? 's' : ''}?`)) return
+
+    try {
+      await deleteTasks(Array.from(selectedTasks))
+      setSelectedTasks(new Set())
+      fetchTasks()
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete tasks')
+    }
+  }
+
 
   const handleEdit = (task: Task) => {
     setEditingTask(task)
@@ -205,6 +265,7 @@ export function TasksList() {
       title: task.title,
       description: task.description || '',
       priority: task.priority as any,
+      taskType: (task as any).taskType || '',
       assignedToId: task.assignedToId || '',
       clientId: task.clientId || '',
       dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
@@ -230,13 +291,14 @@ export function TasksList() {
       priority: 'Medium',
       assignedToId: '',
       clientId: '',
+      taskType: '',
       dueDate: '',
       timeSpent: 0,
     })
     setError('')
   }
 
-  const getStatusBadgeVariant = (status: string) => {
+  const getStatusBadgeVariant = useCallback((status: string) => {
     switch (status) {
       case 'Approved':
         return 'outline'
@@ -247,9 +309,9 @@ export function TasksList() {
       default:
         return 'outline'
     }
-  }
+  }, [])
 
-  const getPriorityBadgeVariant = (priority: string) => {
+  const getPriorityBadgeVariant = useCallback((priority: string) => {
     switch (priority) {
       case 'Urgent':
         return 'destructive'
@@ -258,7 +320,11 @@ export function TasksList() {
       default:
         return 'secondary'
     }
-  }
+  }, [])
+
+  // Memoize filtered tasks count
+  const allSelected = useMemo(() => tasks.length > 0 && selectedTasks.size === tasks.length, [tasks.length, selectedTasks.size])
+  const someSelected = useMemo(() => selectedTasks.size > 0 && selectedTasks.size < tasks.length, [selectedTasks.size, tasks.length])
 
   if (loading && tasks.length === 0) {
     return (
@@ -280,6 +346,16 @@ export function TasksList() {
       )}
       
       <div className="flex flex-col sm:flex-row gap-4">
+        {selectedTasks.size > 0 && (
+          <Button
+            variant="destructive"
+            onClick={handleBulkDelete}
+            className="rounded-xl"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete Selected ({selectedTasks.size})
+          </Button>
+        )}
         <div className="flex-1">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -450,14 +526,44 @@ export function TasksList() {
                         </SelectContent>
                       </Select>
                   </div>
+                  <div>
+                    <Label htmlFor="taskType">Task Type</Label>
+                    <Select
+                      value={formData.taskType || undefined}
+                      onValueChange={(value) => setFormData({ ...formData, taskType: value === 'none' ? '' : value, dueDate: '' })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select task type (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None (Manual Due Date)</SelectItem>
+                        {taskTemplates.map((template) => (
+                          <SelectItem key={template.taskType} value={template.taskType}>
+                            {template.taskType} ({template.durationHours} {template.durationHours === 1 ? 'hour' : 'hours'})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {formData.taskType && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Due date will be automatically calculated based on task type
+                      </p>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="dueDate">Due Date</Label>
+                      <Label htmlFor="dueDate">Due Date {formData.taskType ? '(Auto-calculated)' : ''}</Label>
                       <DatePicker
                         date={formData.dueDate ? new Date(formData.dueDate) : null}
                         onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString().split('T')[0] : '' })}
-                        placeholder="Select due date"
+                        placeholder={formData.taskType ? "Auto-calculated from task type" : "Select due date"}
+                        disabled={!!formData.taskType}
                       />
+                      {formData.taskType && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Due date is automatically calculated from task type. Clear task type to set manually.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="timeSpent">Time Spent (hours)</Label>
@@ -487,6 +593,15 @@ export function TasksList() {
           <Table>
             <TableHeader>
               <TableRow>
+                {canManage && (
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all tasks"
+                    />
+                  </TableHead>
+                )}
                 <TableHead>Title</TableHead>
                 <TableHead>Assigned To</TableHead>
                 {canManage && <TableHead>Assigned By</TableHead>}
@@ -500,7 +615,7 @@ export function TasksList() {
             <TableBody>
               {tasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 8 : 7} className="h-24 text-center">
+                  <TableCell colSpan={canManage ? 9 : 7} className="h-24 text-center">
                     <div className="flex flex-col items-center justify-center py-8">
                       <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
                       <p className="text-sm font-medium text-muted-foreground">No tasks found</p>
@@ -517,6 +632,15 @@ export function TasksList() {
                     className="cursor-pointer hover:bg-muted/50 transition-colors" 
                     onClick={() => router.push(`/tasks/${task.id}`)}
                   >
+                    {canManage && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedTasks.has(task.id)}
+                          onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
+                          aria-label={`Select task ${task.title}`}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="font-medium">{task.title}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {task.assignedTo?.name || 'Unassigned'}

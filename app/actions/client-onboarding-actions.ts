@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logActivity } from '@/lib/activity-log'
-import { canManageClients } from '@/lib/rbac'
+import { canManageClients, canCreateClient } from '@/lib/rbac'
 import { UserRole, ClientStatus, Prisma } from '@prisma/client'
 import { encrypt, decrypt } from '@/lib/encryption'
 import {
@@ -24,7 +24,7 @@ import {
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
 
-// Helper to check authorization
+// Helper to check authorization for managing clients (update/delete - SUPER_ADMIN only)
 async function checkAuth() {
   const session = await getServerSession(authOptions)
   if (!session) throw new Error('Unauthorized')
@@ -34,9 +34,19 @@ async function checkAuth() {
   return session
 }
 
+// Helper to check authorization for onboarding operations (create/update onboarding - SUPER_ADMIN and EMPLOYEE)
+async function checkOnboardingAuth() {
+  const session = await getServerSession(authOptions)
+  if (!session) throw new Error('Unauthorized')
+  if (!canCreateClient(session.user.role as UserRole)) {
+    throw new Error('Forbidden')
+  }
+  return session
+}
+
 // ========== CLIENT BASIC INFO ==========
 export async function updateClientBasicInfo(clientId: string, data: z.infer<typeof clientOnboardingBasicSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientOnboardingBasicSchema.parse(data)
   
   const client = await prisma.client.update({
@@ -62,8 +72,8 @@ export async function updateClientBasicInfo(clientId: string, data: z.infer<type
   return client
 }
 
-export async function finalizeClientOnboarding(clientId: string, startDate: Date) {
-  const session = await checkAuth()
+export async function finalizeClientOnboarding(clientId: string, startDate: Date, accountManagerId?: string) {
+  const session = await checkOnboardingAuth()
   
   const client = await prisma.client.update({
     where: { id: clientId },
@@ -72,6 +82,7 @@ export async function finalizeClientOnboarding(clientId: string, startDate: Date
       startDate,
       scopeFinalised: true,
       onboardingCompletedAt: new Date(),
+      ...(accountManagerId && { accountManagerId }),
     },
   })
 
@@ -85,7 +96,7 @@ export async function finalizeClientOnboarding(clientId: string, startDate: Date
 
 // ========== DOCTORS ==========
 export async function createClientDoctor(clientId: string, data: z.infer<typeof clientDoctorSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientDoctorSchema.parse(data)
   
   const doctor = await prisma.client_doctors.create({
@@ -101,7 +112,7 @@ export async function createClientDoctor(clientId: string, data: z.infer<typeof 
 }
 
 export async function updateClientDoctor(id: string, data: z.infer<typeof clientDoctorSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientDoctorSchema.parse(data)
   
   const doctor = await prisma.client_doctors.update({
@@ -125,7 +136,7 @@ export async function deleteClientDoctor(id: string) {
 
 // ========== SERVICES ==========
 export async function createClientService(clientId: string, data: z.infer<typeof clientServiceSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientServiceSchema.parse(data)
   
   const service = await prisma.client_services.create({
@@ -140,7 +151,7 @@ export async function createClientService(clientId: string, data: z.infer<typeof
 }
 
 export async function updateClientService(id: string, data: z.infer<typeof clientServiceSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientServiceSchema.parse(data)
   
   const service = await prisma.client_services.update({
@@ -161,7 +172,7 @@ export async function deleteClientService(id: string) {
 
 // ========== USPs ==========
 export async function createClientUSP(clientId: string, data: z.infer<typeof clientUSPSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientUSPSchema.parse(data)
   
   const usp = await prisma.client_usps.create({
@@ -176,7 +187,7 @@ export async function createClientUSP(clientId: string, data: z.infer<typeof cli
 }
 
 export async function updateClientUSP(id: string, data: z.infer<typeof clientUSPSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientUSPSchema.parse(data)
   
   const usp = await prisma.client_usps.update({
@@ -197,7 +208,7 @@ export async function deleteClientUSP(id: string) {
 
 // ========== ACCESS (with encryption) ==========
 export async function createClientAccess(clientId: string, data: z.infer<typeof clientAccessSchema>) {
-  const session = await checkAuth()
+  const session = await checkOnboardingAuth()
   const validated = clientAccessSchema.parse(data)
   
   const access = await prisma.client_accesses.create({
@@ -217,7 +228,7 @@ export async function createClientAccess(clientId: string, data: z.infer<typeof 
 }
 
 export async function updateClientAccess(id: string, data: z.infer<typeof clientAccessSchema>) {
-  const session = await checkAuth()
+  const session = await checkOnboardingAuth()
   const validated = clientAccessSchema.parse(data)
   
   const access = await prisma.client_accesses.update({
@@ -246,7 +257,7 @@ export async function deleteClientAccess(id: string) {
 
 // Helper to decrypt password (only for Admin)
 export async function getClientAccessWithPassword(id: string) {
-  const session = await checkAuth()
+  const session = await checkOnboardingAuth()
   const access = await prisma.client_accesses.findUnique({
     where: { id },
   })
@@ -261,7 +272,7 @@ export async function getClientAccessWithPassword(id: string) {
 
 // ========== BRANDING ==========
 export async function upsertClientBranding(clientId: string, data: z.infer<typeof clientBrandingSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientBrandingSchema.parse(data)
   
   const branding = await prisma.client_branding.upsert({
@@ -286,7 +297,7 @@ export async function upsertClientBranding(clientId: string, data: z.infer<typeo
 
 // ========== TARGETING ==========
 export async function upsertClientTargeting(clientId: string, data: z.infer<typeof clientTargetingSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientTargetingSchema.parse(data)
   
   const targeting = await prisma.client_targeting.upsert({
@@ -313,7 +324,7 @@ export async function upsertClientTargeting(clientId: string, data: z.infer<type
 
 // ========== COMPETITORS ==========
 export async function createClientCompetitor(clientId: string, data: z.infer<typeof clientCompetitorSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientCompetitorSchema.parse(data)
   
   const competitor = await prisma.client_competitors.create({
@@ -329,7 +340,7 @@ export async function createClientCompetitor(clientId: string, data: z.infer<typ
 }
 
 export async function updateClientCompetitor(id: string, data: z.infer<typeof clientCompetitorSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientCompetitorSchema.parse(data)
   
   const competitor = await prisma.client_competitors.update({
@@ -356,7 +367,7 @@ export async function upsertClientMarketingRequirement(
   clientId: string,
   data: z.infer<typeof clientMarketingRequirementSchema>
 ) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientMarketingRequirementSchema.parse(data)
   
   const requirement = await prisma.client_marketing_requirements.upsert({
@@ -378,7 +389,7 @@ export async function upsertClientApprovalSettings(
   clientId: string,
   data: z.infer<typeof clientApprovalSettingsSchema>
 ) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientApprovalSettingsSchema.parse(data)
   
   const settings = await prisma.client_approval_settings.upsert({
@@ -403,7 +414,7 @@ export async function upsertClientKpiMonthly(
   clientId: string,
   data: z.infer<typeof clientKpiMonthlySchema>
 ) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientKpiMonthlySchema.parse(data)
   
   const kpi = await prisma.client_kpi_monthly.upsert({
@@ -430,7 +441,7 @@ export async function upsertClientKpiMonthly(
 
 // ========== CLIENT TASKS ==========
 export async function createClientTask(clientId: string, data: z.infer<typeof clientTaskSchema>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   const validated = clientTaskSchema.parse(data)
   
   const task = await prisma.client_tasks.create({
@@ -447,7 +458,7 @@ export async function createClientTask(clientId: string, data: z.infer<typeof cl
 }
 
 export async function updateClientTask(id: string, data: Partial<z.infer<typeof clientTaskSchema>>) {
-  await checkAuth()
+  await checkOnboardingAuth()
   
   const task = await prisma.client_tasks.update({
     where: { id },
@@ -473,7 +484,7 @@ export async function deleteClientTask(id: string) {
 
 // ========== TASK TEMPLATE & GENERATION ==========
 export async function getOrCreateMonthlyTaskTemplate() {
-  await checkAuth()
+  await checkOnboardingAuth()
   
   let template = await prisma.task_templates.findFirst({
     where: { isActive: true },
@@ -555,7 +566,7 @@ export async function getOrCreateMonthlyTaskTemplate() {
 }
 
 export async function generateMonthlyTasksForClient(clientId: string, startDate: Date) {
-  await checkAuth()
+  await checkOnboardingAuth()
   
   const template = await getOrCreateMonthlyTaskTemplate()
   
@@ -598,7 +609,7 @@ export async function generateMonthlyTasksForClient(clientId: string, startDate:
 }
 
 export async function generateTasksForMonth(clientId: string, month: string) {
-  await checkAuth()
+  await checkOnboardingAuth()
   
   // Check if tasks already exist for this month
   const existingTasks = await prisma.client_tasks.findMany({

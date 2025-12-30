@@ -197,6 +197,35 @@ async function main() {
     }
   }
 
+  // Create Task Templates with default durations
+  const taskTemplates = [
+    { taskType: 'website content', durationHours: 24 }, // 1 day
+    { taskType: 'web development', durationHours: 72 }, // 3 days
+    { taskType: 'social media content calendar', durationHours: 4 },
+    { taskType: 'gmb optimisation', durationHours: 3 },
+    { taskType: 'design', durationHours: 48 }, // 2 days
+    { taskType: 'scheduling', durationHours: 4 },
+    { taskType: 'review responses', durationHours: 4 },
+    { taskType: 'gmb photos upload', durationHours: 4 },
+    { taskType: 'GMB liners for 3 months', durationHours: 4 },
+  ]
+
+  for (const template of taskTemplates) {
+    await prisma.taskTemplate.upsert({
+      where: { taskType: template.taskType },
+      create: {
+        id: crypto.randomUUID(),
+        taskType: template.taskType,
+        durationHours: template.durationHours,
+        isActive: true,
+      },
+      update: {
+        durationHours: template.durationHours,
+        isActive: true,
+      },
+    })
+  }
+
   // Create a TEAM chat thread
   const teamThread = await prisma.chat_threads.create({
     data: {

@@ -16,6 +16,7 @@ export async function createTask(data: {
   status?: 'Pending' | 'InProgress' | 'Review' | 'Approved' | 'Rejected'
   assignedToId?: string
   clientId?: string
+  taskType?: string
   dueDate?: Date
   timeSpent?: number
   rejectionFeedback?: string
@@ -73,12 +74,46 @@ export async function createTask(data: {
   // All authenticated users can create tasks
   const validated = createTaskSchema.parse(data)
   
+  // Set start date to current time
+  const startDate = new Date()
+  
+  // Calculate due date from TaskTemplate if taskType is provided
+  let dueDate: Date | undefined = undefined
+  if (validated.taskType) {
+    const template = await prisma.taskTemplate.findUnique({
+      where: { taskType: validated.taskType },
+      select: { durationHours: true, isActive: true },
+    })
+    
+    if (!template) {
+      throw new Error(`Task template not found for type: ${validated.taskType}`)
+    }
+    
+    if (!template.isActive) {
+      throw new Error(`Task template is inactive for type: ${validated.taskType}`)
+    }
+    
+    // Calculate due date: startDate + durationHours
+    dueDate = new Date(startDate.getTime() + template.durationHours * 60 * 60 * 1000)
+  } else if (validated.dueDate) {
+    // If no taskType but dueDate provided, use it (backward compatibility)
+    dueDate = validated.dueDate
+  }
+  
   // Convert empty string to undefined for optional fields
   const taskData: any = {
     id: randomUUID(),
     ...validated,
     assignedById: userId,
     status: 'Pending', // Always start with Pending
+    startDate,
+    dueDate,
+  }
+  
+  // Remove dueDate from validated if we calculated it from template
+  if (validated.taskType) {
+    delete taskData.dueDate
+    taskData.dueDate = dueDate
   }
   
   // Handle empty strings for optional fields
@@ -87,6 +122,9 @@ export async function createTask(data: {
   }
   if (taskData.clientId === '') {
     taskData.clientId = null
+  }
+  if (taskData.taskType === '') {
+    taskData.taskType = null
   }
   
   const task = await prisma.task.create({
@@ -105,6 +143,7 @@ export async function updateTask(id: string, data: {
   status?: 'Pending' | 'InProgress' | 'Review' | 'Approved' | 'Rejected'
   assignedToId?: string
   clientId?: string
+  taskType?: string
   dueDate?: Date | null
   timeSpent?: number
   rejectionFeedback?: string
@@ -147,9 +186,38 @@ export async function updateTask(id: string, data: {
 
   const validated = updateTaskSchema.parse(data)
   
+  // If taskType is being updated, recalculate dueDate
+  let updateData: any = { ...validated }
+  if (data.taskType !== undefined) {
+    if (data.taskType) {
+      const template = await prisma.taskTemplate.findUnique({
+        where: { taskType: data.taskType },
+        select: { durationHours: true, isActive: true },
+      })
+      
+      if (!template) {
+        throw new Error(`Task template not found for type: ${data.taskType}`)
+      }
+      
+      if (!template.isActive) {
+        throw new Error(`Task template is inactive for type: ${data.taskType}`)
+      }
+      
+      // Use existing startDate or current time
+      const startDate = task.startDate || new Date()
+      const dueDate = new Date(startDate.getTime() + template.durationHours * 60 * 60 * 1000)
+      
+      updateData.startDate = startDate
+      updateData.dueDate = dueDate
+    } else {
+      // If taskType is cleared, allow manual dueDate
+      updateData.startDate = null
+    }
+  }
+  
   const updatedTask = await prisma.task.update({
     where: { id },
-    data: validated,
+    data: updateData,
   })
 
   await logActivity(session.user.id, 'UPDATE', 'Task', updatedTask.id)
@@ -220,5 +288,32 @@ export async function deleteTask(id: string) {
   await logActivity(session.user.id, 'DELETE', 'Task', id)
 
   return { success: true }
+}
+
+export async function deleteTasks(ids: string[]) {
+  const session = await getServerSession(authOptions)
+  if (!session) throw new Error('Unauthorized')
+
+  if (!canManageTasks(session.user.role as UserRole)) {
+    throw new Error('Forbidden')
+  }
+
+  if (!ids || ids.length === 0) {
+    throw new Error('No tasks selected')
+  }
+
+  // Delete all tasks in a transaction
+  await prisma.$transaction(
+    ids.map(id =>
+      prisma.task.delete({
+        where: { id },
+      })
+    )
+  )
+
+  // Log activity for bulk delete
+  await logActivity(session.user.id, 'DELETE', 'Task', `Bulk delete: ${ids.length} tasks`)
+
+  return { success: true, deletedCount: ids.length }
 }
 

@@ -11,6 +11,7 @@ interface TaskNotificationProps {
 export function useTaskNotifications({ onNewTask, onTaskCountUpdate }: TaskNotificationProps = {}) {
   const previousTaskCountRef = useRef(0)
   const isInitializedRef = useRef(false)
+  const isFirstCountUpdateRef = useRef(true) // Track if this is the first count update (initial load)
   const [notifyTaskUpdates, setNotifyTaskUpdates] = useState(true)
 
   // Fetch user notification preferences
@@ -69,13 +70,49 @@ export function useTaskNotifications({ onNewTask, onTaskCountUpdate }: TaskNotif
           if (onNewTask) {
             onNewTask(task)
           }
+        } else if (data.type === 'task_completed') {
+          const task = data.task
+          
+          // Only notify if user has task notifications enabled
+          if (notifyTaskUpdates) {
+            // Play sound notification if enabled
+            if (getTaskSoundEnabled()) {
+              playTaskSound()
+            }
+            
+            // Show desktop notification if permission granted
+            if ('Notification' in window && Notification.permission === 'granted') {
+              const completedByName = task.completedBy?.name || 'Someone'
+              const statusText = task.status === 'Review' ? 'completed' : 'approved'
+              new Notification('Task Completed', {
+                body: `${completedByName} has ${statusText} the task "${task.title}"`,
+                icon: '/favicon.ico',
+                tag: `task-completed-${task.id}`, // Prevent duplicate notifications
+              })
+            }
+          }
+          
+          // Always call callback to update UI (even if notifications are disabled)
+          if (onNewTask) {
+            onNewTask(task)
+          }
         } else if (data.type === 'task_count_update') {
           const newCount = data.count || 0
           const oldCount = previousTaskCountRef.current
           
-          // Play sound if count increased and notifications are enabled
-          if (newCount > oldCount && notifyTaskUpdates && getTaskSoundEnabled()) {
+          // Skip sound on first count update (initial load) to prevent sounds when there are no new notifications
+          // Only play sound if:
+          // 1. This is not the first update (initial load)
+          // 2. Count actually increased (not just initialized)
+          // 3. Notifications are enabled
+          // 4. Sound is enabled
+          if (!isFirstCountUpdateRef.current && newCount > oldCount && notifyTaskUpdates && getTaskSoundEnabled()) {
             playTaskSound()
+          }
+          
+          // Mark that we've processed the first update
+          if (isFirstCountUpdateRef.current) {
+            isFirstCountUpdateRef.current = false
           }
           
           previousTaskCountRef.current = newCount

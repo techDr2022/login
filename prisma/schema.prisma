@@ -61,6 +61,8 @@ model Task {
   assignedById                 String
   assignedToId                 String?
   clientId                     String?
+  taskType                     String?
+  startDate                    DateTime?
   dueDate                      DateTime?
   timeSpent                    Float?        @default(0)
   rejectionFeedback            String?
@@ -73,6 +75,7 @@ model Task {
   @@index([assignedToId])
   @@index([clientId])
   @@index([status])
+  @@index([taskType])
 }
 
 model User {
@@ -85,6 +88,7 @@ model User {
   createdAt                               DateTime        @default(now())
   joiningDate                             DateTime?
   adminNotes                              String?
+  jobTitle                                String?
   notifyChatMentions                      Boolean         @default(true)
   notifyClientChanges                     Boolean         @default(true)
   notifyTaskUpdates                       Boolean         @default(true)
@@ -391,6 +395,18 @@ model task_templates {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime
   task_template_items task_template_items[]
+}
+
+model TaskTemplate {
+  id            String   @id
+  taskType      String   @unique
+  durationHours Float
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([taskType])
+  @@index([isActive])
 }
 
 enum ApprovalMode {

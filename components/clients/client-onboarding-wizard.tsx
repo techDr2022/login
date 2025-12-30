@@ -80,6 +80,7 @@ interface OnboardingData {
   kpis?: any[]
   // Step 11
   startDate?: Date
+  accountManagerId?: string
 }
 
 export function ClientOnboardingWizard() {
@@ -129,14 +130,34 @@ export function ClientOnboardingWizard() {
     }
   }
 
-  const handleFinalize = async (startDate: Date) => {
+  const handleFinalize = async (startDate: Date, accountManagerId?: string) => {
     if (!clientId) return
 
     setLoading(true)
     setError('')
 
     try {
-      await finalizeClientOnboarding(clientId, startDate)
+      await finalizeClientOnboarding(clientId, startDate, accountManagerId)
+      
+      // Generate and download PDF
+      try {
+        const response = await fetch(`/api/clients/${clientId}/pdf`)
+        if (response.ok) {
+          const blob = await response.blob()
+          const url = window.URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `client-onboarding-${data.basicInfo?.name?.replace(/[^a-z0-9]/gi, '_') || clientId}-${new Date().toISOString().split('T')[0]}.pdf`
+          document.body.appendChild(a)
+          a.click()
+          window.URL.revokeObjectURL(url)
+          document.body.removeChild(a)
+        }
+      } catch (pdfError) {
+        console.error('Failed to generate PDF:', pdfError)
+        // Don't block navigation if PDF generation fails
+      }
+      
       router.push(`/clients/${clientId}`)
     } catch (err: any) {
       setError(err.message || 'Failed to finalize onboarding')

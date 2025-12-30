@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -83,7 +83,7 @@ export function TaskStatusTimeline() {
     }
   }, [session])
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = useCallback((status: string) => {
     switch (status) {
       case 'Approved':
         return <Badge className="bg-green-100 text-green-800 border-green-200">Approved</Badge>
@@ -98,7 +98,10 @@ export function TaskStatusTimeline() {
       default:
         return <Badge variant="outline">{status}</Badge>
     }
-  }
+  }, [])
+
+  // Memoize status changes to prevent unnecessary re-renders
+  const memoizedStatusChanges = useMemo(() => statusChanges.slice(0, 20), [statusChanges])
 
   if (loading) {
     return (
@@ -141,7 +144,7 @@ export function TaskStatusTimeline() {
               
               {/* Timeline items */}
               <div className="space-y-4">
-                {statusChanges.map((change, index) => (
+                {memoizedStatusChanges.map((change, index) => (
                   <div key={change.id} className="relative flex items-start gap-4">
                     {/* Timeline dot */}
                     <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background border-2 border-primary">

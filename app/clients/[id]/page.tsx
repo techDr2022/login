@@ -9,16 +9,18 @@ import { ClientDetail } from '@/components/clients/client-detail'
 export default async function ClientDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
   const session = await getServerSession(authOptions)
   if (!session) {
     redirect('/login')
   }
 
+  const { id } = await params
+
   return (
     <LayoutWrapper>
-      <ClientDetail clientId={params.id} />
+      <ClientDetail clientId={id} />
     </LayoutWrapper>
   )
 }

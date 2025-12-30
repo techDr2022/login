@@ -1,18 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckCircle2 } from 'lucide-react'
 import { DatePicker } from '@/components/ui/date-picker'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface Step11ConfirmationProps {
   clientId: string | null
   data: any
   onComplete?: never
-  onFinalize: (startDate: Date) => void
+  onFinalize: (startDate: Date, accountManagerId?: string) => void
   loading: boolean
 }
 
@@ -20,13 +21,29 @@ export function Step11Confirmation({ clientId, data, onFinalize, loading }: Step
   const [startDate, setStartDate] = useState<Date | null>(
     data.startDate ? new Date(data.startDate) : null
   )
+  const [accountManagerId, setAccountManagerId] = useState<string>(data.accountManagerId || '')
+  const [managers, setManagers] = useState<Array<{ id: string; name: string }>>([])
+
+  useEffect(() => {
+    fetchManagers()
+  }, [])
+
+  const fetchManagers = async () => {
+    try {
+      const res = await fetch('/api/users?role=EMPLOYEE')
+      const data = await res.json()
+      setManagers(data.users || [])
+    } catch (err) {
+      console.error('Failed to fetch managers:', err)
+    }
+  }
 
   const handleFinalize = () => {
     if (!startDate) {
       alert('Please select a start date')
       return
     }
-    onFinalize(startDate as Date)
+    onFinalize(startDate as Date, accountManagerId || undefined)
   }
 
   const completionChecklist = [
@@ -87,6 +104,28 @@ export function Step11Confirmation({ clientId, data, onFinalize, loading }: Step
             />
             <p className="text-sm text-muted-foreground mt-1">
               This will mark the client as ACTIVE and generate monthly tasks automatically.
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="accountManagerId">Account Manager</Label>
+            <Select
+              value={accountManagerId || undefined}
+              onValueChange={(value) => setAccountManagerId(value || '')}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select account manager (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                {managers.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground mt-1">
+              Select an employee to assign as the account manager for this client.
             </p>
           </div>
 

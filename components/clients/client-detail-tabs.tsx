@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ArrowLeft, Edit, Plus, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Edit, Plus, Eye, EyeOff, Download } from 'lucide-react'
 import Link from 'next/link'
 import { getClientAccessWithPassword } from '@/app/actions/client-onboarding-actions'
 import { decrypt } from '@/lib/encryption'
@@ -34,6 +34,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({})
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   const canManage = session?.user.role && canManageClients(session.user.role as UserRole)
 
@@ -123,6 +124,33 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
     }
   }
 
+  const handleDownloadPdf = async () => {
+    if (!clientId) return
+
+    setDownloadingPdf(true)
+    try {
+      const response = await fetch(`/api/clients/${clientId}/pdf`)
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF')
+      }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const clientName = client?.name?.replace(/[^a-z0-9]/gi, '_') || clientId
+      a.download = `client-onboarding-${clientName}-${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err: any) {
+      console.error('Failed to download PDF:', err)
+      alert(err.message || 'Failed to download PDF. Please try again.')
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -194,12 +222,22 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
             </div>
           </div>
         </div>
-        {canManage && client.status === 'ONBOARDING' && (
-          <Button onClick={() => router.push(`/clients/${clientId}/onboarding`)}>
-            <Edit className="w-4 h-4 mr-2" />
-            Continue Onboarding
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
           </Button>
-        )}
+          {canManage && client.status === 'ONBOARDING' && (
+            <Button onClick={() => router.push(`/clients/${clientId}/onboarding`)}>
+              <Edit className="w-4 h-4 mr-2" />
+              Continue Onboarding
+            </Button>
+          )}
+        </div>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">

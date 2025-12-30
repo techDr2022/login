@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@prisma/client'
+import { canViewAllTasks } from '@/lib/rbac'
 
 export async function GET(
   request: NextRequest,
@@ -16,6 +17,10 @@ export async function GET(
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const userRole = session.user.role as UserRole
+    const userId = session.user.id
+    const canViewAll = canViewAllTasks(userRole)
 
     const task = await prisma.task.findUnique({
       where: { id },
@@ -45,6 +50,14 @@ export async function GET(
 
     if (!task) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    }
+
+    // For non-admin users, check if they have access to this task
+    if (!canViewAll && userId) {
+      const hasAccess = task.assignedToId === userId || task.assignedById === userId
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     // Transform task to map Prisma relation names to expected field names

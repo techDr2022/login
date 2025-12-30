@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@prisma/client'
+import { canViewAllTasks } from '@/lib/rbac'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,10 @@ export async function GET(request: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const userRole = session.user.role as UserRole
+    const userId = session.user.id
+    const canViewAll = canViewAllTasks(userRole)
 
     // Get recent task updates from activity logs
     const recentUpdates = await prisma.activity_logs.findMany({
@@ -35,10 +40,23 @@ export async function GET(request: NextRequest) {
 
     // Fetch task details for each update
     const taskIds = [...new Set(recentUpdates.map((log) => log.entityId))]
+    const tasksWhere: any = { id: { in: taskIds } }
+    
+    // For non-admin users, only show tasks assigned to them or assigned by them
+    if (!canViewAll && userId) {
+      tasksWhere.AND = [
+        { id: { in: taskIds } },
+        {
+          OR: [
+            { assignedToId: userId },
+            { assignedById: userId },
+          ]
+        }
+      ]
+    }
+    
     const tasks = await prisma.task.findMany({
-      where: {
-        id: { in: taskIds },
-      },
+      where: tasksWhere,
       select: {
         id: true,
         title: true,

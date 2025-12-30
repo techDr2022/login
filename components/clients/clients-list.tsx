@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -11,12 +11,13 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Search, Trash2, Edit, Users } from 'lucide-react'
-import { createClient, updateClient, deleteClient } from '@/app/actions/client-actions'
+import { createClient, updateClient, deleteClient, updateClientStatus, bulkUpdateClientStatus } from '@/app/actions/client-actions'
 import { useSession } from 'next-auth/react'
-import { UserRole } from '@prisma/client'
-import { canManageClients } from '@/lib/rbac'
+import { UserRole, ClientStatus } from '@prisma/client'
+import { canManageClients, canCreateClient } from '@/lib/rbac'
 import { useRouter } from 'next/navigation'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface Client {
   id: string
@@ -24,6 +25,7 @@ interface Client {
   doctorOrHospitalName: string
   location: string
   services: string[]
+  status?: ClientStatus
   accountManagerId?: string
   User?: {
     id: string
@@ -54,15 +56,18 @@ export function ClientsList() {
   })
   const [error, setError] = useState('')
   const [managers, setManagers] = useState<Array<{ id: string; name: string }>>([])
+  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set())
+  const selectAllCheckboxRef = useRef<HTMLButtonElement>(null)
 
   const canManage = session?.user.role && canManageClients(session.user.role as UserRole)
+  const canCreate = session?.user.role && canCreateClient(session.user.role as UserRole)
 
   useEffect(() => {
     fetchClients()
-    if (canManage) {
+    if (canCreate) {
       fetchManagers()
     }
-  }, [page, search, canManage])
+  }, [page, search, canCreate])
 
   const fetchManagers = async () => {
     try {
@@ -147,6 +152,67 @@ export function ClientsList() {
     setDialogOpen(true)
   }
 
+  const handleStatusChange = async (clientId: string, newStatus: ClientStatus) => {
+    try {
+      await updateClientStatus(clientId, newStatus)
+      fetchClients()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update client status')
+    }
+  }
+
+  const handleBulkStatusChange = async (newStatus: ClientStatus) => {
+    if (selectedClients.size === 0) return
+    
+    try {
+      await bulkUpdateClientStatus(Array.from(selectedClients), newStatus)
+      setSelectedClients(new Set())
+      fetchClients()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update client statuses')
+    }
+  }
+
+  const handleSelectClient = (clientId: string, checked: boolean) => {
+    const newSelected = new Set(selectedClients)
+    if (checked) {
+      newSelected.add(clientId)
+    } else {
+      newSelected.delete(clientId)
+    }
+    setSelectedClients(newSelected)
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedClients(new Set(clients.map(c => c.id)))
+    } else {
+      setSelectedClients(new Set())
+    }
+  }
+
+  const isAllSelected = clients.length > 0 && selectedClients.size === clients.length
+  const isIndeterminate = selectedClients.size > 0 && selectedClients.size < clients.length
+
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      const input = selectAllCheckboxRef.current.querySelector('input')
+      if (input) {
+        input.indeterminate = isIndeterminate
+      }
+    }
+  }, [isIndeterminate])
+
+  const getStatusBadge = (status?: ClientStatus) => {
+    if (!status) return null
+    const variants: Record<ClientStatus, any> = {
+      ONBOARDING: 'secondary',
+      ACTIVE: 'default',
+      PAUSED: 'outline',
+    }
+    return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>
+  }
+
   const resetForm = () => {
     setEditingClient(null)
     setFormData({
@@ -193,7 +259,33 @@ export function ClientsList() {
             />
           </div>
         </div>
-        {canManage && (
+        {canManage && selectedClients.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {selectedClients.size} selected
+            </span>
+            <Select
+              onValueChange={(value) => handleBulkStatusChange(value as ClientStatus)}
+            >
+              <SelectTrigger className="w-[140px] rounded-xl">
+                <SelectValue placeholder="Change status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ONBOARDING">Onboarding</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="PAUSED">Paused</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              onClick={() => setSelectedClients(new Set())}
+              className="rounded-xl"
+            >
+              Clear
+            </Button>
+          </div>
+        )}
+        {canCreate && (
           <Dialog open={dialogOpen} onOpenChange={(open) => {
             setDialogOpen(open)
             if (!open) resetForm()
@@ -286,9 +378,19 @@ export function ClientsList() {
           <Table>
             <TableHeader>
               <TableRow>
+                {canManage && (
+                  <TableHead className="w-12">
+                    <Checkbox
+                      ref={selectAllCheckboxRef}
+                      checked={isAllSelected}
+                      onCheckedChange={handleSelectAll}
+                    />
+                  </TableHead>
+                )}
                 <TableHead>Name</TableHead>
                 <TableHead>Doctor/Hospital</TableHead>
                 <TableHead>Location</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Services</TableHead>
                 <TableHead>Account Manager</TableHead>
                 <TableHead>Tasks</TableHead>
@@ -298,11 +400,11 @@ export function ClientsList() {
             <TableBody>
               {clients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 7 : 6} className="h-24 text-center">
+                  <TableCell colSpan={canManage ? 9 : 7} className="h-24 text-center">
                     <div className="flex flex-col items-center justify-center py-8">
                       <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
                       <p className="text-sm font-medium text-muted-foreground">No clients found</p>
-                      {canManage && (
+                      {canCreate && (
                         <p className="text-xs text-muted-foreground mt-1">
                           Get started by creating a new client
                         </p>
@@ -317,9 +419,36 @@ export function ClientsList() {
                   className="cursor-pointer hover:bg-muted/50 transition-colors" 
                   onClick={() => router.push(`/clients/${client.id}`)}
                 >
+                  {canManage && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedClients.has(client.id)}
+                        onCheckedChange={(checked) => handleSelectClient(client.id, checked as boolean)}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="font-medium">{client.name}</TableCell>
                   <TableCell className="text-muted-foreground">{client.doctorOrHospitalName}</TableCell>
                   <TableCell className="text-muted-foreground">{client.location}</TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {canManage ? (
+                      <Select
+                        value={client.status || 'ONBOARDING'}
+                        onValueChange={(value) => handleStatusChange(client.id, value as ClientStatus)}
+                      >
+                        <SelectTrigger className="w-[120px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ONBOARDING">Onboarding</SelectItem>
+                          <SelectItem value="ACTIVE">Active</SelectItem>
+                          <SelectItem value="PAUSED">Paused</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      getStatusBadge(client.status)
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {client.services.slice(0, 2).map((service, idx) => (

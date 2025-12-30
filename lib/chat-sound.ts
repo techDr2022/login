@@ -35,18 +35,18 @@ export function setTaskSoundPath(path: string) {
 // Initialize audio context after user interaction
 export function initChatSound() {
   // Check localStorage for saved preferences
-  // Default to true for chat sounds if not explicitly set
+  // Default to false for chat sounds (disabled by default to prevent disturbing sounds)
   const chatSaved = localStorage.getItem('chatSoundEnabled')
   if (chatSaved === null) {
-    // First time - enable by default and save to localStorage
-    chatSoundEnabled = true
-    localStorage.setItem('chatSoundEnabled', 'true')
+    // First time - disable by default and save to localStorage
+    chatSoundEnabled = false
+    localStorage.setItem('chatSoundEnabled', 'false')
   } else {
     chatSoundEnabled = chatSaved === 'true'
   }
   
   const taskSaved = localStorage.getItem('taskSoundEnabled')
-  taskSoundEnabled = taskSaved === 'true' || taskSaved === null // Default to true for tasks
+  taskSoundEnabled = taskSaved === 'true' // Default to false for tasks (disabled by default)
 
   // Listen for first user interaction
   const enableSound = () => {
@@ -78,7 +78,7 @@ function playAudioFile(path: string) {
 
   try {
     const audio = new Audio(path)
-    audio.volume = 0.7 // Set volume to 70%
+    audio.volume = 0.3 // Set volume to 30% (reduced from 70% to be less disturbing)
     
     // Preload the audio
     audio.preload = 'auto'
@@ -115,10 +115,15 @@ function playAudioFile(path: string) {
 export function playChatSound() {
   // Re-check enabled state from localStorage in case it changed
   const chatSaved = typeof window !== 'undefined' ? localStorage.getItem('chatSoundEnabled') : null
-  const isEnabled = chatSaved === null ? true : chatSaved === 'true'
+  const isEnabled = chatSaved === 'true' // Only enabled if explicitly set to 'true'
   
   if (!isEnabled) {
     return // Silent return - don't log when disabled
+  }
+  
+  // Check if user has interacted (required for audio to play)
+  if (!userInteracted) {
+    return // Don't play sound if user hasn't interacted yet
   }
   
   // Update local state
@@ -134,13 +139,23 @@ export function playChatSound() {
 
 // Play notification sound for tasks
 export function playTaskSound() {
-  if (!taskSoundEnabled) {
-    console.log('Task sound disabled')
-    return
+  // Re-check enabled state from localStorage in case it changed
+  const taskSaved = typeof window !== 'undefined' ? localStorage.getItem('taskSoundEnabled') : null
+  const isEnabled = taskSaved === 'true' // Only enabled if explicitly set to 'true'
+  
+  if (!isEnabled) {
+    return // Silent return - don't log when disabled
   }
   
+  // Check if user has interacted (required for audio to play)
+  if (!userInteracted) {
+    return // Don't play sound if user hasn't interacted yet
+  }
+  
+  // Update local state
+  taskSoundEnabled = isEnabled
+  
   const soundPath = getTaskSoundPath()
-  console.log('Playing task sound from:', soundPath)
   if (soundPath) {
     playAudioFile(soundPath)
   } else {
@@ -179,7 +194,11 @@ export function setSoundEnabled(enabled: boolean) {
 }
 
 export function getSoundEnabled(): boolean {
-  return chatSoundEnabled
+  // Check localStorage directly to ensure we have the latest value
+  if (typeof window === 'undefined') return false
+  const saved = localStorage.getItem('chatSoundEnabled')
+  // Default to false if not set (disabled by default)
+  return saved === 'true'
 }
 
 // Task sound functions
@@ -190,7 +209,7 @@ export function setTaskSoundEnabled(enabled: boolean) {
 
 export function getTaskSoundEnabled(): boolean {
   const saved = localStorage.getItem('taskSoundEnabled')
-  return saved === null ? true : saved === 'true' // Default to true
+  return saved === 'true' // Default to false (disabled by default)
 }
 
 // Test function to verify sound is working (can be called from browser console)

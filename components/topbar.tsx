@@ -147,6 +147,42 @@ export function TopBar() {
     }
   }
 
+  const formatNotificationTime = (dateString: string | Date | undefined) => {
+    if (!dateString) return ''
+    
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+    
+    if (diffInSeconds < 60) {
+      return 'Just now'
+    }
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60)
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes} minute${diffInMinutes !== 1 ? 's' : ''} ago`
+    }
+    
+    const diffInHours = Math.floor(diffInMinutes / 60)
+    if (diffInHours < 24) {
+      return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`
+    }
+    
+    const diffInDays = Math.floor(diffInHours / 24)
+    if (diffInDays < 7) {
+      return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`
+    }
+    
+    // For older notifications, show the actual date
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
+
   const searchItems = [
     { id: 'dashboard', label: 'Dashboard', href: '/dashboard', keywords: ['dashboard', 'home'] },
     { id: 'tasks', label: 'Tasks', href: '/tasks', keywords: ['tasks', 'task'] },
@@ -243,6 +279,11 @@ export function TopBar() {
                                       {task.assignedBy?.name || 'Someone'} created this task
                                       {task.assignedTo && ` • Assigned to ${task.assignedTo.name}`}
                                     </div>
+                                    {(task.createdAt || (task as any).timestamp) && (
+                                      <div className="text-xs text-muted-foreground mt-1">
+                                        {formatNotificationTime(task.createdAt || (task as any).timestamp)}
+                                      </div>
+                                    )}
                                   </div>
                                   {isUnseen && (
                                     <span className="h-2 w-2 rounded-full bg-blue-600 flex-shrink-0" />

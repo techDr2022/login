@@ -85,6 +85,7 @@ export function ClientOnboardingWizard({ clientId }: ClientOnboardingWizardProps
         approvals: client.approvalSettings,
         kpis: client.kpis || [],
         startDate: client.startDate,
+        accountManagerId: client.accountManagerId || '',
       })
     } catch (err) {
       console.error('Failed to fetch client data:', err)
@@ -107,13 +108,13 @@ export function ClientOnboardingWizard({ clientId }: ClientOnboardingWizardProps
     }
   }
 
-  const handleFinalize = async (startDate: Date) => {
+  const handleFinalize = async (startDate: Date, accountManagerId?: string) => {
     setLoading(true)
     setError('')
 
     try {
       const { finalizeClientOnboarding } = await import('@/app/actions/client-onboarding-actions')
-      await finalizeClientOnboarding(clientId, startDate)
+      await finalizeClientOnboarding(clientId, startDate, accountManagerId)
       router.push(`/clients/${clientId}`)
     } catch (err: any) {
       setError(err.message || 'Failed to finalize onboarding')

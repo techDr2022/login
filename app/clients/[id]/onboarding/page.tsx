@@ -9,16 +9,18 @@ import { ClientOnboardingWizard } from '@/components/clients/client-onboarding-w
 export default async function EditOnboardingPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
   const session = await getServerSession(authOptions)
   if (!session) {
     redirect('/login')
   }
 
+  const { id } = await params
+
   return (
     <LayoutWrapper>
-      <ClientOnboardingWizard clientId={params.id} />
+      <ClientOnboardingWizard clientId={id} />
     </LayoutWrapper>
   )
 }

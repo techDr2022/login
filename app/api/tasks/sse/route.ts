@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@prisma/client'
+import { canViewAllTasks } from '@/lib/rbac'
 
 // SSE endpoint for real-time task notifications
 export async function GET(request: NextRequest) {
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
 
   const userId = session.user.id
   const userRole = session.user.role as UserRole
+  const canViewAll = canViewAllTasks(userRole)
 
   // Create a readable stream for SSE
   const stream = new ReadableStream({
@@ -38,8 +40,17 @@ export async function GET(request: NextRequest) {
       // Track last known task statuses for detecting changes
       const taskStatusMap = new Map<string, string>()
       
-      // Initialize task status map
+      // Initialize task status map with user-specific filtering
+      const initialTasksWhere: any = {}
+      if (!canViewAll && userId) {
+        initialTasksWhere.OR = [
+          { assignedToId: userId },
+          { assignedById: userId },
+        ]
+      }
+      
       const initialTasks = await prisma.task.findMany({
+        where: initialTasksWhere,
         select: { id: true, status: true },
         take: 100, // Track up to 100 most recent tasks
       })
@@ -58,21 +69,21 @@ export async function GET(request: NextRequest) {
 
         try {
           // Build query based on user role
-          const where: any = {}
-          
-          // Employees only see tasks assigned to them
-          if (userRole === UserRole.EMPLOYEE) {
-            where.assignedToId = userId
+          const where: any = {
+            createdAt: { gt: lastCheck },
           }
-          // Managers and Super Admins see all tasks
-          // (no filter needed)
+          
+          // For non-admin users, only show tasks assigned to them or assigned by them
+          if (!canViewAll && userId) {
+            where.OR = [
+              { assignedToId: userId },
+              { assignedById: userId },
+            ]
+          }
 
           // Check for new tasks created after lastCheck
           const newTasks = await prisma.task.findMany({
-            where: {
-              ...where,
-              createdAt: { gt: lastCheck },
-            },
+            where,
             include: {
               User_Task_assignedByIdToUser: {
                 select: { id: true, name: true, email: true },
@@ -96,11 +107,11 @@ export async function GET(request: NextRequest) {
             
             // Notify if:
             // 1. Task is assigned to this user
-            // 2. User is a manager or super admin (they see all tasks created by others)
+            // 2. User is a super admin (they see all tasks created by others)
             if (task.assignedToId === userId) {
               return true
             }
-            if (userRole === UserRole.MANAGER || userRole === UserRole.SUPER_ADMIN) {
+            if (canViewAll) {
               return true
             }
             return false
@@ -180,15 +191,55 @@ export async function GET(request: NextRequest) {
           for (const update of recentTaskUpdates) {
             const task = await prisma.task.findUnique({
               where: { id: update.entityId },
-              select: { id: true, title: true, status: true },
+              include: {
+                User_Task_assignedToIdToUser: {
+                  select: { id: true, name: true, email: true },
+                },
+                User_Task_assignedByIdToUser: {
+                  select: { id: true, name: true, email: true },
+                },
+              },
             })
 
-            if (task) {
+            // Check if user has access to this task
+            if (task && (canViewAll || task.assignedToId === userId || task.assignedById === userId)) {
               const oldStatus = taskStatusMap.get(task.id)
               const newStatus = task.status
 
               // If status changed, send event
               if (oldStatus && oldStatus !== newStatus) {
+                // Check if task was completed by the assigned person
+                // Task is considered "completed" when status changes to Review or Approved
+                const isCompleted = (newStatus === 'Review' || newStatus === 'Approved') && 
+                                    (oldStatus !== 'Review' && oldStatus !== 'Approved')
+                const completedByAssignedPerson = isCompleted && 
+                                                   task.assignedToId && 
+                                                   task.assignedToId === update.userId &&
+                                                   task.assignedById !== update.userId
+
+                if (completedByAssignedPerson && task.assignedById === userId) {
+                  // Notify the assigner that the task has been completed
+                  sendEvent({
+                    type: 'task_completed',
+                    task: {
+                      id: task.id,
+                      title: task.title,
+                      status: newStatus,
+                      completedBy: {
+                        id: task.assignedToId,
+                        name: task.User_Task_assignedToIdToUser?.name || 'Unknown',
+                        email: task.User_Task_assignedToIdToUser?.email || '',
+                      },
+                      assignedBy: {
+                        id: task.assignedById,
+                        name: task.User_Task_assignedByIdToUser?.name || 'Unknown',
+                        email: task.User_Task_assignedByIdToUser?.email || '',
+                      },
+                      timestamp: update.timestamp.toISOString(),
+                    },
+                  })
+                }
+
                 sendEvent({
                   type: 'status_change',
                   statusChange: {
@@ -212,8 +263,21 @@ export async function GET(request: NextRequest) {
           // Also send task_update event for any task changes
           if (recentTaskUpdates.length > 0) {
             const updatedTaskIds = [...new Set(recentTaskUpdates.map((u) => u.entityId))]
+            const updatedTasksWhere: any = { id: { in: updatedTaskIds } }
+            if (!canViewAll && userId) {
+              updatedTasksWhere.AND = [
+                { id: { in: updatedTaskIds } },
+                {
+                  OR: [
+                    { assignedToId: userId },
+                    { assignedById: userId },
+                  ]
+                }
+              ]
+            }
+            
             const updatedTasks = await prisma.task.findMany({
-              where: { id: { in: updatedTaskIds } },
+              where: updatedTasksWhere,
               include: {
                 User_Task_assignedByIdToUser: {
                   select: { id: true, name: true, email: true },

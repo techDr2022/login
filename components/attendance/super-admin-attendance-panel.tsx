@@ -12,6 +12,9 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
+import { DatePicker } from '@/components/ui/date-picker'
+import { markAllAttendanceForDay } from '@/app/actions/attendance-actions'
+import { AttendanceMode } from '@prisma/client'
 import { 
   Users, 
   TrendingUp, 
@@ -25,7 +28,8 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  CheckSquare
 } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
 
@@ -74,6 +78,14 @@ export function SuperAdminAttendancePanel() {
   
   // Settings
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
+  const [payrollDialogOpen, setPayrollDialogOpen] = useState(false)
+  const [markAllDialogOpen, setMarkAllDialogOpen] = useState(false)
+  const [markAllDate, setMarkAllDate] = useState<Date | null>(new Date())
+  const [markAllMode, setMarkAllMode] = useState<AttendanceMode>(AttendanceMode.OFFICE)
+  const [markingAll, setMarkingAll] = useState(false)
+  const [markAllResult, setMarkAllResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [existingAttendanceCount, setExistingAttendanceCount] = useState<number | null>(null)
+  const [checkingExisting, setCheckingExisting] = useState(false)
   const [settings, setSettings] = useState({
     officeStartHour: 10,
     officeStartMinute: 0,
@@ -228,14 +240,75 @@ export function SuperAdminAttendancePanel() {
   }
 
   const exportPayroll = () => {
-    // TODO: Implement payroll export
-    alert('Payroll export coming soon')
+    setPayrollDialogOpen(true)
   }
 
   const saveSettings = async () => {
     // TODO: Implement settings save API
     alert('Settings save coming soon')
     setSettingsDialogOpen(false)
+  }
+
+  const checkExistingAttendance = useCallback(async (date: Date | null) => {
+    if (!date) {
+      setExistingAttendanceCount(null)
+      return
+    }
+
+    setCheckingExisting(true)
+    try {
+      const dateStr = date.toISOString().split('T')[0]
+      const res = await fetch(`/api/attendance?startDate=${dateStr}&endDate=${dateStr}&limit=1000`)
+      const data = await res.json()
+      setExistingAttendanceCount(data.attendances?.length || 0)
+    } catch (error) {
+      console.error('Failed to check existing attendance:', error)
+      setExistingAttendanceCount(null)
+    } finally {
+      setCheckingExisting(false)
+    }
+  }, [])
+
+  const handleMarkAllAttendance = async () => {
+    if (!markAllDate) {
+      setMarkAllResult({ success: false, message: 'Please select a date' })
+      return
+    }
+
+    setMarkingAll(true)
+    setMarkAllResult(null)
+
+    try {
+      const result = await markAllAttendanceForDay(markAllDate, markAllMode)
+      
+      if (result.success) {
+        const updatedCount = result.results.filter(r => r.action === 'updated').length
+        const createdCount = result.results.filter(r => r.action === 'created').length
+        
+        setMarkAllResult({
+          success: true,
+          message: `Successfully marked attendance: ${createdCount} created, ${updatedCount} updated out of ${result.totalEmployees} employees${result.errorCount > 0 ? ` (${result.errorCount} errors)` : ''}`,
+        })
+        
+        // Refresh the attendance logs
+        setTimeout(() => {
+          fetchAttendanceLogs()
+          fetchGlobalStats()
+          checkExistingAttendance(markAllDate)
+          setMarkAllDialogOpen(false)
+          setMarkAllResult(null)
+        }, 2000)
+      } else {
+        setMarkAllResult({ success: false, message: 'Failed to mark all attendance' })
+      }
+    } catch (error) {
+      setMarkAllResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'An error occurred while marking attendance',
+      })
+    } finally {
+      setMarkingAll(false)
+    }
   }
 
   if (loading) {
@@ -417,6 +490,10 @@ export function SuperAdminAttendancePanel() {
               <CardDescription>Complete audit trail of all attendance records</CardDescription>
             </div>
             <div className="flex gap-2">
+              <Button variant="default" size="sm" onClick={() => setMarkAllDialogOpen(true)}>
+                <CheckSquare className="w-4 h-4 mr-2" />
+                Mark All Attendance
+              </Button>
               <Button variant="outline" size="sm" onClick={exportPayroll}>
                 <Download className="w-4 h-4 mr-2" />
                 Payroll Export
@@ -484,6 +561,39 @@ export function SuperAdminAttendancePanel() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Payroll Export Coming Soon Dialog */}
+      <Dialog open={payrollDialogOpen} onOpenChange={setPayrollDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" />
+              Payroll Export
+            </DialogTitle>
+            <DialogDescription>
+              Export attendance data for payroll processing
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex flex-col items-center justify-center space-y-4 text-center">
+              <div className="rounded-full bg-primary/10 p-4">
+                <AlertCircle className="h-8 w-8 text-primary" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold">Coming Soon</h3>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  The payroll export feature is currently under development. 
+                  This will allow you to export attendance data in various formats 
+                  for payroll processing.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setPayrollDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Settings Dialog */}
       <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
@@ -561,6 +671,113 @@ export function SuperAdminAttendancePanel() {
               Cancel
             </Button>
             <Button onClick={saveSettings}>Save Settings</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mark All Attendance Dialog */}
+      <Dialog open={markAllDialogOpen} onOpenChange={(open) => {
+        setMarkAllDialogOpen(open)
+        if (!open) {
+          setMarkAllResult(null)
+          setExistingAttendanceCount(null)
+        } else if (markAllDate) {
+          checkExistingAttendance(markAllDate)
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckSquare className="h-5 w-5" />
+              Mark All Attendance for Day
+            </DialogTitle>
+            <DialogDescription>
+              Mark attendance as Present for all active employees on the selected date. Existing records will be updated.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Select Date</Label>
+              <DatePicker
+                date={markAllDate}
+                onSelect={(date) => {
+                  setMarkAllDate(date)
+                  if (date) {
+                    checkExistingAttendance(date)
+                  }
+                }}
+                placeholder="Select a date"
+              />
+              {checkingExisting && (
+                <p className="text-xs text-muted-foreground mt-1">Checking existing records...</p>
+              )}
+              {!checkingExisting && existingAttendanceCount !== null && existingAttendanceCount > 0 && (
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-xs text-yellow-800">
+                    <AlertCircle className="h-3 w-3 inline mr-1" />
+                    {existingAttendanceCount} employee{existingAttendanceCount !== 1 ? 's' : ''} already have attendance records for this date. They will be updated.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div>
+              <Label>Attendance Mode</Label>
+              <Select
+                value={markAllMode}
+                onValueChange={(value) => setMarkAllMode(value as AttendanceMode)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={AttendanceMode.OFFICE}>Office</SelectItem>
+                  <SelectItem value={AttendanceMode.WFH}>WFH</SelectItem>
+                  <SelectItem value={AttendanceMode.LEAVE}>Leave</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {markAllResult && (
+              <div
+                className={`p-3 rounded-md flex items-start gap-2 ${
+                  markAllResult.success
+                    ? 'bg-green-50 text-green-800 border border-green-200'
+                    : 'bg-red-50 text-red-800 border border-red-200'
+                }`}
+              >
+                {markAllResult.success ? (
+                  <CheckCircle2 className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <XCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                )}
+                <p className="text-sm">{markAllResult.message}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMarkAllDialogOpen(false)
+                setMarkAllResult(null)
+                setMarkAllDate(new Date())
+              }}
+              disabled={markingAll}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleMarkAllAttendance} disabled={markingAll || !markAllDate}>
+              {markingAll ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Marking...
+                </>
+              ) : (
+                <>
+                  <CheckSquare className="w-4 h-4 mr-2" />
+                  Mark All Attendance
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
