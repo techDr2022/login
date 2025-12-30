@@ -16,6 +16,10 @@ export function canManageClients(userRole: UserRole): boolean {
   return userRole === UserRole.SUPER_ADMIN
 }
 
+export function canEditClient(userRole: UserRole): boolean {
+  return userRole === UserRole.SUPER_ADMIN || userRole === UserRole.EMPLOYEE
+}
+
 export function canCreateClient(userRole: UserRole): boolean {
   return userRole === UserRole.SUPER_ADMIN || userRole === UserRole.EMPLOYEE
 }

@@ -23,6 +23,7 @@ import {
 } from '@/lib/validations'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
+import { generateInitialTasksForClient } from './client-actions'
 
 // Helper to check authorization for managing clients (update/delete - SUPER_ADMIN only)
 async function checkAuth() {
@@ -90,6 +91,21 @@ export async function finalizeClientOnboarding(clientId: string, startDate: Date
   
   // Generate monthly tasks for the client
   await generateMonthlyTasksForClient(clientId, startDate)
+
+  // Generate initial tasks if account manager is provided
+  if (accountManagerId) {
+    try {
+      await generateInitialTasksForClient(
+        clientId,
+        client.name,
+        client.doctorOrHospitalName || client.name,
+        session.user.id
+      )
+    } catch (error) {
+      // Log error but don't fail onboarding if task creation fails
+      console.error('Error creating automatic tasks for client:', error)
+    }
+  }
 
   return client
 }

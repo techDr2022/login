@@ -10,13 +10,13 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ArrowLeft, Edit, Plus, Eye, EyeOff, Download } from 'lucide-react'
+import { ArrowLeft, Edit, Plus, Eye, EyeOff, Download, Phone, Mail, MapPin, Calendar, Clock, Globe, MessageCircle, CheckCircle2, XCircle, Building2, Users } from 'lucide-react'
 import Link from 'next/link'
 import { getClientAccessWithPassword } from '@/app/actions/client-onboarding-actions'
 import { decrypt } from '@/lib/encryption'
 import { useSession } from 'next-auth/react'
 import { UserRole } from '@prisma/client'
-import { canManageClients } from '@/lib/rbac'
+import { canManageClients, canEditClient } from '@/lib/rbac'
 import { generateTasksForMonth } from '@/app/actions/client-onboarding-actions'
 
 interface ClientDetailTabsProps {
@@ -37,6 +37,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   const canManage = session?.user.role && canManageClients(session.user.role as UserRole)
+  const canEdit = session?.user.role && canEditClient(session.user.role as UserRole)
 
   useEffect(() => {
     if (clientId) {
@@ -206,19 +207,65 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
     return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>
   }
 
+  // Calculate statistics - handle both camelCase and snake_case field names
+  const tasks = client.Task || client.tasks || []
+  const doctors = client.doctors || client.client_doctors || []
+  const services = client.clientServices || client.client_services || []
+  const kpis = client.kpis || client.client_kpi_monthly || []
+  
+  const stats = {
+    totalTasks: tasks.length || 0,
+    pendingTasks: tasks.filter((t: any) => t.status === 'Pending').length || 0,
+    inProgressTasks: tasks.filter((t: any) => t.status === 'InProgress').length || 0,
+    completedTasks: tasks.filter((t: any) => t.status === 'Approved').length || 0,
+    doctorsCount: doctors.length || 0,
+    servicesCount: services.length || 0,
+    kpisCount: kpis.length || 0,
+  }
+
+  // Parse working days if available
+  const workingDays = client.workingDays ? (typeof client.workingDays === 'string' ? JSON.parse(client.workingDays) : client.workingDays) : null
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.back()}>
+      {/* Header Section */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-4 flex-1">
+          <Button variant="ghost" onClick={() => router.back()} className="mt-1">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{client.name || client.doctorOrHospitalName || 'Unnamed Client'}</h1>
-            <div className="flex items-center gap-2 mt-1">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold">{client.name || client.doctorOrHospitalName || 'Unnamed Client'}</h1>
               {getStatusBadge(client.status || 'ONBOARDING')}
-              {client.type && <Badge variant="outline">{client.type}</Badge>}
+              {client.type && <Badge variant="outline" className="text-xs">{client.type}</Badge>}
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              {client.location && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />
+                  <span>{client.location}</span>
+                </div>
+              )}
+              {client.phonePrimary && (
+                <div className="flex items-center gap-1">
+                  <Phone className="w-4 h-4" />
+                  <span>{client.phonePrimary}</span>
+                </div>
+              )}
+              {client.email && (
+                <div className="flex items-center gap-1">
+                  <Mail className="w-4 h-4" />
+                  <span>{client.email}</span>
+                </div>
+              )}
+              {client.createdAt && (
+                <div className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  <span>Created {new Date(client.createdAt).toLocaleDateString()}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -227,17 +274,78 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
             variant="outline"
             onClick={handleDownloadPdf}
             disabled={downloadingPdf}
+            className="rounded-xl"
           >
             <Download className="w-4 h-4 mr-2" />
             {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
           </Button>
-          {canManage && client.status === 'ONBOARDING' && (
-            <Button onClick={() => router.push(`/clients/${clientId}/onboarding`)}>
+          {(canEdit || canManage) && client.status === 'ONBOARDING' && (
+            <Button onClick={() => router.push(`/clients/${clientId}/onboarding`)} className="rounded-xl">
               <Edit className="w-4 h-4 mr-2" />
               Continue Onboarding
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        <Card className="rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Total Tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalTasks}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Pending</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{stats.pendingTasks}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">In Progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{stats.inProgressTasks}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Completed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.completedTasks}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Doctors</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.doctorsCount}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Services</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.servicesCount}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">KPI Reports</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.kpisCount}</div>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
@@ -256,37 +364,81 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="rounded-xl">
               <CardHeader>
-                <CardTitle>Basic Information</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  Basic Information
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">Type</p>
+                  <p className="text-sm text-muted-foreground mb-1">Type</p>
                   <p className="font-medium">{client.type || 'N/A'}</p>
                 </div>
                 {client.primaryContactName && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Primary Contact</p>
+                    <p className="text-sm text-muted-foreground mb-1">Primary Contact</p>
                     <p className="font-medium">{client.primaryContactName}</p>
                   </div>
                 )}
                 {client.phonePrimary && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Phone</p>
+                    <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      Phone
+                    </p>
                     <p className="font-medium">{client.phonePrimary}</p>
+                  </div>
+                )}
+                {client.phoneWhatsApp && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                      <MessageCircle className="w-3 h-3" />
+                      WhatsApp
+                    </p>
+                    <p className="font-medium">{client.phoneWhatsApp}</p>
                   </div>
                 )}
                 {client.email && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{client.email}</p>
+                    <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                      <Mail className="w-3 h-3" />
+                      Email
+                    </p>
+                    <p className="font-medium break-all">{client.email}</p>
+                  </div>
+                )}
+                {client.preferredLanguage && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                      <Globe className="w-3 h-3" />
+                      Preferred Language
+                    </p>
+                    <p className="font-medium">{client.preferredLanguage}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  Location & Address
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {client.location && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Location</p>
+                    <p className="font-medium">{client.location}</p>
                   </div>
                 )}
                 {client.addressLine && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Address</p>
+                    <p className="text-sm text-muted-foreground mb-1">Address</p>
                     <p className="font-medium">
                       {client.addressLine}
                       {client.area && `, ${client.area}`}
@@ -297,53 +449,140 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
                 )}
                 {client.googleMapLink && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Map</p>
+                    <p className="text-sm text-muted-foreground mb-1">Google Maps</p>
                     <a
                       href={client.googleMapLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
+                      className="text-blue-600 hover:underline flex items-center gap-1"
                     >
+                      <Globe className="w-4 h-4" />
                       View on Google Maps
                     </a>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  Working Schedule
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {workingDays && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Working Days</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(workingDays).map(([day, isWorking]: [string, any]) => (
+                        <Badge key={day} variant={isWorking ? 'default' : 'outline'} className="text-xs">
+                          {day.substring(0, 3)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {client.workingTimings && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Working Hours</p>
+                    <p className="text-sm text-muted-foreground mb-1">Working Hours</p>
                     <p className="font-medium">{client.workingTimings}</p>
                   </div>
                 )}
                 {client.startDate && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Start Date</p>
+                    <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      Start Date
+                    </p>
                     <p className="font-medium">{new Date(client.startDate).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {client.onboardingCompletedAt && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Onboarding Completed
+                    </p>
+                    <p className="font-medium">{new Date(client.onboardingCompletedAt).toLocaleDateString()}</p>
+                  </div>
+                )}
+                {client.createdAt && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      Created At
+                    </p>
+                    <p className="font-medium">{new Date(client.createdAt).toLocaleDateString()}</p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
             {client.User && (
-              <Card>
+              <Card className="rounded-xl">
                 <CardHeader>
-                  <CardTitle>Account Manager</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Account Manager
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="font-medium">{client.User.name}</p>
+                  <p className="font-medium text-lg mb-1">{client.User.name}</p>
                   <p className="text-sm text-muted-foreground">{client.User.email}</p>
                 </CardContent>
               </Card>
             )}
+
+            <Card className="rounded-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5" />
+                  Status & Progress
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Status</p>
+                  {getStatusBadge(client.status || 'ONBOARDING')}
+                </div>
+                <div className="flex items-center gap-2">
+                  {client.scopeFinalised ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      <span className="text-sm font-medium">Scope Finalised</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4 text-yellow-600" />
+                      <span className="text-sm font-medium">Scope Not Finalised</span>
+                    </>
+                  )}
+                </div>
+                {client.onboardingCompletedAt ? (
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium">Onboarding Completed</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-yellow-600" />
+                    <span className="text-sm font-medium">Onboarding In Progress</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
         <TabsContent value="doctors" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
-              <CardTitle>Doctors ({client.doctors?.length || 0})</CardTitle>
+              <CardTitle>Doctors ({doctors.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              {!client.doctors || client.doctors.length === 0 ? (
+              {doctors.length === 0 ? (
                 <p className="text-muted-foreground">No doctors added</p>
               ) : (
                 <Table>
@@ -356,7 +595,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {client.doctors.map((doctor: any) => (
+                    {doctors.map((doctor: any) => (
                       <TableRow key={doctor.id}>
                         <TableCell className="font-medium">{doctor.fullName}</TableCell>
                         <TableCell>{doctor.qualification || '-'}</TableCell>
@@ -372,16 +611,16 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsContent>
 
         <TabsContent value="services" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
-              <CardTitle>Services ({client.clientServices?.length || 0})</CardTitle>
+              <CardTitle>Services ({services.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              {!client.clientServices || client.clientServices.length === 0 ? (
+              {services.length === 0 ? (
                 <p className="text-muted-foreground">No services added</p>
               ) : (
                 <div className="space-y-2">
-                  {client.clientServices.map((service: any) => (
+                  {services.map((service: any) => (
                     <div key={service.id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div>
                         <p className="font-medium">{service.name}</p>
@@ -395,7 +634,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
           </Card>
 
           {client.usps && client.usps.length > 0 && (
-            <Card>
+            <Card className="rounded-xl">
               <CardHeader>
                 <CardTitle>Unique Selling Points</CardTitle>
               </CardHeader>
@@ -411,7 +650,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsContent>
 
         <TabsContent value="branding" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
               <CardTitle>Branding</CardTitle>
             </CardHeader>
@@ -475,7 +714,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
           </Card>
 
           {client.assets && client.assets.length > 0 && (
-            <Card>
+            <Card className="rounded-xl">
               <CardHeader>
                 <CardTitle>Assets ({client.assets.length})</CardTitle>
               </CardHeader>
@@ -494,7 +733,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsContent>
 
         <TabsContent value="access" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
               <CardTitle>Access Credentials ({client.accesses?.length || 0})</CardTitle>
             </CardHeader>
@@ -517,7 +756,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
                         <TableCell>{access.type}</TableCell>
                         <TableCell>{access.username || '-'}</TableCell>
                         <TableCell>
-                          {canManage ? (
+                          {(canEdit || canManage) ? (
                             <div className="flex items-center gap-2">
                               {revealedPasswords[access.id] ? (
                                 <span className="font-mono text-sm">
@@ -568,7 +807,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsContent>
 
         <TabsContent value="targeting" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
               <CardTitle>Targeting</CardTitle>
             </CardHeader>
@@ -610,7 +849,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsContent>
 
         <TabsContent value="competitors" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
               <CardTitle>Competitors ({client.competitors?.length || 0})</CardTitle>
             </CardHeader>
@@ -641,7 +880,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsContent>
 
         <TabsContent value="marketing" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
               <CardTitle>Marketing Requirements</CardTitle>
             </CardHeader>
@@ -710,7 +949,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsContent>
 
         <TabsContent value="approvals" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
               <CardTitle>Approval Settings</CardTitle>
             </CardHeader>
@@ -748,12 +987,12 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsContent>
 
         <TabsContent value="kpis" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
               <CardTitle>KPIs</CardTitle>
             </CardHeader>
             <CardContent>
-              {!client.kpis || client.kpis.length === 0 ? (
+              {kpis.length === 0 ? (
                 <p className="text-muted-foreground">No KPI data</p>
               ) : (
                 <Table>
@@ -768,7 +1007,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {client.kpis.map((kpi: any) => (
+                    {kpis.map((kpi: any) => (
                       <TableRow key={kpi.id}>
                         <TableCell className="font-medium">{kpi.month}</TableCell>
                         <TableCell>{kpi.gmbCalls}</TableCell>
@@ -790,7 +1029,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         </TabsContent>
 
         <TabsContent value="tasks" className="space-y-4">
-          <Card>
+          <Card className="rounded-xl">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Client Tasks</CardTitle>
