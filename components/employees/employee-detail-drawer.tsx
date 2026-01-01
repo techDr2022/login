@@ -365,7 +365,18 @@ export function EmployeeDetailDrawer({
                               <p className="font-medium">{task.title}</p>
                               <div className="flex items-center gap-2 mt-1">
                                 <Badge variant="outline">{task.status}</Badge>
-                                <Badge variant="outline">{task.priority}</Badge>
+                                <Badge 
+                                  variant="outline"
+                                  className={
+                                    task.priority === 'Urgent' ? 'bg-red-100 text-red-800 border-red-200' :
+                                    task.priority === 'High' ? 'bg-orange-100 text-orange-800 border-orange-200' :
+                                    task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                                    task.priority === 'Low' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                                    ''
+                                  }
+                                >
+                                  {task.priority}
+                                </Badge>
                                 {task.Client && (
                                   <span className="text-xs text-muted-foreground">
                                     {task.Client.name}

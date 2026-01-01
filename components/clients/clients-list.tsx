@@ -50,6 +50,12 @@ export function ClientsList() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    onboarding: 0,
+    paused: 0,
+  })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [formData, setFormData] = useState({
@@ -108,6 +114,11 @@ export function ClientsList() {
       
       setClients(filteredClients)
       setTotalPages(data.pagination?.totalPages || 1)
+      
+      // Update stats from API response
+      if (data.stats) {
+        setStats(data.stats)
+      }
     } catch (err) {
       setError('Failed to load clients')
     } finally {
@@ -273,12 +284,6 @@ export function ClientsList() {
     )
   }
 
-  const stats = {
-    total: clients.length,
-    active: clients.filter(c => c.status === 'ACTIVE').length,
-    onboarding: clients.filter(c => c.status === 'ONBOARDING').length,
-    paused: clients.filter(c => c.status === 'PAUSED').length,
-  }
 
   return (
     <div className="space-y-6">

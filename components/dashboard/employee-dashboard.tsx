@@ -98,8 +98,10 @@ export function EmployeeDashboard() {
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
+      case 'Urgent':
+        return <Badge className="bg-red-100 text-red-800 border-red-200">Urgent</Badge>
       case 'High':
-        return <Badge className="bg-red-100 text-red-800 border-red-200">High</Badge>
+        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">High</Badge>
       case 'Medium':
         return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Medium</Badge>
       case 'Low':

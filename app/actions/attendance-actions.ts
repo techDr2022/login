@@ -133,7 +133,23 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
 
   await logActivity(session.user.id, 'CREATE', 'Attendance', attendance.id)
 
-  return attendance
+  // Return serializable object (convert Date objects to ISO strings)
+  return {
+    id: attendance.id,
+    userId: attendance.userId,
+    date: attendance.date.toISOString(),
+    loginTime: attendance.loginTime?.toISOString() ?? null,
+    logoutTime: attendance.logoutTime?.toISOString() ?? null,
+    status: attendance.status,
+    mode: attendance.mode,
+    earlySignInMinutes: attendance.earlySignInMinutes,
+    lateSignInMinutes: attendance.lateSignInMinutes,
+    earlyLogoutMinutes: attendance.earlyLogoutMinutes,
+    lateLogoutMinutes: attendance.lateLogoutMinutes,
+    totalHours: attendance.totalHours,
+    lastActivityTime: attendance.lastActivityTime?.toISOString() ?? null,
+    wfhActivityPings: attendance.wfhActivityPings,
+  }
 }
 
 export async function clockOut() {
@@ -243,7 +259,23 @@ export async function clockOut() {
 
   await logActivity(session.user.id, 'UPDATE', 'Attendance', updated.id)
 
-  return updated
+  // Return serializable object (convert Date objects to ISO strings)
+  return {
+    id: updated.id,
+    userId: updated.userId,
+    date: updated.date.toISOString(),
+    loginTime: updated.loginTime?.toISOString() ?? null,
+    logoutTime: updated.logoutTime?.toISOString() ?? null,
+    status: updated.status,
+    mode: updated.mode,
+    earlySignInMinutes: updated.earlySignInMinutes,
+    lateSignInMinutes: updated.lateSignInMinutes,
+    earlyLogoutMinutes: updated.earlyLogoutMinutes,
+    lateLogoutMinutes: updated.lateLogoutMinutes,
+    totalHours: updated.totalHours,
+    lastActivityTime: updated.lastActivityTime?.toISOString() ?? null,
+    wfhActivityPings: updated.wfhActivityPings,
+  }
 }
 
 export async function startLunchBreak() {

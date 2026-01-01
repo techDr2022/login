@@ -322,6 +322,21 @@ export function TasksList() {
     }
   }, [])
 
+  const getPriorityBadgeClassName = useCallback((priority: string) => {
+    switch (priority) {
+      case 'Urgent':
+        return 'bg-red-100 text-red-800 border-red-200 hover:bg-red-200'
+      case 'High':
+        return 'bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200'
+      case 'Medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200'
+      case 'Low':
+        return 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200'
+      default:
+        return ''
+    }
+  }, [])
+
   // Memoize filtered tasks count
   const allSelected = useMemo(() => tasks.length > 0 && selectedTasks.size === tasks.length, [tasks.length, selectedTasks.size])
   const someSelected = useMemo(() => selectedTasks.size > 0 && selectedTasks.size < tasks.length, [selectedTasks.size, tasks.length])
@@ -652,7 +667,10 @@ export function TasksList() {
                     )}
                     <TableCell className="text-muted-foreground">{task.client?.name || '-'}</TableCell>
                     <TableCell>
-                      <Badge variant={getPriorityBadgeVariant(task.priority)}>
+                      <Badge 
+                        variant={getPriorityBadgeVariant(task.priority)}
+                        className={getPriorityBadgeClassName(task.priority)}
+                      >
                         {task.priority}
                       </Badge>
                     </TableCell>

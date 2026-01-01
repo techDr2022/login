@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       where.accountManagerId = accountManagerId
     }
 
-    const [clients, total] = await Promise.all([
+    const [clients, total, stats] = await Promise.all([
       prisma.client.findMany({
         where,
         include: {
@@ -54,6 +54,18 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
       }),
       prisma.client.count({ where }),
+      // Get stats for all clients (not filtered by search or pagination)
+      Promise.all([
+        prisma.client.count(),
+        prisma.client.count({ where: { status: 'ACTIVE' } }),
+        prisma.client.count({ where: { status: 'ONBOARDING' } }),
+        prisma.client.count({ where: { status: 'PAUSED' } }),
+      ]).then(([total, active, onboarding, paused]) => ({
+        total,
+        active,
+        onboarding,
+        paused,
+      })),
     ])
 
     return NextResponse.json({
@@ -64,6 +76,7 @@ export async function GET(request: NextRequest) {
         total,
         totalPages: Math.ceil(total / limit),
       },
+      stats,
     })
   } catch (error) {
     console.error('Error fetching clients:', error)

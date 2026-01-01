@@ -78,7 +78,7 @@ export function Sidebar() {
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Briefcase className="h-5 w-5" />
             </div>
-            <span className="text-xl font-bold">TechDr</span>
+            <span className="text-xl font-bold">TechDr - Team</span>
           </Link>
         )}
         {isCollapsed && (

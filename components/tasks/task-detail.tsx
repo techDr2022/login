@@ -7,7 +7,22 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft } from 'lucide-react'
+import { 
+  ArrowLeft, 
+  Clock, 
+  User, 
+  UserCheck, 
+  Calendar, 
+  AlertCircle, 
+  CheckCircle2, 
+  XCircle, 
+  FileText, 
+  Building2,
+  Timer,
+  MessageSquare,
+  PlayCircle,
+  CheckCircle
+} from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -130,7 +145,32 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
     }
   }
 
-  if (loading) return <div>Loading...</div>
+  const getPriorityBadgeClassName = (priority: string) => {
+    switch (priority) {
+      case 'Urgent':
+        return 'bg-red-100 text-red-800 border-red-200 hover:bg-red-200'
+      case 'High':
+        return 'bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200'
+      case 'Medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200'
+      case 'Low':
+        return 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200'
+      default:
+        return ''
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Loading task details...</p>
+        </div>
+      </div>
+    )
+  }
+
   if (!task) {
     return (
       <div className="space-y-6">
@@ -140,14 +180,15 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
             Back
           </Button>
         </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-semibold">Task not found</h2>
+        <Card className="rounded-xl">
+          <CardContent className="p-12">
+            <div className="text-center space-y-4">
+              <AlertCircle className="h-16 w-16 text-muted-foreground mx-auto" />
+              <h2 className="text-2xl font-semibold">Task not found</h2>
               {error && (
-                <p className="text-sm text-red-600">{error}</p>
+                <p className="text-sm text-destructive">{error}</p>
               )}
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
                 The task you're looking for doesn't exist or you don't have permission to view it.
               </p>
             </div>
@@ -157,157 +198,289 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
     )
   }
 
+  const getStatusIcon = () => {
+    switch (task.status) {
+      case 'Approved':
+        return <CheckCircle2 className="h-5 w-5 text-green-600" />
+      case 'Rejected':
+        return <XCircle className="h-5 w-5 text-red-600" />
+      case 'Review':
+        return <AlertCircle className="h-5 w-5 text-yellow-600" />
+      case 'InProgress':
+        return <PlayCircle className="h-5 w-5 text-blue-600" />
+      default:
+        return <Clock className="h-5 w-5 text-gray-600" />
+    }
+  }
+
+  const getStatusColor = () => {
+    switch (task.status) {
+      case 'Approved':
+        return 'bg-green-50 border-green-200'
+      case 'Rejected':
+        return 'bg-red-50 border-red-200'
+      case 'Review':
+        return 'bg-yellow-50 border-yellow-200'
+      case 'InProgress':
+        return 'bg-blue-50 border-blue-200'
+      default:
+        return 'bg-gray-50 border-gray-200'
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header Section */}
+      <div className="flex flex-col gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.back()}>
+          <Button variant="ghost" onClick={() => router.back()} className="rounded-xl">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
-          <h1 className="text-3xl font-bold">{task.title}</h1>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Employee quick status updates */}
-          {isAssignedToMe && !canApprove && (
-            <>
-              {task.status === 'Pending' && (
-                <Button 
-                  onClick={() => handleQuickStatusUpdate('InProgress')}
-                  className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
-                >
-                  Start Task
-                </Button>
-              )}
-              {task.status === 'InProgress' && (
-                <Button 
-                  onClick={() => handleQuickStatusUpdate('Review')}
-                  className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
-                >
-                  Mark as Complete
-                </Button>
-              )}
-              {(task.status === 'Pending' || task.status === 'InProgress') && (
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setStatusFormData({
-                      status: task.status as any,
-                      rejectionFeedback: '',
-                    })
-                    setStatusDialogOpen(true)
-                  }}
-                >
-                  Update Status
-                </Button>
-              )}
-            </>
-          )}
-          {/* Admin full status update */}
-          {canApprove && (
-            <Button onClick={() => {
-              setStatusFormData({
-                status: task.status as any,
-                rejectionFeedback: task.rejectionFeedback || '',
-              })
-              setStatusDialogOpen(true)
-            }}>
-              Update Status
-            </Button>
-          )}
+        
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div className="flex-1 space-y-3">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">{task.title}</h1>
+              <Badge
+                variant={getStatusBadgeVariant(task.status)}
+                className={`${getStatusColor()} flex items-center gap-1.5 px-3 py-1`}
+              >
+                {getStatusIcon()}
+                {task.status}
+              </Badge>
+            </div>
+            {task.description && (
+              <p className="text-muted-foreground text-lg max-w-3xl">{task.description}</p>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Employee quick status updates */}
+            {isAssignedToMe && !canApprove && (
+              <>
+                {task.status === 'Pending' && (
+                  <Button 
+                    onClick={() => handleQuickStatusUpdate('InProgress')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+                  >
+                    <PlayCircle className="w-4 h-4 mr-2" />
+                    Start Task
+                  </Button>
+                )}
+                {task.status === 'InProgress' && (
+                  <Button 
+                    onClick={() => handleQuickStatusUpdate('Review')}
+                    className="bg-green-600 hover:bg-green-700 text-white rounded-xl"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Mark Complete
+                  </Button>
+                )}
+                {(task.status === 'Pending' || task.status === 'InProgress') && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setStatusFormData({
+                        status: task.status as any,
+                        rejectionFeedback: '',
+                      })
+                      setStatusDialogOpen(true)
+                    }}
+                    className="rounded-xl"
+                  >
+                    Update Status
+                  </Button>
+                )}
+              </>
+            )}
+            {/* Admin full status update */}
+            {canApprove && (
+              <Button 
+                onClick={() => {
+                  setStatusFormData({
+                    status: task.status as any,
+                    rejectionFeedback: task.rejectionFeedback || '',
+                  })
+                  setStatusDialogOpen(true)
+                }}
+                className="rounded-xl"
+              >
+                Update Status
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-xl">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Task Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm text-gray-500">Status</p>
-              <Badge
-                variant={getStatusBadgeVariant(task.status)}
-                className={
-                  task.status === 'Approved'
-                    ? 'mt-1 bg-green-100 text-green-800 border-green-200'
-                    : task.status === 'Rejected'
-                    ? 'mt-1 bg-red-100 text-red-800 border-red-200'
-                    : 'mt-1'
-                }
-              >
-                {task.status}
-              </Badge>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Priority</p>
-              <Badge variant={getPriorityBadgeVariant(task.priority)} className="mt-1">
-                {task.priority}
-              </Badge>
-            </div>
-            {task.description && (
-              <div>
-                <p className="text-sm text-gray-500">Description</p>
-                <p className="font-medium mt-1">{task.description}</p>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Main Info */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Task Details Card */}
+          <Card className="rounded-xl border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Task Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Priority */}
+              <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                <AlertCircle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground">Priority</p>
+                  <Badge 
+                    variant={getPriorityBadgeVariant(task.priority)} 
+                    className={`mt-1 ${getPriorityBadgeClassName(task.priority)}`}
+                  >
+                    {task.priority}
+                  </Badge>
+                </div>
               </div>
-            )}
-            <div>
-              <p className="text-sm text-gray-500">Assigned To</p>
-              <p className="font-medium">{task.assignedTo?.name || 'Unassigned'}</p>
-              {task.assignedTo?.email && (
-                <p className="text-sm text-gray-500">{task.assignedTo.email}</p>
-              )}
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Assigned By</p>
-              <p className="font-medium">{task.assignedBy?.name || '-'}</p>
-            </div>
-            {task.dueDate && (
-              <div>
-                <p className="text-sm text-gray-500">Due Date</p>
-                <p className="font-medium">{new Date(task.dueDate).toLocaleDateString()}</p>
-              </div>
-            )}
-            {task.timeSpent !== undefined && (
-              <div>
-                <p className="text-sm text-gray-500">Time Spent</p>
-                <p className="font-medium">{task.timeSpent} hours</p>
-              </div>
-            )}
-            {task.rejectionFeedback && (
-              <div>
-                <p className="text-sm text-gray-500">Rejection Feedback</p>
-                <p className="font-medium text-red-600">{task.rejectionFeedback}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Related Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {task.client && (
-              <div>
-                <p className="text-sm text-gray-500">Client</p>
-                <Link href={`/clients/${task.client.id}`} className="text-blue-600 hover:underline font-medium">
-                  {task.client.name}
-                </Link>
+              {/* Description */}
+              {task.description && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">Description</p>
+                  <div className="p-4 bg-muted/30 rounded-lg border">
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{task.description}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Rejection Feedback */}
+              {task.rejectionFeedback && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-destructive">Rejection Feedback</p>
+                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <p className="text-sm text-destructive leading-relaxed">{task.rejectionFeedback}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Assignment & Timeline Card */}
+          <Card className="rounded-xl border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2">
+                <UserCheck className="h-5 w-5 text-primary" />
+                Assignment & Timeline
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Assigned To */}
+                <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
+                  <User className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground mb-1">Assigned To</p>
+                    <p className="font-semibold truncate">{task.assignedTo?.name || 'Unassigned'}</p>
+                    {task.assignedTo?.email && (
+                      <p className="text-xs text-muted-foreground truncate">{task.assignedTo.email}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Assigned By */}
+                <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
+                  <UserCheck className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground mb-1">Assigned By</p>
+                    <p className="font-semibold truncate">{task.assignedBy?.name || '-'}</p>
+                  </div>
+                </div>
               </div>
-            )}
-            <div>
-              <p className="text-sm text-gray-500">Created At</p>
-              <p className="font-medium">{new Date(task.createdAt).toLocaleString()}</p>
-            </div>
-          </CardContent>
-        </Card>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Due Date */}
+                {task.dueDate && (
+                  <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
+                    <Calendar className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm text-muted-foreground mb-1">Due Date</p>
+                      <p className="font-semibold">{new Date(task.dueDate).toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Time Spent */}
+                {task.timeSpent !== undefined && (
+                  <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
+                    <Timer className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm text-muted-foreground mb-1">Time Spent</p>
+                      <p className="font-semibold">{task.timeSpent} hours</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Sidebar */}
+        <div className="space-y-6">
+          {/* Related Information Card */}
+          <Card className="rounded-xl border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                Related Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {task.client && (
+                <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
+                  <Building2 className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground mb-1">Client</p>
+                    <Link 
+                      href={`/clients/${task.client.id}`} 
+                      className="font-semibold text-primary hover:underline truncate block"
+                    >
+                      {task.client.name}
+                    </Link>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
+                <Clock className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground mb-1">Created At</p>
+                  <p className="font-semibold text-sm">
+                    {new Date(task.createdAt).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'short', 
+                      day: 'numeric' 
+                    })}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {new Date(task.createdAt).toLocaleTimeString('en-US', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Status Update Dialog */}
