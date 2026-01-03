@@ -54,6 +54,8 @@ export async function updateClientBasicInfo(clientId: string, data: z.infer<type
     where: { id: clientId },
     data: {
       name: validated.name,
+      doctorOrHospitalName: validated.doctorOrHospitalName,
+      location: validated.location,
       type: validated.type,
       primaryContactName: validated.primaryContactName,
       phonePrimary: validated.phonePrimary,

@@ -32,6 +32,7 @@ import {
   CheckSquare
 } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
+import { formatDateLocal } from '@/lib/utils'
 
 interface GlobalStats {
   totalEmployees: number
@@ -100,7 +101,9 @@ export function SuperAdminAttendancePanel() {
   // Fetch global stats
   const fetchGlobalStats = useCallback(async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const todayDate = new Date()
+      todayDate.setHours(0, 0, 0, 0)
+      const today = formatDateLocal(todayDate)
       const res = await fetch(`/api/attendance?startDate=${today}&endDate=${today}&limit=1000`)
       const data = await res.json()
       
@@ -133,8 +136,8 @@ export function SuperAdminAttendancePanel() {
       const params = new URLSearchParams({
         limit: '100',
         ...(selectedEmployee !== 'all' && { userId: selectedEmployee }),
-        ...(dateRange.from && { startDate: dateRange.from.toISOString().split('T')[0] }),
-        ...(dateRange.to && { endDate: dateRange.to.toISOString().split('T')[0] }),
+        ...(dateRange.from && { startDate: formatDateLocal(dateRange.from) }),
+        ...(dateRange.to && { endDate: formatDateLocal(dateRange.to) }),
       })
       
       const res = await fetch(`/api/attendance?${params}`)
@@ -178,7 +181,9 @@ export function SuperAdminAttendancePanel() {
   // Fetch hourly data
   const fetchHourlyData = useCallback(async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const todayDate = new Date()
+      todayDate.setHours(0, 0, 0, 0)
+      const today = formatDateLocal(todayDate)
       const res = await fetch(`/api/attendance?startDate=${today}&endDate=${today}&limit=1000`)
       const data = await res.json()
       
@@ -257,7 +262,9 @@ export function SuperAdminAttendancePanel() {
 
     setCheckingExisting(true)
     try {
-      const dateStr = date.toISOString().split('T')[0]
+      const dateToCheck = new Date(date)
+      dateToCheck.setHours(0, 0, 0, 0)
+      const dateStr = formatDateLocal(dateToCheck)
       const res = await fetch(`/api/attendance?startDate=${dateStr}&endDate=${dateStr}&limit=1000`)
       const data = await res.json()
       setExistingAttendanceCount(data.attendances?.length || 0)

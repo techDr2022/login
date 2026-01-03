@@ -64,6 +64,8 @@ export const createEmployeeSchema = z.object({
 // Client Onboarding Schemas
 export const clientOnboardingBasicSchema = z.object({
   name: z.string().min(1, 'Client name is required'),
+  doctorOrHospitalName: z.string().min(1, 'Doctor or Hospital name is required'),
+  location: z.string().min(1, 'Location is required'),
   type: z.enum(['CLINIC', 'HOSPITAL', 'DOCTOR']),
   primaryContactName: z.string().optional(),
   phonePrimary: z.string().optional(),

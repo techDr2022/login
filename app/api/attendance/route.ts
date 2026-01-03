@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode, AttendanceStatus } from '@prisma/client'
+import { parseDateLocal } from '@/lib/utils'
 
 // Public holiday configuration (dates in YYYY-MM-DD format).
 // Add or update these dates based on your company's holiday calendar.
@@ -52,20 +53,28 @@ export async function GET(request: NextRequest) {
     if (startDate || endDate) {
       where.date = {}
       if (startDate) {
-        const start = new Date(startDate)
-        if (isNaN(start.getTime())) {
-          return NextResponse.json({ error: 'Invalid start date' }, { status: 400 })
+        try {
+          const start = parseDateLocal(startDate)
+          if (isNaN(start.getTime())) {
+            return NextResponse.json({ error: 'Invalid start date' }, { status: 400 })
+          }
+          where.date.gte = start
+        } catch (error) {
+          return NextResponse.json({ error: 'Invalid start date format' }, { status: 400 })
         }
-        start.setHours(0, 0, 0, 0)
-        where.date.gte = start
       }
       if (endDate) {
-        const end = new Date(endDate)
-        if (isNaN(end.getTime())) {
-          return NextResponse.json({ error: 'Invalid end date' }, { status: 400 })
+        try {
+          const end = parseDateLocal(endDate)
+          if (isNaN(end.getTime())) {
+            return NextResponse.json({ error: 'Invalid end date' }, { status: 400 })
+          }
+          // Set to end of day (23:59:59.999)
+          end.setHours(23, 59, 59, 999)
+          where.date.lte = end
+        } catch (error) {
+          return NextResponse.json({ error: 'Invalid end date format' }, { status: 400 })
         }
-        end.setHours(23, 59, 59, 999)
-        where.date.lte = end
       }
     }
 
@@ -114,16 +123,16 @@ export async function GET(request: NextRequest) {
     // Only if date range is provided and not too large (to avoid performance issues)
     if (session.user.role === UserRole.SUPER_ADMIN && startDate && endDate) {
       try {
-        const start = new Date(startDate)
+        const start = parseDateLocal(startDate)
         if (isNaN(start.getTime())) {
           throw new Error('Invalid start date')
         }
-        start.setHours(0, 0, 0, 0)
         
-        const end = new Date(endDate)
+        const end = parseDateLocal(endDate)
         if (isNaN(end.getTime())) {
           throw new Error('Invalid end date')
         }
+        // Set to end of day (23:59:59.999)
         end.setHours(23, 59, 59, 999)
 
         // Limit date range to 3 months to avoid performance issues
@@ -213,10 +222,10 @@ export async function GET(request: NextRequest) {
     if (startDate || endDate) {
       summaryWhere.date = {}
       if (startDate) {
-        summaryWhere.date.gte = new Date(startDate)
+        summaryWhere.date.gte = parseDateLocal(startDate)
       }
       if (endDate) {
-        const end = new Date(endDate)
+        const end = parseDateLocal(endDate)
         end.setHours(23, 59, 59, 999)
         summaryWhere.date.lte = end
       }

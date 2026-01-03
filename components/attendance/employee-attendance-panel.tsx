@@ -21,6 +21,7 @@ import {
 import { format } from 'date-fns'
 import { clockIn, clockOut } from '@/app/actions/attendance-actions'
 import { AttendanceMode } from '@prisma/client'
+import { formatDateLocal } from '@/lib/utils'
 
 interface AttendanceRecord {
   id: string
@@ -45,7 +46,9 @@ export function EmployeeAttendancePanel() {
 
   const fetchTodayAttendance = useCallback(async () => {
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const todayDate = new Date()
+      todayDate.setHours(0, 0, 0, 0)
+      const today = formatDateLocal(todayDate)
       const res = await fetch(`/api/attendance?userId=${session?.user?.id}&startDate=${today}&endDate=${today}`)
       const data = await res.json()
       
@@ -77,8 +80,10 @@ export function EmployeeAttendancePanel() {
       const startDate = new Date()
       startDate.setDate(startDate.getDate() - 30)
       
+      const startDateStr = formatDateLocal(startDate)
+      const endDateStr = formatDateLocal(endDate)
       const res = await fetch(
-        `/api/attendance?userId=${session?.user?.id}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}&limit=30`
+        `/api/attendance?userId=${session?.user?.id}&startDate=${startDateStr}&endDate=${endDateStr}&limit=30`
       )
       const data = await res.json()
       

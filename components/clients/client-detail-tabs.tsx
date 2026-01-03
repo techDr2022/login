@@ -18,6 +18,7 @@ import { useSession } from 'next-auth/react'
 import { UserRole } from '@prisma/client'
 import { canManageClients, canEditClient } from '@/lib/rbac'
 import { generateTasksForMonth } from '@/app/actions/client-onboarding-actions'
+import { EditClientDialog } from './edit-client-dialog'
 
 interface ClientDetailTabsProps {
   clientId: string
@@ -35,6 +36,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
   })
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({})
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
 
   const canManage = session?.user.role && canManageClients(session.user.role as UserRole)
   const canEdit = session?.user.role && canEditClient(session.user.role as UserRole)
@@ -279,6 +281,12 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
             <Download className="w-4 h-4 mr-2" />
             {downloadingPdf ? 'Generating PDF...' : 'Download PDF'}
           </Button>
+          {canEdit && (
+            <Button onClick={() => setEditDialogOpen(true)} className="rounded-xl">
+              <Edit className="w-4 h-4 mr-2" />
+              Edit Client
+            </Button>
+          )}
           {(canEdit || canManage) && client.status === 'ONBOARDING' && (
             <Button onClick={() => router.push(`/clients/${clientId}/onboarding`)} className="rounded-xl">
               <Edit className="w-4 h-4 mr-2" />
@@ -1100,6 +1108,18 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {canEdit && (
+        <EditClientDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          client={client}
+          onSuccess={() => {
+            fetchClient()
+            setEditDialogOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }
