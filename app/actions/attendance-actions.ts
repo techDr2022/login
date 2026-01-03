@@ -10,7 +10,9 @@ import { randomUUID } from 'crypto'
 import { 
   ATTENDANCE_CONFIG, 
   getOfficeStartTime, 
-  isLate as checkIsLate 
+  isLate as checkIsLate,
+  getHalfDayThresholdTime,
+  getAbsentThresholdTime
 } from '@/lib/attendance-config'
 
 export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFFICE) {
@@ -43,7 +45,7 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
-  // Check if already clocked in today
+  // Check if already clocked in today (and not clocked out yet)
   const existing = await prisma.attendances.findUnique({
     where: {
       userId_date: {
@@ -53,7 +55,8 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
     },
   })
 
-  if (existing && existing.loginTime) {
+  // Only prevent clock in if user is already clocked in AND hasn't clocked out yet
+  if (existing && existing.loginTime && !existing.logoutTime) {
     throw new Error('Already clocked in today')
   }
 
@@ -69,22 +72,41 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
 
   // Calculate early/late sign in minutes
   if (attendanceMode === AttendanceMode.OFFICE) {
-    const diffMinutes = Math.round((now.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+    const halfDayThreshold = getHalfDayThresholdTime(today)
+    const absentThreshold = getAbsentThresholdTime(today)
     
-    if (diffMinutes < 0) {
-      // Signed in early
-      earlySignInMinutes = Math.abs(diffMinutes)
-      lateSignInMinutes = 0
-      status = AttendanceStatus.Present
-    } else if (checkIsLate(now, expectedLoginTime)) {
-      // Signed in late (after 10:05 AM)
+    // Check if clocking in after 2:00 PM (Absent)
+    if (now >= absentThreshold) {
+      earlySignInMinutes = 0
+      lateSignInMinutes = Math.round((now.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+      status = AttendanceStatus.Absent
+    } 
+    // Check if clocking in after 12:05 PM but before 2:00 PM (HalfDay)
+    else if (now >= halfDayThreshold) {
+      const diffMinutes = Math.round((now.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+      earlySignInMinutes = 0
+      lateSignInMinutes = diffMinutes
+      status = AttendanceStatus.HalfDay
+    }
+    // Check if clocking in after 10:05 AM but before 12:05 PM (Late)
+    else if (checkIsLate(now, expectedLoginTime)) {
+      const diffMinutes = Math.round((now.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
       earlySignInMinutes = 0
       lateSignInMinutes = diffMinutes
       status = AttendanceStatus.Late
-    } else {
-      // Exactly on time (within 5 minutes)
-      earlySignInMinutes = 0
-      lateSignInMinutes = 0
+    }
+    // Clocking in on time or early (Present)
+    else {
+      const diffMinutes = Math.round((now.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+      if (diffMinutes < 0) {
+        // Signed in early
+        earlySignInMinutes = Math.abs(diffMinutes)
+        lateSignInMinutes = 0
+      } else {
+        // Exactly on time (within 5 minutes)
+        earlySignInMinutes = 0
+        lateSignInMinutes = 0
+      }
       status = AttendanceStatus.Present
     }
   } else if (attendanceMode === AttendanceMode.WFH) {
@@ -110,10 +132,14 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
     },
     update: {
       loginTime: now,
+      logoutTime: null, // Clear logoutTime when clocking in again
       status,
       mode: attendanceMode,
       earlySignInMinutes,
       lateSignInMinutes,
+      earlyLogoutMinutes: null, // Clear early logout minutes
+      lateLogoutMinutes: null, // Clear late logout minutes
+      totalHours: null, // Clear total hours (will be calculated on clock out)
       lastActivityTime: attendanceMode === AttendanceMode.WFH ? now : null,
       wfhActivityPings: attendanceMode === AttendanceMode.WFH ? 1 : 0,
     },
@@ -182,7 +208,7 @@ export async function clockOut() {
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
-  const attendance = await prisma.attendances.findUnique({
+  let attendance = await prisma.attendances.findUnique({
     where: {
       userId_date: {
         userId: session.user.id,
@@ -196,7 +222,36 @@ export async function clockOut() {
   }
 
   if (attendance.logoutTime) {
-    throw new Error('Already clocked out today')
+    // Check if logoutTime is invalid (e.g., before loginTime, which shouldn't happen)
+    // Or if loginTime is more recent than logoutTime (user clocked in again after clocking out)
+    // In both cases, clear the old logoutTime and allow clock out
+    if (attendance.loginTime > attendance.logoutTime) {
+      // Invalid state or user clocked in again: clear old logoutTime and allow new clock out
+      await prisma.attendances.update({
+        where: { id: attendance.id },
+        data: {
+          logoutTime: null,
+          totalHours: null,
+          earlyLogoutMinutes: null,
+          lateLogoutMinutes: null,
+        },
+      })
+      // Re-fetch attendance after clearing invalid data
+      attendance = await prisma.attendances.findUnique({
+        where: {
+          userId_date: {
+            userId: session.user.id,
+            date: today,
+          },
+        },
+      })
+      if (!attendance || !attendance.loginTime) {
+        throw new Error('Failed to refresh attendance data')
+      }
+      // Continue with clock out after clearing invalid data
+    } else {
+      throw new Error('Already clocked out today. Please refresh the page to see your attendance status.')
+    }
   }
 
   // Expected logout time: 7:00 PM
@@ -228,10 +283,22 @@ export async function clockOut() {
   // Calculate total hours (excluding lunch break: 1:00 PM to 1:30 PM = 30 minutes)
   let totalHours = (now.getTime() - attendance.loginTime.getTime()) / (1000 * 60 * 60)
   
-  // Subtract lunch break if both login and logout times are within the same day
+  // Subtract lunch break only if user worked through the lunch period
   if (attendance.mode === AttendanceMode.OFFICE) {
-    const lunchBreakHours = ATTENDANCE_CONFIG.LUNCH_DURATION_MINUTES / 60 // 30 minutes = 0.5 hours
-    totalHours = totalHours - lunchBreakHours
+    const lunchStartTime = new Date(today)
+    lunchStartTime.setHours(ATTENDANCE_CONFIG.LUNCH_START_HOUR, ATTENDANCE_CONFIG.LUNCH_START_MINUTE, 0, 0)
+    
+    // Only subtract lunch break if user clocked out after lunch start time
+    // (meaning they worked through or past the lunch period)
+    if (now >= lunchStartTime) {
+      const lunchBreakHours = ATTENDANCE_CONFIG.LUNCH_DURATION_MINUTES / 60 // 30 minutes = 0.5 hours
+      totalHours = totalHours - lunchBreakHours
+    }
+    
+    // Ensure totalHours is not negative (in case of very early clock out)
+    if (totalHours < 0) {
+      totalHours = 0
+    }
   }
 
   // Update status based on mode and total hours

@@ -16,6 +16,14 @@ export const ATTENDANCE_CONFIG = {
   // Late Threshold (in minutes after office start time)
   LATE_THRESHOLD_MINUTES: 5, // After 10:05 AM is considered late
   
+  // Half Day Threshold (in hours:minutes)
+  HALF_DAY_HOUR: 12,
+  HALF_DAY_MINUTE: 5, // After 12:05 PM is considered half day
+  
+  // Absent Threshold (in hours:minutes)
+  ABSENT_HOUR: 14,
+  ABSENT_MINUTE: 0, // After 2:00 PM is considered absent
+  
   // WFH Activity Tracking
   WFH_ACTIVITY_PING_INTERVAL_MINUTES: 60, // Ping every 60 minutes
   WFH_INACTIVITY_THRESHOLD_MINUTES: 120, // Flag if no activity for 2+ hours
@@ -58,5 +66,17 @@ export function getLunchEndTime(date: Date): Date {
 export function isLate(checkInTime: Date, officeStartTime: Date): boolean {
   const diffMinutes = Math.round((checkInTime.getTime() - officeStartTime.getTime()) / (1000 * 60))
   return diffMinutes > ATTENDANCE_CONFIG.LATE_THRESHOLD_MINUTES
+}
+
+export function getHalfDayThresholdTime(date: Date): Date {
+  const threshold = new Date(date)
+  threshold.setHours(ATTENDANCE_CONFIG.HALF_DAY_HOUR, ATTENDANCE_CONFIG.HALF_DAY_MINUTE, 0, 0)
+  return threshold
+}
+
+export function getAbsentThresholdTime(date: Date): Date {
+  const threshold = new Date(date)
+  threshold.setHours(ATTENDANCE_CONFIG.ABSENT_HOUR, ATTENDANCE_CONFIG.ABSENT_MINUTE, 0, 0)
+  return threshold
 }
 

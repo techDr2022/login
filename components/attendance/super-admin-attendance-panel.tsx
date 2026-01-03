@@ -165,6 +165,8 @@ export function SuperAdminAttendancePanel() {
           filteredLogs = logs.filter(l => l.status === 'Present')
         } else if (attendanceType === 'Late') {
           filteredLogs = logs.filter(l => l.status === 'Late')
+        } else if (attendanceType === 'HalfDay') {
+          filteredLogs = logs.filter(l => l.status === 'HalfDay')
         } else if (attendanceType === 'Absent') {
           filteredLogs = logs.filter(l => l.status === 'Absent')
         } else if (attendanceType === 'WFH') {
@@ -237,6 +239,8 @@ export function SuperAdminAttendancePanel() {
         return <Badge className="bg-green-100 text-green-800 border-green-200">Present</Badge>
       case 'Late':
         return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Late</Badge>
+      case 'HalfDay':
+        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Half Day</Badge>
       case 'Absent':
         return <Badge className="bg-red-100 text-red-800 border-red-200">Absent</Badge>
       default:
@@ -460,6 +464,7 @@ export function SuperAdminAttendancePanel() {
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="Present">Present</SelectItem>
                   <SelectItem value="Late">Late</SelectItem>
+                  <SelectItem value="HalfDay">Half Day</SelectItem>
                   <SelectItem value="Absent">Absent</SelectItem>
                   <SelectItem value="WFH">WFH</SelectItem>
                 </SelectContent>

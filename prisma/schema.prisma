@@ -424,6 +424,7 @@ enum AttendanceMode {
 enum AttendanceStatus {
   Present
   Late
+  HalfDay
   Absent
 }
 

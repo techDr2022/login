@@ -12,17 +12,18 @@ import { parseDateLocal } from '@/lib/utils'
 // Add or update these dates based on your company's holiday calendar.
 // Current list is for the 2025 calendar year.
 const PUBLIC_HOLIDAYS: string[] = [
-  '2025-01-14', // Sankranthi
+  '2025-01-14', // Sankranthi Festival
   '2025-01-26', // Republic Day
-  '2025-03-14', // Holi
+  '2025-03-04', // Holi Festival
+  '2025-03-26', // Ram Navami
   '2025-03-30', // Ugadhi
   '2025-03-31', // Ramadan
   '2025-06-07', // Bakrid
   '2025-08-09', // Ganesh Chaturthi
   '2025-08-15', // Independence Day
-  '2025-10-02', // Dussera
-  '2025-10-21', // Diwali
-  '2025-12-25', // Christmas
+  '2025-10-20', // Dussehra
+  '2025-11-08', // Diwali (Deepavali)
+  '2025-12-25', // Christmas Day
 ]
 
 function isPublicHoliday(date: Date): boolean {

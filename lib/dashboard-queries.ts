@@ -7,6 +7,12 @@ export async function getSuperAdminDashboardData(userId?: string) {
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
 
+  // Get today's date range for due date filtering
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const todayEnd = new Date()
+  todayEnd.setHours(23, 59, 59, 999)
+
   // Execute all independent queries in parallel for better performance
   const [
     loggedInToday,
@@ -15,6 +21,7 @@ export async function getSuperAdminDashboardData(userId?: string) {
     pendingApprovals,
     totalClients,
     recentTasks,
+    todaysTasks,
     clientWorkload,
     teamAttendance,
     assignedByMeTasks,
@@ -73,7 +80,46 @@ export async function getSuperAdminDashboardData(userId?: string) {
         title: true,
         status: true,
         createdAt: true,
+        dueDate: true,
+        priority: true,
         User_Task_assignedToIdToUser: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        Client: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    }),
+
+    // Today's tasks (tasks due today)
+    prisma.task.findMany({
+      where: {
+        dueDate: {
+          gte: todayStart,
+          lte: todayEnd,
+        },
+      },
+      take: 10,
+      orderBy: { dueDate: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        priority: true,
+        dueDate: true,
+        User_Task_assignedToIdToUser: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        Client: {
           select: {
             id: true,
             name: true,
@@ -151,6 +197,7 @@ export async function getSuperAdminDashboardData(userId?: string) {
     pendingApprovals,
     totalClients,
     recentTasks,
+    todaysTasks,
     clientWorkload,
     teamAttendance,
     assignedByMeTasks,

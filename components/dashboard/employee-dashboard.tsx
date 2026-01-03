@@ -38,6 +38,7 @@ interface AttendanceSummary {
 export function EmployeeDashboard() {
   const { data: session } = useSession()
   const [tasks, setTasks] = useState<Task[]>([])
+  const [todaysTasks, setTodaysTasks] = useState<Task[]>([])
   const [assignedByMeTasks, setAssignedByMeTasks] = useState<Task[]>([])
   const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -52,22 +53,38 @@ export function EmployeeDashboard() {
         const lastDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
         const userId = session.user.id
 
+        // Get today's date range (start and end of today)
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const todayEnd = new Date()
+        todayEnd.setHours(23, 59, 59, 999)
+
         // Fetch all data in parallel for better performance
-        const [tasksRes, assignedByMeRes, attendanceRes, monthRes] = await Promise.all([
+        const [tasksRes, todaysTasksRes, assignedByMeRes, attendanceRes, monthRes] = await Promise.all([
           fetch(`/api/tasks?assignedToId=${userId}&limit=5`),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=10`),
           fetch(`/api/tasks?assignedById=${userId}&limit=5`),
           fetch(`/api/attendance?userId=${userId}&startDate=${today}&endDate=${today}`),
           fetch(`/api/attendance?userId=${userId}&startDate=${firstDayOfMonth}&endDate=${lastDayOfMonth}`),
         ])
 
-        const [tasksData, assignedByMeData, attendanceData, monthData] = await Promise.all([
+        const [tasksData, todaysTasksData, assignedByMeData, attendanceData, monthData] = await Promise.all([
           tasksRes.json(),
+          todaysTasksRes.json(),
           assignedByMeRes.json(),
           attendanceRes.json(),
           monthRes.json(),
         ])
 
+        // Filter tasks that are due today
+        const todayTasks = (todaysTasksData.tasks || []).filter((task: Task) => {
+          if (!task.dueDate) return false
+          const dueDate = new Date(task.dueDate)
+          return dueDate >= todayStart && dueDate <= todayEnd
+        })
+
         setTasks(tasksData.tasks?.slice(0, 5) || [])
+        setTodaysTasks(todayTasks.slice(0, 5))
         setAssignedByMeTasks(assignedByMeData.tasks?.slice(0, 5) || [])
 
         const todayAttendance = attendanceData.attendances?.[0]
@@ -204,6 +221,68 @@ export function EmployeeDashboard() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
+        {/* Today's Tasks */}
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Today&apos;s Tasks</CardTitle>
+                <CardDescription className="text-sm">Tasks due today</CardDescription>
+              </div>
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {todaysTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">No tasks due today</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Priority</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {todaysTasks.map((task) => (
+                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
+                        <TableCell>
+                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
+                            {task.title}
+                          </Link>
+                          {task.client && (
+                            <p className="text-xs text-muted-foreground">{task.client.name}</p>
+                          )}
+                          {task.dueDate && (
+                            <p className="text-xs text-muted-foreground">
+                              Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(task.status)}</TableCell>
+                        <TableCell>{getPriorityBadge(task.priority)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="pt-2">
+                  <Link href="/tasks">
+                    <Button variant="ghost" className="w-full rounded-xl">
+                      View All Tasks
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* My Tasks */}
         <Card className="rounded-xl border shadow-sm">
           <CardHeader>

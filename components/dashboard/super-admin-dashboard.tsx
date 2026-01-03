@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Users, CheckSquare2, Clock, AlertCircle, Briefcase, ArrowRight, Calendar, TrendingUp, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { format } from 'date-fns'
 import { TaskStatusTimeline } from './task-status-timeline'
 
 export async function SuperAdminDashboard() {
@@ -77,6 +78,72 @@ export async function SuperAdminDashboard() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
+        {/* Today's Tasks */}
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Today&apos;s Tasks</CardTitle>
+                <CardDescription className="text-sm">Tasks due today</CardDescription>
+              </div>
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {data.todaysTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">No tasks due today</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Assigned To</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.todaysTasks.map((task: any) => (
+                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
+                        <TableCell>
+                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
+                            {task.title}
+                          </Link>
+                          {task.Client && (
+                            <p className="text-xs text-muted-foreground">{task.Client.name}</p>
+                          )}
+                          {task.dueDate && (
+                            <p className="text-xs text-muted-foreground">
+                              Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{task.status}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="pt-2">
+                  <Link href="/tasks">
+                    <Button variant="ghost" className="w-full rounded-xl">
+                      View All Tasks
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Recent Tasks */}
         <Card className="rounded-xl border shadow-sm">
           <CardHeader>
@@ -159,7 +226,8 @@ export async function SuperAdminDashboard() {
                     <div className="flex items-center gap-3">
                       <div className={`h-2 w-2 rounded-full ${
                         item.status === 'Present' ? 'bg-green-500' : 
-                        item.status === 'Absent' ? 'bg-red-500' : 'bg-yellow-500'
+                        item.status === 'Absent' ? 'bg-red-500' :
+                        item.status === 'HalfDay' ? 'bg-orange-500' : 'bg-yellow-500'
                       }`} />
                       <span className="font-medium">{item.status}</span>
                     </div>

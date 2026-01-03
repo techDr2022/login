@@ -137,6 +137,8 @@ export function EmployeeAttendancePanel() {
       await fetchAttendanceHistory()
     } catch (error: any) {
       alert(error.message || 'Failed to clock out')
+      // Refresh data even on error to sync UI state with database
+      await fetchTodayAttendance()
     } finally {
       setClockingOut(false)
     }
@@ -148,6 +150,8 @@ export function EmployeeAttendancePanel() {
         return <Badge className="bg-green-100 text-green-800 border-green-200">Present</Badge>
       case 'Late':
         return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Late</Badge>
+      case 'HalfDay':
+        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Half Day</Badge>
       case 'Absent':
         return <Badge className="bg-red-100 text-red-800 border-red-200">Absent</Badge>
       default:
