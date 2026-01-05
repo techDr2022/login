@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
       prisma.attendances.count({ where }),
     ])
 
-    // For super admin, also include absent users for the date range
+    // For super admin, also include absent employees and auto-generate Present records for super admins
     // Only if date range is provided and not too large (to avoid performance issues)
     if (session.user.role === UserRole.SUPER_ADMIN && startDate && endDate) {
       try {
@@ -143,19 +143,6 @@ export async function GET(request: NextRequest) {
         if (daysDiff > maxDays) {
           // Skip absent record generation for large date ranges
         } else {
-          const allUsers = await prisma.user.findMany({
-            where: {
-              role: UserRole.SUPER_ADMIN,
-              isActive: true,
-              ...(userId && { id: userId }),
-            },
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          })
-
           const attendanceMap = new Map(
             attendances.map((a) => [`${a.userId}-${a.date.toISOString().split('T')[0]}`, a])
           )
@@ -179,13 +166,68 @@ export async function GET(request: NextRequest) {
             existingAttendances.map((a) => `${a.userId}-${a.date.toISOString().split('T')[0]}`)
           )
 
-          // Add derived records for users without explicit attendance.
-          // On public holidays we do NOT mark users as absent.
-          for (const user of allUsers) {
+          // 1. Auto-generate Present records for super admins (they are always present)
+          const superAdmins = await prisma.user.findMany({
+            where: {
+              role: UserRole.SUPER_ADMIN,
+              isActive: true,
+              ...(userId && { id: userId }),
+            },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          })
+
+          for (const superAdmin of superAdmins) {
             const currentDate = new Date(start)
             while (currentDate <= end) {
               const isoDate = currentDate.toISOString().split('T')[0]
-              const dateKey = `${user.id}-${isoDate}`
+              const dateKey = `${superAdmin.id}-${isoDate}`
+              
+              if (!existingMap.has(dateKey) && !attendanceMap.has(dateKey)) {
+                const dateOnly = new Date(currentDate)
+                dateOnly.setHours(0, 0, 0, 0)
+
+                // Super admins are always present (even on public holidays)
+                attendances.push({
+                  id: `present-${superAdmin.id}-${isoDate}`,
+                  userId: superAdmin.id,
+                  loginTime: null,
+                  logoutTime: null,
+                  totalHours: null,
+                  date: dateOnly,
+                  status: AttendanceStatus.Present,
+                  mode: AttendanceMode.OFFICE,
+                  User: superAdmin,
+                  createdAt: dateOnly,
+                } as any)
+              }
+
+              currentDate.setDate(currentDate.getDate() + 1)
+            }
+          }
+
+          // 2. Generate absent records for employees (not super admins)
+          const allEmployees = await prisma.user.findMany({
+            where: {
+              role: UserRole.EMPLOYEE,
+              isActive: true,
+              ...(userId && { id: userId }),
+            },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          })
+
+          for (const employee of allEmployees) {
+            const currentDate = new Date(start)
+            while (currentDate <= end) {
+              const isoDate = currentDate.toISOString().split('T')[0]
+              const dateKey = `${employee.id}-${isoDate}`
               
               if (!existingMap.has(dateKey) && !attendanceMap.has(dateKey)) {
                 const dateOnly = new Date(currentDate)
@@ -194,15 +236,15 @@ export async function GET(request: NextRequest) {
                 // Skip creating Absent records on public holidays
                 if (!isPublicHoliday(dateOnly)) {
                   attendances.push({
-                    id: `absent-${user.id}-${isoDate}`,
-                    userId: user.id,
+                    id: `absent-${employee.id}-${isoDate}`,
+                    userId: employee.id,
                     loginTime: null,
                     logoutTime: null,
                     totalHours: null,
                     date: dateOnly,
                     status: AttendanceStatus.Absent,
                     mode: AttendanceMode.OFFICE,
-                    User: user,
+                    User: employee,
                     createdAt: dateOnly,
                   } as any)
                 }

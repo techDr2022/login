@@ -52,13 +52,14 @@ export function TasksList() {
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
-  const [users, setUsers] = useState<Array<{ id: string; name: string; email?: string }>>([])
+  const [users, setUsers] = useState<Array<{ id: string; name: string; email?: string; role?: string }>>([])
   const [taskTemplates, setTaskTemplates] = useState<Array<{ taskType: string; durationHours: number; isActive: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
   const [assignedByMeFilter, setAssignedByMeFilter] = useState(false)
+  const [employeeFilter, setEmployeeFilter] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -90,7 +91,7 @@ export function TasksList() {
     fetchClients()
     fetchUsers()
     fetchTaskTemplates()
-  }, [page, search, statusFilter, priorityFilter, assignedByMeFilter])
+  }, [page, search, statusFilter, priorityFilter, assignedByMeFilter, employeeFilter])
 
   useEffect(() => {
     // Clear selection when tasks change (e.g., after deletion or filter change)
@@ -143,6 +144,7 @@ export function TasksList() {
         ...(statusFilter && { status: statusFilter }),
         ...(priorityFilter && { priority: priorityFilter }),
         ...(assignedByMeFilter && session?.user?.id && { assignedById: session.user.id }),
+        ...(employeeFilter && canManage && { assignedToId: employeeFilter }),
       })
       const res = await fetch(`/api/tasks?${params}`)
       const data = await res.json()
@@ -416,6 +418,26 @@ export function TasksList() {
             <SelectItem value="Urgent">Urgent</SelectItem>
           </SelectContent>
         </Select>
+        {canManage && (
+          <Select value={employeeFilter || 'all'} onValueChange={(value) => {
+            setEmployeeFilter(value === 'all' ? '' : value)
+            setPage(1)
+          }}>
+            <SelectTrigger className="w-[180px] rounded-xl">
+              <SelectValue placeholder="All Employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Employees</SelectItem>
+              {users
+                .filter((u) => u.role === UserRole.EMPLOYEE)
+                .map((employee) => (
+                  <SelectItem key={employee.id} value={employee.id}>
+                    {employee.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        )}
         {canManage && (
           <Button
             variant={assignedByMeFilter ? "default" : "outline"}
