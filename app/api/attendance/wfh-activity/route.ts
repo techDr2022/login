@@ -100,23 +100,24 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Get tasks updated/completed today
-    const tasksUpdated = await prisma.task.findMany({
-      where: {
-        assignedToId: userId,
-        updatedAt: {
-          gte: todayStart,
-          lte: todayEnd,
-        },
-      },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        timeSpent: true,
-        updatedAt: true,
-      },
-    })
+    // Get tasks updated/completed today (based on activity logs)
+    const taskIdsFromActivity = [...new Set(taskActivity.map(activity => activity.entityId))]
+    const tasksUpdated = taskIdsFromActivity.length > 0
+      ? await prisma.task.findMany({
+          where: {
+            assignedToId: userId,
+            id: {
+              in: taskIdsFromActivity,
+            },
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            timeSpent: true,
+          },
+        })
+      : []
 
     // Calculate productivity metrics
     const totalTaskTime = tasksUpdated.reduce((sum, task) => sum + (task.timeSpent || 0), 0)
