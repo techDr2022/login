@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { ArrowLeft, Edit, Plus, Eye, EyeOff, Download, Phone, Mail, MapPin, Calendar, Clock, Globe, MessageCircle, CheckCircle2, XCircle, Building2, Users } from 'lucide-react'
 import Link from 'next/link'
 import { getClientAccessWithPassword } from '@/app/actions/client-onboarding-actions'
@@ -228,6 +229,31 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
   // Parse working days if available
   const workingDays = client.workingDays ? (typeof client.workingDays === 'string' ? JSON.parse(client.workingDays) : client.workingDays) : null
 
+  // Find logo asset
+  const assets = client.assets || client.client_assets || []
+  const logoAsset = assets.find((asset: any) => asset.type === 'LOGO')
+  
+  // Get logo URL - if URL starts with http, use directly (S3), otherwise use /api/files/ (local)
+  const getLogoUrl = (asset: any) => {
+    if (!asset?.url) return null
+    const url = asset.url
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    return `/api/files/${url}`
+  }
+  const logoUrl = logoAsset ? getLogoUrl(logoAsset) : null
+
+  // Get client initials for fallback
+  const getClientInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header Section */}
@@ -239,6 +265,14 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
           </Button>
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
+              {logoUrl && (
+                <Avatar className="h-12 w-12 rounded-lg border">
+                  <AvatarImage src={logoUrl} alt={`${client.name || client.doctorOrHospitalName} logo`} />
+                  <AvatarFallback className="rounded-lg">
+                    {getClientInitials(client.name || client.doctorOrHospitalName || 'U')}
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <h1 className="text-3xl font-bold">{client.name || client.doctorOrHospitalName || 'Unnamed Client'}</h1>
               {getStatusBadge(client.status || 'ONBOARDING')}
               {client.type && <Badge variant="outline" className="text-xs">{client.type}</Badge>}
