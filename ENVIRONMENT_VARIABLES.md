@@ -155,3 +155,90 @@ For production (Vercel, Railway, etc.):
 - Encrypted passwords cannot be recovered with a different key
 - You'll need to re-enter passwords if the key changes
 
+## Optional: WhatsApp Notifications
+
+These variables are **optional**. If not set, WhatsApp notifications for task assignments will be disabled.
+
+### When to use WhatsApp notifications:
+- Want to notify employees immediately when tasks are assigned
+- Need real-time task assignment notifications
+- Employees prefer WhatsApp over email
+
+### WhatsApp Variables:
+
+#### Option 1: Using Twilio (Recommended)
+```env
+WHATSAPP_PROVIDER="twilio"
+TWILIO_ACCOUNT_SID="your-twilio-account-sid"
+TWILIO_AUTH_TOKEN="your-twilio-auth-token"
+TWILIO_WHATSAPP_FROM="+1234567890"  # Your Twilio WhatsApp number (without whatsapp: prefix)
+```
+
+**Setting up Twilio WhatsApp:**
+1. Sign up for a Twilio account at https://www.twilio.com
+2. Get a WhatsApp-enabled phone number from Twilio
+3. Complete Twilio's WhatsApp Business verification process
+4. Get your Account SID and Auth Token from Twilio Console
+5. Set the environment variables
+
+**Note:** Twilio WhatsApp requires business verification and may have approval processes. For testing, you can use Twilio's sandbox.
+
+#### Option 2: Using Custom Webhook
+```env
+WHATSAPP_PROVIDER="webhook"
+WHATSAPP_WEBHOOK_URL="https://your-webhook-endpoint.com/send-whatsapp"
+```
+
+**Webhook Format:**
+Your webhook should accept POST requests with this JSON body:
+```json
+{
+  "to": "+1234567890",
+  "message": "Your message here"
+}
+```
+
+#### Option 3: Disable WhatsApp Notifications
+```env
+WHATSAPP_PROVIDER="none"
+# Or simply don't set WHATSAPP_PROVIDER (defaults to 'none')
+```
+
+### How it works:
+1. When a task is assigned to an employee, the system checks:
+   - If the employee has a phone number in their profile
+   - If the employee has `notifyTaskUpdates` enabled (default: true)
+   - If WhatsApp provider is configured
+2. If all conditions are met, a WhatsApp message is sent with task details
+3. Task creation/update succeeds even if WhatsApp notification fails (errors are logged)
+
+### Phone Number Format:
+- Phone numbers are automatically normalized to E.164 format (e.g., `+1234567890`)
+- Indian numbers without country code are assumed to be +91
+- Numbers can be entered with or without spaces/dashes
+
+### User Phone Numbers:
+- Employees need to have their phone number added to their user profile
+- Phone numbers can be added/updated through the employee management interface
+- Only employees with phone numbers and `notifyTaskUpdates` enabled will receive notifications
+
+### Troubleshooting WhatsApp Notifications:
+
+**Notifications not sending:**
+- Check that `WHATSAPP_PROVIDER` is set correctly
+- Verify Twilio credentials (if using Twilio)
+- Check that employee has phone number in profile
+- Verify employee has `notifyTaskUpdates` enabled
+- Check server logs for error messages
+
+**Twilio errors:**
+- Ensure your Twilio account is active
+- Verify WhatsApp number is approved/verified
+- Check that phone numbers are in correct format
+- Ensure you have sufficient Twilio credits
+
+**Webhook errors:**
+- Verify webhook URL is accessible
+- Check webhook accepts POST requests
+- Ensure webhook returns proper response format
+

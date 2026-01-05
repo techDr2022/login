@@ -29,10 +29,12 @@ import {
   CheckCircle2,
   XCircle,
   Calendar as CalendarIcon,
-  CheckSquare
+  CheckSquare,
+  Activity
 } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
 import { formatDateLocal } from '@/lib/utils'
+import { WFHActivityMonitor } from './wfh-activity-monitor'
 
 interface GlobalStats {
   totalEmployees: number
@@ -68,6 +70,8 @@ export function SuperAdminAttendancePanel() {
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLog[]>([])
   const [hourlyData, setHourlyData] = useState<OfficeHourlyData[]>([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
   
   // Filters
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all')
@@ -134,7 +138,8 @@ export function SuperAdminAttendancePanel() {
   const fetchAttendanceLogs = useCallback(async () => {
     try {
       const params = new URLSearchParams({
-        limit: '100',
+        page: page.toString(),
+        limit: '10',
         ...(selectedEmployee !== 'all' && { userId: selectedEmployee }),
         ...(dateRange.from && { startDate: formatDateLocal(dateRange.from) }),
         ...(dateRange.to && { endDate: formatDateLocal(dateRange.to) }),
@@ -175,10 +180,11 @@ export function SuperAdminAttendancePanel() {
       }
       
       setAttendanceLogs(filteredLogs)
+      setTotalPages(data.pagination?.totalPages || 1)
     } catch (err) {
       console.error('Failed to fetch attendance logs:', err)
     }
-  }, [selectedEmployee, dateRange, attendanceType])
+  }, [selectedEmployee, dateRange, attendanceType, page])
 
   // Fetch hourly data
   const fetchHourlyData = useCallback(async () => {
@@ -227,6 +233,11 @@ export function SuperAdminAttendancePanel() {
     fetchUsers()
     setLoading(false)
   }, [fetchGlobalStats, fetchAttendanceLogs, fetchHourlyData, fetchUsers])
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [selectedEmployee, dateRange, attendanceType])
 
   const formatTime = (time: string | null | undefined) => {
     if (!time) return '-'
@@ -427,6 +438,22 @@ export function SuperAdminAttendancePanel() {
         </CardContent>
       </Card>
 
+      {/* WFH Activity Monitor */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            WFH Activity Monitoring
+          </CardTitle>
+          <CardDescription>
+            Monitor work-from-home employees&apos; activity and productivity
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <WFHActivityMonitor />
+        </CardContent>
+      </Card>
+
       {/* Advanced Filters */}
       <Card>
         <CardHeader>
@@ -571,6 +598,31 @@ export function SuperAdminAttendancePanel() {
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <p className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

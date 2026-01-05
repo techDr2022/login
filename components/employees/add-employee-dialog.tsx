@@ -29,6 +29,7 @@ interface Employee {
   createdAt: string
   joiningDate: string | null
   adminNotes?: string | null
+  phoneNumber?: string | null
 }
 
 interface AddEmployeeDialogProps {
@@ -52,6 +53,7 @@ export function AddEmployeeDialog({
     confirmPassword: '',
     joiningDate: new Date().toISOString().split('T')[0],
     adminNotes: '',
+    phoneNumber: '',
     isActive: true,
   })
   const [error, setError] = useState('')
@@ -71,6 +73,7 @@ export function AddEmployeeDialog({
           ? new Date(employee.joiningDate).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
         adminNotes: employee.adminNotes || '',
+        phoneNumber: employee.phoneNumber || '',
         isActive: employee.isActive,
       })
       setPasswordGenerated(false)
@@ -88,6 +91,7 @@ export function AddEmployeeDialog({
       confirmPassword: '',
       joiningDate: new Date().toISOString().split('T')[0],
       adminNotes: '',
+      phoneNumber: '',
       isActive: true,
     })
     setError('')
@@ -142,6 +146,7 @@ export function AddEmployeeDialog({
           role: formData.role,
           joiningDate: formData.joiningDate,
           adminNotes: formData.adminNotes || null,
+          phoneNumber: formData.phoneNumber || null,
           isActive: formData.isActive,
         }
 
@@ -169,6 +174,7 @@ export function AddEmployeeDialog({
             password: formData.password,
             joiningDate: formData.joiningDate,
             adminNotes: formData.adminNotes || null,
+            phoneNumber: formData.phoneNumber || null,
           }),
         })
 
@@ -320,6 +326,21 @@ export function AddEmployeeDialog({
                 placeholder="Select joining date"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="phoneNumber">Phone Number (WhatsApp)</Label>
+            <Input
+              id="phoneNumber"
+              type="tel"
+              value={formData.phoneNumber}
+              onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+              placeholder="+91 9876543210"
+              className="rounded-xl"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Used for WhatsApp notifications when tasks are assigned
+            </p>
           </div>
 
           {!employee && (

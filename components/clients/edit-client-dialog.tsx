@@ -107,7 +107,7 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
   // Approval Settings State
   const [approvalSettings, setApprovalSettings] = useState({
     pointOfContactName: '',
-    approvalTimeHours: 0,
+    approvalTimeHours: undefined as number | undefined,
     approvalMode: 'WHATSAPP' as 'WHATSAPP' | 'EMAIL' | 'BOTH',
     performanceTrackingMode: 'MANUAL' as 'AUTO' | 'MANUAL',
   })
@@ -190,7 +190,7 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
         const a = client.approvalSettings || client.client_approval_settings
         setApprovalSettings({
           pointOfContactName: a.pointOfContactName || '',
-          approvalTimeHours: a.approvalTimeHours || 0,
+          approvalTimeHours: a.approvalTimeHours && a.approvalTimeHours > 0 ? a.approvalTimeHours : undefined,
           approvalMode: a.approvalMode || 'WHATSAPP',
           performanceTrackingMode: a.performanceTrackingMode || 'MANUAL',
         })
@@ -324,7 +324,12 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
       await upsertClientMarketingRequirement(client.id, marketing)
 
       // Save approval settings
-      await upsertClientApprovalSettings(client.id, approvalSettings)
+      await upsertClientApprovalSettings(client.id, {
+        ...approvalSettings,
+        approvalTimeHours: approvalSettings.approvalTimeHours && approvalSettings.approvalTimeHours > 0 
+          ? approvalSettings.approvalTimeHours 
+          : undefined,
+      })
 
       onSuccess?.()
       onOpenChange(false)
@@ -944,8 +949,15 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
                       <Label>Approval Time (Hours)</Label>
                       <Input
                         type="number"
-                        value={approvalSettings.approvalTimeHours}
-                        onChange={(e) => setApprovalSettings({ ...approvalSettings, approvalTimeHours: parseInt(e.target.value) || 0 })}
+                        min="1"
+                        value={approvalSettings.approvalTimeHours ?? ''}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          setApprovalSettings({
+                            ...approvalSettings,
+                            approvalTimeHours: value === '' || value === '0' ? undefined : parseInt(value) || undefined,
+                          })
+                        }}
                       />
                     </div>
                     <div>

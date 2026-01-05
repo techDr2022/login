@@ -45,6 +45,7 @@ export function TopBar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [taskNotifications, setTaskNotifications] = useState(0)
   const [recentTasks, setRecentTasks] = useState<Array<any>>([])
+  const [allTasks, setAllTasks] = useState<Array<any>>([])
   const [seenTaskIds, setSeenTaskIds] = useState<Set<string>>(new Set())
   const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
 
@@ -56,34 +57,58 @@ export function TopBar() {
         const newTasks = [task, ...prev.filter(t => t.id !== task.id)].slice(0, 5)
         return newTasks
       })
+      // Also add to allTasks if it exists (so it appears immediately in dropdown)
+      setAllTasks((prev) => {
+        // Check if task already exists to avoid duplicates
+        if (prev.some(t => t.id === task.id)) {
+          return prev
+        }
+        // Add new task at the beginning (newest first)
+        return [task, ...prev].sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0).getTime()
+          const dateB = new Date(b.createdAt || 0).getTime()
+          return dateB - dateA
+        })
+      })
     },
     onTaskCountUpdate: (count) => {
       setTaskNotifications(count)
     },
   })
 
-  // Mark all current tasks as seen when dropdown opens
-  const handleNotificationDropdownOpenChange = (open: boolean) => {
+  // Refresh tasks when dropdown opens
+  const handleNotificationDropdownOpenChange = async (open: boolean) => {
     setNotificationDropdownOpen(open)
-    if (open) {
-      // Mark all recent tasks as seen
-      const allTaskIds = new Set<string>()
-      recentTasks.forEach(task => allTaskIds.add(task.id))
-      setSeenTaskIds(prev => new Set([...prev, ...allTaskIds]))
-      
-      // Also fetch and mark all pending/in-progress tasks as seen
-      if (session?.user?.id) {
-        Promise.all([
+    if (open && session?.user?.id) {
+      try {
+        // Refresh all pending and in-progress tasks
+        const [pendingRes, inProgressRes] = await Promise.all([
           fetch(`/api/tasks?assignedToId=${session.user.id}&status=Pending&limit=1000`),
           fetch(`/api/tasks?assignedToId=${session.user.id}&status=InProgress&limit=1000`),
-        ]).then(([pendingRes, inProgressRes]) => {
-          Promise.all([pendingRes.json(), inProgressRes.json()]).then(([pendingData, inProgressData]) => {
-            const allPendingTaskIds = new Set<string>()
-            pendingData.tasks?.forEach((task: any) => allPendingTaskIds.add(task.id))
-            inProgressData.tasks?.forEach((task: any) => allPendingTaskIds.add(task.id))
-            setSeenTaskIds(prev => new Set([...prev, ...allPendingTaskIds]))
-          })
-        }).catch(err => console.error('Failed to mark tasks as seen:', err))
+        ])
+        
+        const [pendingData, inProgressData] = await Promise.all([
+          pendingRes.json(),
+          inProgressRes.json(),
+        ])
+        
+        // Combine all tasks and sort by creation date (newest first)
+        const combinedTasks = [
+          ...(pendingData.tasks || []),
+          ...(inProgressData.tasks || []),
+        ].sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0).getTime()
+          const dateB = new Date(b.createdAt || 0).getTime()
+          return dateB - dateA
+        })
+        
+        setAllTasks(combinedTasks)
+        
+        // Update task count
+        const total = (pendingData.pagination?.total || 0) + (inProgressData.pagination?.total || 0)
+        setTaskNotifications(total)
+      } catch (err) {
+        console.error('Failed to refresh tasks:', err)
       }
     }
   }
@@ -100,28 +125,43 @@ export function TopBar() {
     return () => document.removeEventListener('keydown', down)
   }, [])
 
-  // Fetch initial task count
+  // Fetch initial task count and all tasks
   useEffect(() => {
-    const fetchTaskCount = async () => {
+    const fetchTasks = async () => {
       if (!session?.user?.id) return
       
       try {
-        // Count pending and in-progress tasks assigned to user
+        // Fetch all pending and in-progress tasks assigned to user
         const [pendingRes, inProgressRes] = await Promise.all([
-          fetch(`/api/tasks?assignedToId=${session.user.id}&status=Pending&limit=1`),
-          fetch(`/api/tasks?assignedToId=${session.user.id}&status=InProgress&limit=1`),
+          fetch(`/api/tasks?assignedToId=${session.user.id}&status=Pending&limit=1000`),
+          fetch(`/api/tasks?assignedToId=${session.user.id}&status=InProgress&limit=1000`),
         ])
         
-        const pendingData = await pendingRes.json()
-        const inProgressData = await inProgressRes.json()
+        const [pendingData, inProgressData] = await Promise.all([
+          pendingRes.json(),
+          inProgressRes.json(),
+        ])
+        
         const total = (pendingData.pagination?.total || 0) + (inProgressData.pagination?.total || 0)
         setTaskNotifications(total)
+        
+        // Combine all tasks and sort by creation date (newest first)
+        const combinedTasks = [
+          ...(pendingData.tasks || []),
+          ...(inProgressData.tasks || []),
+        ].sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0).getTime()
+          const dateB = new Date(b.createdAt || 0).getTime()
+          return dateB - dateA
+        })
+        
+        setAllTasks(combinedTasks)
       } catch (error) {
-        console.error('Failed to fetch task count:', error)
+        console.error('Failed to fetch tasks:', error)
       }
     }
 
-    fetchTaskCount()
+    fetchTasks()
   }, [session?.user?.id])
 
   if (!session) return null
@@ -221,11 +261,11 @@ export function TopBar() {
                 <Button variant="ghost" size="icon" className="relative">
                   <Bell className="h-5 w-5" />
                   {(() => {
-                    // Count only unseen recent tasks
-                    const unseenRecentTasks = recentTasks.filter(task => !seenTaskIds.has(task.id))
-                    const unseenCount = unseenRecentTasks.length
-                    // Show badge if there are unseen recent tasks
-                    // Once dropdown is opened, all tasks are marked as seen, so badge disappears
+                    // Count unseen tasks from allTasks if available, otherwise use taskNotifications
+                    const unseenCount = allTasks.length > 0 
+                      ? allTasks.filter(task => !seenTaskIds.has(task.id)).length
+                      : taskNotifications
+                    // Show badge if there are unseen tasks
                     return unseenCount > 0 ? (
                       <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
                         {unseenCount > 9 ? '9+' : unseenCount}
@@ -234,7 +274,10 @@ export function TopBar() {
                   })()}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuContent 
+                align="end" 
+                className="w-80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[side=bottom]:slide-in-from-top-4 data-[side=top]:slide-in-from-bottom-4 data-[side=left]:slide-in-from-right-4 data-[side=right]:slide-in-from-left-4 duration-300 ease-out"
+              >
                 <DropdownMenuLabel className="flex items-center justify-between">
                   <span>Notifications</span>
                   {taskNotifications > 0 && (
@@ -244,80 +287,62 @@ export function TopBar() {
                   )}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {taskNotifications === 0 && recentTasks.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground">
-                    No new notifications
-                  </div>
-                ) : (
-                  <div className="max-h-[400px] overflow-y-auto">
-                    {recentTasks.length > 0 && (
-                      <>
-                        <div className="p-2">
-                          <div className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                            Recent Tasks
-                          </div>
-                          {recentTasks.map((task) => {
-                            const isUnseen = !seenTaskIds.has(task.id)
-                            return (
-                              <DropdownMenuItem
-                                key={task.id}
-                                className={cn(
-                                  "flex flex-col items-start gap-1 p-3 cursor-pointer",
-                                  isUnseen && "bg-blue-50/50 dark:bg-blue-950/20"
-                                )}
-                                onClick={() => {
-                                  // Mark as seen when clicked
-                                  setSeenTaskIds(prev => new Set([...prev, task.id]))
-                                  router.push(`/tasks/${task.id}`)
-                                }}
-                              >
-                                <div className="flex items-center gap-2 w-full">
-                                  <CheckSquare2 className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm truncate">{task.title}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {task.assignedBy?.name || 'Someone'} created this task
-                                      {task.assignedTo && ` • Assigned to ${task.assignedTo.name}`}
-                                    </div>
-                                    {(task.createdAt || (task as any).timestamp) && (
-                                      <div className="text-xs text-muted-foreground mt-1">
-                                        {formatNotificationTime(task.createdAt || (task as any).timestamp)}
-                                      </div>
-                                    )}
+                <div className="max-h-[400px] overflow-y-auto scroll-smooth">
+                  {allTasks.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      No pending tasks
+                    </div>
+                  ) : (
+                    <div className="p-2">
+                        {allTasks.map((task) => {
+                          const isUnseen = !seenTaskIds.has(task.id)
+                          return (
+                            <DropdownMenuItem
+                              key={task.id}
+                              className={cn(
+                                "flex flex-col items-start gap-1 p-3 cursor-pointer my-1 rounded-md transition-colors",
+                                isUnseen 
+                                  ? "bg-blue-50 dark:bg-blue-950/30 border-l-2 border-l-blue-600" 
+                                  : "bg-muted/30 dark:bg-muted/20 hover:bg-muted/50"
+                              )}
+                              onClick={() => {
+                                // Mark as seen when clicked
+                                setSeenTaskIds(prev => new Set([...prev, task.id]))
+                                router.push(`/tasks/${task.id}`)
+                              }}
+                            >
+                              <div className="flex items-center gap-2 w-full">
+                                <CheckSquare2 className={cn(
+                                  "h-4 w-4 flex-shrink-0",
+                                  isUnseen ? "text-blue-600" : "text-muted-foreground"
+                                )} />
+                                <div className="flex-1 min-w-0">
+                                  <div className={cn(
+                                    "font-medium text-sm truncate",
+                                    isUnseen ? "text-foreground font-semibold" : "text-muted-foreground"
+                                  )}>
+                                    {task.title}
                                   </div>
-                                  {isUnseen && (
-                                    <span className="h-2 w-2 rounded-full bg-blue-600 flex-shrink-0" />
+                                  <div className="text-xs text-muted-foreground">
+                                    {task.assignedBy?.name || 'Someone'} created this task
+                                    {task.assignedTo && ` • Assigned to ${task.assignedTo.name}`}
+                                  </div>
+                                  {(task.createdAt || (task as any).timestamp) && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {formatNotificationTime(task.createdAt || (task as any).timestamp)}
+                                    </div>
                                   )}
                                 </div>
-                              </DropdownMenuItem>
-                            )
-                          })}
-                        </div>
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    {taskNotifications > 0 && (
-                      <div className="p-2">
-                        <DropdownMenuItem
-                          className="flex items-center justify-center p-2 cursor-pointer"
-                          onClick={() => {
-                            // Mark all tasks as seen when viewing all tasks
-                            setSeenTaskIds(prev => {
-                              const newSet = new Set(prev)
-                              recentTasks.forEach(task => newSet.add(task.id))
-                              return newSet
-                            })
-                            router.push('/tasks')
-                          }}
-                        >
-                          <span className="text-sm font-medium">
-                            View all {taskNotifications} pending task{taskNotifications !== 1 ? 's' : ''}
-                          </span>
-                        </DropdownMenuItem>
+                                {isUnseen && (
+                                  <span className="h-2 w-2 rounded-full bg-blue-600 flex-shrink-0" />
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                          )
+                        })}
                       </div>
                     )}
-                  </div>
-                )}
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
 

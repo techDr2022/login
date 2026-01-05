@@ -89,6 +89,7 @@ model User {
   joiningDate                             DateTime?
   adminNotes                              String?
   jobTitle                                String?
+  phoneNumber                             String?
   notifyChatMentions                      Boolean         @default(true)
   notifyClientChanges                     Boolean         @default(true)
   notifyTaskUpdates                       Boolean         @default(true)

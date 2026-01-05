@@ -73,11 +73,43 @@ export function EmployeesManagementPage() {
       }
 
       const res = await fetch(`/api/admin/employees?${params}`)
+      
+      if (!res.ok) {
+        const errorData = await res.json()
+        console.error('API error:', errorData)
+        throw new Error(errorData.error || 'Failed to fetch employees')
+      }
+      
       const data = await res.json()
-      setEmployees(data.employees || [])
-      setFilteredEmployees(data.employees || [])
+      
+      console.log('API Response:', {
+        hasError: !!data.error,
+        error: data.error,
+        employeesCount: data.employees?.length || 0,
+        employees: data.employees?.slice(0, 2) // Log first 2 for debugging
+      })
+      
+      if (data.error) {
+        console.error('API returned error:', data.error)
+        setEmployees([])
+        setFilteredEmployees([])
+        return
+      }
+      
+      if (!data.employees) {
+        console.error('API response missing employees array:', data)
+        setEmployees([])
+        setFilteredEmployees([])
+        return
+      }
+      
+      console.log('Setting employees:', data.employees.length)
+      setEmployees(data.employees)
+      setFilteredEmployees(data.employees)
     } catch (error) {
       console.error('Failed to fetch employees:', error)
+      setEmployees([])
+      setFilteredEmployees([])
     } finally {
       setLoading(false)
     }

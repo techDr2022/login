@@ -8,6 +8,7 @@ import { createTaskSchema, updateTaskSchema, updateTaskStatusSchema } from '@/li
 import { logActivity } from '@/lib/activity-log'
 import { canManageTasks, canApproveTasks } from '@/lib/rbac'
 import { UserRole, TaskStatus } from '@prisma/client'
+import { sendWhatsAppNotification, formatTaskAssignmentMessage } from '@/lib/whatsapp'
 
 export async function createTask(data: {
   title: string
@@ -129,9 +130,48 @@ export async function createTask(data: {
   
   const task = await prisma.task.create({
     data: taskData,
+    include: {
+      User_Task_assignedByIdToUser: {
+        select: { name: true },
+      },
+      User_Task_assignedToIdToUser: {
+        select: { id: true, name: true, phoneNumber: true, notifyTaskUpdates: true },
+      },
+      Client: {
+        select: { name: true },
+      },
+    },
   })
 
   await logActivity(userId, 'CREATE', 'Task', task.id)
+
+  // Send WhatsApp notification if task is assigned to an employee
+  if (task.assignedToId && task.User_Task_assignedToIdToUser) {
+    const assignedToUser = task.User_Task_assignedToIdToUser
+    
+    // Only send if user has phone number and notifications enabled
+    if (assignedToUser.phoneNumber && assignedToUser.notifyTaskUpdates) {
+      try {
+        const message = formatTaskAssignmentMessage(
+          task.title,
+          task.User_Task_assignedByIdToUser.name,
+          task.priority,
+          task.dueDate || undefined,
+          task.Client?.name
+        )
+
+        const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message)
+        
+        if (!result.success) {
+          console.error('Failed to send WhatsApp notification:', result.error)
+          // Don't throw error - task creation should succeed even if notification fails
+        }
+      } catch (error) {
+        console.error('Error sending WhatsApp notification:', error)
+        // Don't throw error - task creation should succeed even if notification fails
+      }
+    }
+  }
 
   return task
 }
@@ -218,9 +258,48 @@ export async function updateTask(id: string, data: {
   const updatedTask = await prisma.task.update({
     where: { id },
     data: updateData,
+    include: {
+      User_Task_assignedByIdToUser: {
+        select: { name: true },
+      },
+      User_Task_assignedToIdToUser: {
+        select: { id: true, name: true, phoneNumber: true, notifyTaskUpdates: true },
+      },
+      Client: {
+        select: { name: true },
+      },
+    },
   })
 
   await logActivity(session.user.id, 'UPDATE', 'Task', updatedTask.id)
+
+  // Send WhatsApp notification if task assignment changed to a new employee
+  if (data.assignedToId !== undefined && data.assignedToId && data.assignedToId !== task.assignedToId) {
+    const assignedToUser = updatedTask.User_Task_assignedToIdToUser
+    
+    // Only send if user has phone number and notifications enabled
+    if (assignedToUser && assignedToUser.phoneNumber && assignedToUser.notifyTaskUpdates) {
+      try {
+        const message = formatTaskAssignmentMessage(
+          updatedTask.title,
+          updatedTask.User_Task_assignedByIdToUser.name,
+          updatedTask.priority,
+          updatedTask.dueDate || undefined,
+          updatedTask.Client?.name
+        )
+
+        const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message)
+        
+        if (!result.success) {
+          console.error('Failed to send WhatsApp notification:', result.error)
+          // Don't throw error - task update should succeed even if notification fails
+        }
+      } catch (error) {
+        console.error('Error sending WhatsApp notification:', error)
+        // Don't throw error - task update should succeed even if notification fails
+      }
+    }
+  }
 
   return updatedTask
 }

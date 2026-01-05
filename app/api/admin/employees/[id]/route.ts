@@ -34,6 +34,7 @@ export async function GET(
         createdAt: true,
         joiningDate: true,
         adminNotes: true,
+        phoneNumber: true,
         Task_Task_assignedToIdToUser: {
           select: {
             id: true,
@@ -151,7 +152,7 @@ export async function PUT(
 
     const { id } = await context.params
     const body = await request.json()
-    const { name, email, role, isActive, joiningDate, adminNotes } = body
+    const { name, email, role, isActive, joiningDate, adminNotes, phoneNumber } = body
 
     // Check if email is being changed and if it already exists
     if (email) {
@@ -175,6 +176,7 @@ export async function PUT(
     if (joiningDate !== undefined)
       updateData.joiningDate = joiningDate ? new Date(joiningDate) : null
     if (adminNotes !== undefined) updateData.adminNotes = adminNotes
+    if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber || null
 
     const user = await prisma.user.update({
       where: { id },
@@ -188,6 +190,7 @@ export async function PUT(
         createdAt: true,
         joiningDate: true,
         adminNotes: true,
+        phoneNumber: true,
       },
     })
 
