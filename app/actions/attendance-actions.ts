@@ -14,6 +14,7 @@ import {
   getHalfDayThresholdTime,
   getAbsentThresholdTime
 } from '@/lib/attendance-config'
+import { sendWhatsAppNotification, formatAttendanceNotificationMessage, getAttendanceNotificationTemplateVariables } from '@/lib/whatsapp'
 
 export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFFICE) {
   const session = await getServerSession(authOptions)
@@ -27,10 +28,10 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
     throw new Error('Only employees can clock in/out')
   }
 
-  // Verify user exists in database
+  // Verify user exists in database and get name
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, isActive: true },
+    select: { id: true, isActive: true, name: true },
   })
 
   if (!user) {
@@ -159,6 +160,73 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
 
   await logActivity(session.user.id, 'CREATE', 'Attendance', attendance.id)
 
+  // Notify super admins via WhatsApp
+  try {
+    console.log(`[WhatsApp] Clock-in event: ${user.name} (${session.user.id})`)
+    
+    const superAdmins = await prisma.user.findMany({
+      where: {
+        role: UserRole.SUPER_ADMIN,
+        isActive: true,
+        phoneNumber: { not: null },
+        notifyClientChanges: true, // Use notifyClientChanges as proxy for attendance notifications
+      },
+      select: {
+        id: true,
+        name: true,
+        phoneNumber: true,
+        notifyClientChanges: true,
+      },
+    })
+
+    console.log(`[WhatsApp] Found ${superAdmins.length} super admins to notify`)
+
+    if (superAdmins.length > 0 && user.name) {
+      const message = formatAttendanceNotificationMessage(
+        user.name,
+        'clock-in',
+        now,
+        attendanceMode
+      )
+
+      // Get template variables for template-based messages
+      const templateVariables = getAttendanceNotificationTemplateVariables(
+        user.name,
+        'clock-in',
+        now,
+        attendanceMode
+      )
+
+      // Send notifications to all super admins (don't wait for all to complete)
+      const notificationPromises = superAdmins
+        .filter(admin => admin.phoneNumber && admin.notifyClientChanges)
+        .map(admin => {
+          console.log(`[WhatsApp] Sending clock-in notification to ${admin.name} (${admin.phoneNumber})`)
+          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables).then(result => {
+            if (result.success) {
+              console.log(`[WhatsApp] ✅ Clock-in notification sent to ${admin.name}. Message ID: ${result.messageId || 'N/A'}`)
+            } else {
+              console.error(`[WhatsApp] ❌ Failed to send clock-in notification to ${admin.name}: ${result.error}`)
+            }
+            return result
+          }).catch(error => {
+            console.error(`[WhatsApp] ❌ Error sending clock-in notification to ${admin.name}:`, error)
+            return { success: false, error: error.message }
+          })
+        })
+
+      // Fire and forget - don't block the response
+      Promise.all(notificationPromises).catch(error => {
+        console.error('[WhatsApp] Error sending attendance notifications:', error)
+      })
+    } else {
+      console.log('[WhatsApp] No super admins found with phone numbers or notifications disabled')
+    }
+  } catch (error) {
+    // Don't fail the clock-in if notification fails
+    console.error('[WhatsApp] Error notifying super admins of clock-in:', error)
+  }
+
   // Return serializable object (convert Date objects to ISO strings)
   return {
     id: attendance.id,
@@ -190,10 +258,10 @@ export async function clockOut() {
     throw new Error('Only employees can clock in/out')
   }
 
-  // Verify user exists in database
+  // Verify user exists in database and get name
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, isActive: true },
+    select: { id: true, isActive: true, name: true },
   })
 
   if (!user) {
@@ -325,6 +393,74 @@ export async function clockOut() {
   })
 
   await logActivity(session.user.id, 'UPDATE', 'Attendance', updated.id)
+
+  // Notify super admins via WhatsApp
+  try {
+    console.log(`[WhatsApp] Clock-out event: ${user.name} (${session.user.id})`)
+    console.log(`[WhatsApp] Total hours worked: ${totalHours.toFixed(2)}`)
+    
+    const superAdmins = await prisma.user.findMany({
+      where: {
+        role: UserRole.SUPER_ADMIN,
+        isActive: true,
+        phoneNumber: { not: null },
+        notifyClientChanges: true, // Use notifyClientChanges as proxy for attendance notifications
+      },
+      select: {
+        id: true,
+        name: true,
+        phoneNumber: true,
+        notifyClientChanges: true,
+      },
+    })
+
+    console.log(`[WhatsApp] Found ${superAdmins.length} super admins to notify`)
+
+    if (superAdmins.length > 0 && user.name) {
+      const message = formatAttendanceNotificationMessage(
+        user.name,
+        'clock-out',
+        now,
+        updated.mode
+      )
+
+      // Get template variables for template-based messages
+      const templateVariables = getAttendanceNotificationTemplateVariables(
+        user.name,
+        'clock-out',
+        now,
+        updated.mode
+      )
+
+      // Send notifications to all super admins (don't wait for all to complete)
+      const notificationPromises = superAdmins
+        .filter(admin => admin.phoneNumber && admin.notifyClientChanges)
+        .map(admin => {
+          console.log(`[WhatsApp] Sending clock-out notification to ${admin.name} (${admin.phoneNumber})`)
+          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables).then(result => {
+            if (result.success) {
+              console.log(`[WhatsApp] ✅ Clock-out notification sent to ${admin.name}. Message ID: ${result.messageId || 'N/A'}`)
+            } else {
+              console.error(`[WhatsApp] ❌ Failed to send clock-out notification to ${admin.name}: ${result.error}`)
+            }
+            return result
+          }).catch(error => {
+            console.error(`[WhatsApp] ❌ Error sending clock-out notification to ${admin.name}:`, error)
+            return { success: false, error: error.message }
+          })
+        })
+
+      // Fire and forget - don't block the response
+      Promise.all(notificationPromises).catch(error => {
+        console.error('[WhatsApp] Error sending attendance notifications:', error)
+      })
+    } else {
+      console.log('[WhatsApp] No super admins found with phone numbers or notifications disabled')
+    }
+  } catch (error) {
+    // Don't fail the clock-out if notification fails
+    console.error('[WhatsApp] Error notifying super admins of clock-out:', error)
+  }
 
   // Return serializable object (convert Date objects to ISO strings)
   return {

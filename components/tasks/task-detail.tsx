@@ -502,6 +502,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
               <div>
                 <Label htmlFor="status">Status</Label>
                 <Select
+                  id="status"
                   value={statusFormData.status}
                   onValueChange={(value) => setStatusFormData({ ...statusFormData, status: value as any })}
                   required

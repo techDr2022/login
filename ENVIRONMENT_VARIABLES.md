@@ -172,6 +172,10 @@ WHATSAPP_PROVIDER="twilio"
 TWILIO_ACCOUNT_SID="your-twilio-account-sid"
 TWILIO_AUTH_TOKEN="your-twilio-auth-token"
 TWILIO_WHATSAPP_FROM="+1234567890"  # Your Twilio WhatsApp number (without whatsapp: prefix)
+
+# Optional: For production, use WhatsApp Message Templates (recommended)
+TWILIO_WHATSAPP_TEMPLATE_SID="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Content Template SID
+TWILIO_USE_TEMPLATE="true"  # Set to "true" to use templates instead of freeform messages
 ```
 
 **Setting up Twilio WhatsApp:**
@@ -180,6 +184,15 @@ TWILIO_WHATSAPP_FROM="+1234567890"  # Your Twilio WhatsApp number (without whats
 3. Complete Twilio's WhatsApp Business verification process
 4. Get your Account SID and Auth Token from Twilio Console
 5. Set the environment variables
+
+**Important: WhatsApp Message Templates (Required for Production):**
+- Freeform messages only work within a 24-hour window after the user messages you
+- For production, you **must** use approved WhatsApp Message Templates
+- To set up templates:
+  1. Go to Twilio Console → Messaging → Content Templates
+  2. Create a new template (or use an existing one)
+  3. Copy the Template SID (starts with `HX...`)
+  4. Set `TWILIO_WHATSAPP_TEMPLATE_SID` and `TWILIO_USE_TEMPLATE="true"`
 
 **Note:** Twilio WhatsApp requires business verification and may have approval processes. For testing, you can use Twilio's sandbox.
 
@@ -236,6 +249,16 @@ WHATSAPP_PROVIDER="none"
 - Verify WhatsApp number is approved/verified
 - Check that phone numbers are in correct format
 - Ensure you have sufficient Twilio credits
+
+**"Outside the allowed window" error:**
+- This means freeform messages can't be sent (24h window expired)
+- **Solution:** Set up a WhatsApp Message Template:
+  1. Go to Twilio Console → Messaging → Content Templates
+  2. Create a template for task notifications
+  3. Get the Template SID (starts with `HX...`)
+  4. Set `TWILIO_WHATSAPP_TEMPLATE_SID="your-template-sid"`
+  5. Set `TWILIO_USE_TEMPLATE="true"`
+  6. Restart your server
 
 **Webhook errors:**
 - Verify webhook URL is accessible

@@ -6,10 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { CheckSquare2, Clock, Calendar, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react'
+import { CheckSquare2, Clock, Calendar, TrendingUp, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { TaskStatusTimeline } from './task-status-timeline'
+import { updateTaskStatus } from '@/app/actions/task-actions'
 
 interface Task {
   id: string
@@ -38,10 +39,12 @@ interface AttendanceSummary {
 export function EmployeeDashboard() {
   const { data: session } = useSession()
   const [tasks, setTasks] = useState<Task[]>([])
+  const [pendingTasks, setPendingTasks] = useState<Task[]>([])
   const [todaysTasks, setTodaysTasks] = useState<Task[]>([])
   const [assignedByMeTasks, setAssignedByMeTasks] = useState<Task[]>([])
   const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [completingTasks, setCompletingTasks] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,21 +63,28 @@ export function EmployeeDashboard() {
         todayEnd.setHours(23, 59, 59, 999)
 
         // Fetch all data in parallel for better performance
-        const [tasksRes, todaysTasksRes, assignedByMeRes, attendanceRes, monthRes] = await Promise.all([
+        const [tasksRes, allTasksRes, todaysTasksRes, assignedByMeRes, attendanceRes, monthRes] = await Promise.all([
           fetch(`/api/tasks?assignedToId=${userId}&limit=5`),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=50`), // Fetch more to get all pending/in-progress
           fetch(`/api/tasks?assignedToId=${userId}&limit=10`),
           fetch(`/api/tasks?assignedById=${userId}&limit=5`),
           fetch(`/api/attendance?userId=${userId}&startDate=${today}&endDate=${today}`),
           fetch(`/api/attendance?userId=${userId}&startDate=${firstDayOfMonth}&endDate=${lastDayOfMonth}`),
         ])
 
-        const [tasksData, todaysTasksData, assignedByMeData, attendanceData, monthData] = await Promise.all([
+        const [tasksData, allTasksData, todaysTasksData, assignedByMeData, attendanceData, monthData] = await Promise.all([
           tasksRes.json(),
+          allTasksRes.json(),
           todaysTasksRes.json(),
           assignedByMeRes.json(),
           attendanceRes.json(),
           monthRes.json(),
         ])
+
+        // Filter pending tasks (Pending or InProgress status)
+        const pending = (allTasksData.tasks || []).filter((task: Task) => 
+          task.status === 'Pending' || task.status === 'InProgress'
+        )
 
         // Filter tasks that are due today
         const todayTasks = (todaysTasksData.tasks || []).filter((task: Task) => {
@@ -84,6 +94,7 @@ export function EmployeeDashboard() {
         })
 
         setTasks(tasksData.tasks?.slice(0, 5) || [])
+        setPendingTasks(pending.slice(0, 10))
         setTodaysTasks(todayTasks.slice(0, 5))
         setAssignedByMeTasks(assignedByMeData.tasks?.slice(0, 5) || [])
 
@@ -113,6 +124,31 @@ export function EmployeeDashboard() {
     fetchData()
   }, [session?.user?.id])
 
+  const handleMarkComplete = async (taskId: string) => {
+    setCompletingTasks(prev => new Set(prev).add(taskId))
+    try {
+      await updateTaskStatus(taskId, { status: 'Approved' })
+      // Remove the completed task from pending tasks
+      setPendingTasks(prev => prev.filter(task => task.id !== taskId))
+      // Also update in other task lists
+      setTasks(prev => prev.map(task => 
+        task.id === taskId ? { ...task, status: 'Approved' } : task
+      ))
+      setTodaysTasks(prev => prev.map(task => 
+        task.id === taskId ? { ...task, status: 'Approved' } : task
+      ))
+    } catch (error) {
+      console.error('Failed to mark task as complete:', error)
+      alert('Failed to mark task as complete. Please try again.')
+    } finally {
+      setCompletingTasks(prev => {
+        const next = new Set(prev)
+        next.delete(taskId)
+        return next
+      })
+    }
+  }
+
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
       case 'Urgent':
@@ -134,6 +170,8 @@ export function EmployeeDashboard() {
         return <Badge className="bg-green-100 text-green-800 border-green-200">Approved</Badge>
       case 'Review':
         return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Review</Badge>
+      case 'InProgress':
+        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">In Progress</Badge>
       case 'Pending':
         return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Pending</Badge>
       case 'Rejected':
@@ -161,6 +199,79 @@ export function EmployeeDashboard() {
         <p className="text-sm text-muted-foreground">Employee Dashboard</p>
         <h1 className="text-2xl font-semibold">Welcome back, {session?.user?.name || 'Employee'}</h1>
       </div>
+
+      {/* Your Pending Tasks - Highlighted Section */}
+      {pendingTasks.length > 0 && (
+        <Card className="rounded-xl border-2 border-blue-500 shadow-lg bg-gradient-to-br from-blue-50 to-white">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-xl font-bold text-blue-900 flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-blue-600" />
+                  Your Pending Tasks
+                </CardTitle>
+                <CardDescription className="text-sm text-blue-700">
+                  {pendingTasks.length} task{pendingTasks.length !== 1 ? 's' : ''} waiting for you
+                </CardDescription>
+              </div>
+              <CheckSquare2 className="h-6 w-6 text-blue-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-center justify-between p-4 bg-white rounded-lg border border-blue-200 hover:border-blue-300 transition-colors"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Link href={`/tasks/${task.id}`} className="font-semibold text-gray-900 hover:text-blue-600 hover:underline">
+                        {task.title}
+                      </Link>
+                      {getPriorityBadge(task.priority)}
+                    </div>
+                    {task.client && (
+                      <p className="text-sm text-muted-foreground mt-1">{task.client.name}</p>
+                    )}
+                    {task.dueDate && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    onClick={() => handleMarkComplete(task.id)}
+                    disabled={completingTasks.has(task.id)}
+                    className="ml-4 bg-green-600 hover:bg-green-700 text-white"
+                    size="sm"
+                  >
+                    {completingTasks.has(task.id) ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Completing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Mark Complete
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="pt-4">
+              <Link href="/tasks">
+                <Button variant="outline" className="w-full rounded-xl border-blue-300 text-blue-700 hover:bg-blue-50">
+                  View All Tasks
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

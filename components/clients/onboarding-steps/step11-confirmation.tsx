@@ -96,7 +96,7 @@ export function Step11Confirmation({ clientId, data, onFinalize, loading }: Step
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="startDate">Start Date *</Label>
+            <Label>Start Date *</Label>
             <DatePicker
               date={startDate}
               onSelect={setStartDate}
@@ -110,6 +110,7 @@ export function Step11Confirmation({ clientId, data, onFinalize, loading }: Step
           <div>
             <Label htmlFor="accountManagerId">Account Manager</Label>
             <Select
+              id="accountManagerId"
               value={accountManagerId || undefined}
               onValueChange={(value) => setAccountManagerId(value || '')}
             >

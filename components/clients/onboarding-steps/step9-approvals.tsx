@@ -67,6 +67,7 @@ export function Step9Approvals({ clientId, data, onComplete, loading }: Step9App
       <div>
         <Label htmlFor="approvalMode">Approval Mode</Label>
         <Select
+          id="approvalMode"
           value={settings.approvalMode}
           onValueChange={(value) => setSettings({ ...settings, approvalMode: value })}
         >
@@ -84,6 +85,7 @@ export function Step9Approvals({ clientId, data, onComplete, loading }: Step9App
       <div>
         <Label htmlFor="performanceTrackingMode">Performance Tracking Mode</Label>
         <Select
+          id="performanceTrackingMode"
           value={settings.performanceTrackingMode}
           onValueChange={(value) => setSettings({ ...settings, performanceTrackingMode: value })}
         >

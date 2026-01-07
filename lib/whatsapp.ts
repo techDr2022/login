@@ -19,6 +19,7 @@
 interface WhatsAppMessage {
   to: string
   message: string
+  templateVariables?: string[] // Optional: For template-based messages
 }
 
 interface WhatsAppResponse {
@@ -52,16 +53,33 @@ function normalizePhoneNumber(phone: string): string {
 
 /**
  * Send WhatsApp message using Twilio
+ * Supports both template-based messages (recommended) and freeform messages (24h window only)
  */
 async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID
   const authToken = process.env.TWILIO_AUTH_TOKEN
   const fromNumber = process.env.TWILIO_WHATSAPP_FROM
+  const templateSid = process.env.TWILIO_WHATSAPP_TEMPLATE_SID // Optional: Content Template SID
+  const useTemplate = process.env.TWILIO_USE_TEMPLATE === 'true' // Optional: Force template usage
+
+  console.log('[WhatsApp] Twilio configuration check:', {
+    accountSid: accountSid ? 'SET' : 'MISSING',
+    authToken: authToken ? 'SET' : 'MISSING',
+    fromNumber: fromNumber ? 'SET' : 'MISSING',
+    templateSid: templateSid ? 'SET' : 'NOT SET (will use freeform)',
+    useTemplate: useTemplate ? 'ENABLED' : 'DISABLED',
+  })
 
   if (!accountSid || !authToken || !fromNumber) {
+    const missing = []
+    if (!accountSid) missing.push('TWILIO_ACCOUNT_SID')
+    if (!authToken) missing.push('TWILIO_AUTH_TOKEN')
+    if (!fromNumber) missing.push('TWILIO_WHATSAPP_FROM')
+    
+    console.error(`[WhatsApp] ❌ Twilio credentials not configured. Missing: ${missing.join(', ')}`)
     return {
       success: false,
-      error: 'Twilio credentials not configured. Please set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_WHATSAPP_FROM environment variables.',
+      error: `Twilio credentials not configured. Missing: ${missing.join(', ')}`,
     }
   }
 
@@ -81,18 +99,79 @@ async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse
     const normalizedTo = normalizePhoneNumber(message.to)
     const normalizedFrom = normalizePhoneNumber(fromNumber)
 
-    const result = await client.messages.create({
+    // Try to use template if configured, otherwise use freeform (may fail outside 24h window)
+    let messagePayload: any = {
       from: `whatsapp:${normalizedFrom}`,
       to: `whatsapp:${normalizedTo}`,
-      body: message.message,
+    }
+
+    if (templateSid && useTemplate) {
+      // Use Content Template (requires pre-approved template in Twilio)
+      console.log('[WhatsApp] Using Content Template:', templateSid)
+      messagePayload.contentSid = templateSid
+      
+      // Add template variables if provided
+      if (message.templateVariables && message.templateVariables.length > 0) {
+        // Twilio Content Templates expect contentVariables as a JSON string
+        // Format: {"1": "value1", "2": "value2", ...}
+        const contentVariables: Record<string, string> = {}
+        message.templateVariables.forEach((value, index) => {
+          // Twilio uses "1", "2", "3" etc. as keys for template variables
+          contentVariables[String(index + 1)] = value || ''
+        })
+        messagePayload.contentVariables = JSON.stringify(contentVariables)
+        console.log('[WhatsApp] Template variables:', JSON.stringify(contentVariables, null, 2))
+      } else {
+        console.warn('[WhatsApp] ⚠️ No template variables provided. Template may not render correctly.')
+        console.warn('[WhatsApp] ⚠️ Make sure your template doesn\'t require variables, or provide templateVariables.')
+      }
+    } else {
+      // Use freeform message (works only within 24h window after user messages you)
+      console.log('[WhatsApp] Using freeform message (24h window only)')
+      console.warn('[WhatsApp] ⚠️ Freeform messages only work within 24h of user messaging you.')
+      console.warn('[WhatsApp] ⚠️ For production, set TWILIO_WHATSAPP_TEMPLATE_SID and TWILIO_USE_TEMPLATE=true')
+      messagePayload.body = message.message
+    }
+
+    const result = await client.messages.create(messagePayload)
+
+    console.log('[WhatsApp] Twilio response:', {
+      messageId: result.sid,
+      status: result.status,
+      to: result.to,
+      from: result.from,
+      errorCode: result.errorCode,
+      errorMessage: result.errorMessage,
     })
+
+    // Check if message was queued/sent (but not necessarily delivered)
+    if (result.status === 'queued' || result.status === 'sent' || result.status === 'sending') {
+      console.log(`[WhatsApp] Message ${result.status}. Check Twilio console for delivery status.`)
+    } else if (result.status === 'failed' || result.status === 'undelivered') {
+      console.error(`[WhatsApp] Message ${result.status}. Error: ${result.errorMessage || 'Unknown error'}`)
+    }
 
     return {
       success: true,
       messageId: result.sid,
     }
   } catch (error: any) {
-    console.error('Twilio WhatsApp error:', error)
+    console.error('[WhatsApp] Twilio WhatsApp error:', error)
+    
+    // Check if it's the template/freeform window error
+    if (error.message && error.message.includes('outside the allowed window')) {
+      console.error('[WhatsApp] ❌ Freeform message failed: Outside 24h window')
+      console.error('[WhatsApp] 💡 Solution: Set up a WhatsApp Message Template in Twilio and configure:')
+      console.error('[WhatsApp]   1. Create a template in Twilio Console → Messaging → Content Templates')
+      console.error('[WhatsApp]   2. Get the Template SID (starts with HX...)')
+      console.error('[WhatsApp]   3. Set TWILIO_WHATSAPP_TEMPLATE_SID="your-template-sid"')
+      console.error('[WhatsApp]   4. Set TWILIO_USE_TEMPLATE="true"')
+      return {
+        success: false,
+        error: 'Freeform messages only work within 24h window. Please set up a WhatsApp Message Template. See logs for instructions.',
+      }
+    }
+    
     return {
       success: false,
       error: error.message || 'Failed to send WhatsApp message via Twilio',
@@ -106,7 +185,12 @@ async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse
 async function sendViaWebhook(message: WhatsAppMessage): Promise<WhatsAppResponse> {
   const webhookUrl = process.env.WHATSAPP_WEBHOOK_URL
 
+  console.log('[WhatsApp] Webhook configuration check:', {
+    webhookUrl: webhookUrl ? 'SET' : 'MISSING',
+  })
+
   if (!webhookUrl) {
+    console.error('[WhatsApp] ❌ WhatsApp webhook URL not configured. Set WHATSAPP_WEBHOOK_URL environment variable.')
     return {
       success: false,
       error: 'WhatsApp webhook URL not configured. Please set WHATSAPP_WEBHOOK_URL environment variable.',
@@ -151,25 +235,31 @@ async function sendViaWebhook(message: WhatsAppMessage): Promise<WhatsAppRespons
  * Send WhatsApp notification
  * 
  * @param to - Phone number of the recipient (will be normalized)
- * @param message - Message text to send
+ * @param message - Message text to send (for freeform messages)
+ * @param templateVariables - Optional array of template variables (for template-based messages)
  * @returns Promise with success status and optional message ID or error
  */
 export async function sendWhatsAppNotification(
   to: string,
-  message: string
+  message: string,
+  templateVariables?: string[]
 ): Promise<WhatsAppResponse> {
   // Check if WhatsApp notifications are enabled
   const provider = process.env.WHATSAPP_PROVIDER || 'none'
 
+  console.log(`[WhatsApp] Provider configured: ${provider}`)
+
   if (provider === 'none') {
-    console.log('WhatsApp notifications disabled (WHATSAPP_PROVIDER=none)')
+    console.warn('[WhatsApp] ⚠️ Notifications disabled. Set WHATSAPP_PROVIDER environment variable to enable.')
+    console.warn('[WhatsApp] Options: "twilio" (requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM) or "webhook" (requires WHATSAPP_WEBHOOK_URL)')
     return {
       success: false,
-      error: 'WhatsApp notifications are disabled',
+      error: 'WhatsApp notifications are disabled. Set WHATSAPP_PROVIDER environment variable.',
     }
   }
 
   if (!to || !message) {
+    console.error('[WhatsApp] ❌ Missing required parameters:', { to: to ? 'SET' : 'MISSING', message: message ? 'SET' : 'MISSING' })
     return {
       success: false,
       error: 'Recipient phone number and message are required',
@@ -179,6 +269,7 @@ export async function sendWhatsAppNotification(
   const whatsappMessage: WhatsAppMessage = {
     to,
     message,
+    templateVariables,
   }
 
   switch (provider) {
@@ -196,6 +287,7 @@ export async function sendWhatsAppNotification(
 
 /**
  * Format task assignment message for WhatsApp
+ * Returns both formatted message string and template variables
  */
 export function formatTaskAssignmentMessage(
   taskTitle: string,
@@ -236,5 +328,117 @@ export function formatTaskAssignmentMessage(
   message += `\nPlease check your dashboard for more details.`
 
   return message
+}
+
+/**
+ * Get template variables for WhatsApp template
+ * Returns variables in the order: [taskTitle, assignedByName, priority, dueDate, clientName]
+ */
+export function getTaskAssignmentTemplateVariables(
+  taskTitle: string,
+  assignedByName: string,
+  priority?: string,
+  dueDate?: Date,
+  clientName?: string
+): string[] {
+  // Format priority with emoji
+  let priorityText = ''
+  if (priority) {
+    const priorityEmoji = {
+      Low: '🟢',
+      Medium: '🟡',
+      High: '🟠',
+      Urgent: '🔴',
+    }[priority] || '📌'
+    priorityText = `${priorityEmoji} ${priority}`
+  }
+
+  // Format due date
+  let dueDateText = ''
+  if (dueDate) {
+    dueDateText = new Date(dueDate).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  // Return variables in order: taskTitle, assignedByName, priority, dueDate, clientName
+  return [
+    taskTitle,
+    assignedByName,
+    priorityText || 'Not set',
+    dueDateText || 'Not set',
+    clientName || 'Not assigned',
+  ]
+}
+
+/**
+ * Format attendance notification message for WhatsApp
+ */
+export function formatAttendanceNotificationMessage(
+  employeeName: string,
+  action: 'clock-in' | 'clock-out',
+  time: Date,
+  mode?: string
+): string {
+  const actionEmoji = action === 'clock-in' ? '✅' : '🔴'
+  const actionText = action === 'clock-in' ? 'Clock In' : 'Clock Out'
+  
+  const formattedTime = time.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+
+  let message = `${actionEmoji} *Employee ${actionText}*\n\n`
+  message += `*Employee:* ${employeeName}\n`
+  message += `*Time:* ${formattedTime}\n`
+  
+  if (mode) {
+    const modeDisplay = mode === 'OFFICE' ? 'Office' : mode === 'WFH' ? 'Work From Home' : mode === 'LEAVE' ? 'Leave' : mode
+    message += `*Mode:* ${modeDisplay}\n`
+  }
+
+  return message
+}
+
+/**
+ * Get template variables for attendance notification template
+ * Returns variables in the order: [employeeName, action, time, mode]
+ */
+export function getAttendanceNotificationTemplateVariables(
+  employeeName: string,
+  action: 'clock-in' | 'clock-out',
+  time: Date,
+  mode?: string
+): string[] {
+  const actionText = action === 'clock-in' ? 'Clock In' : 'Clock Out'
+  
+  const formattedTime = time.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+
+  const modeDisplay = mode 
+    ? (mode === 'OFFICE' ? 'Office' : mode === 'WFH' ? 'Work From Home' : mode === 'LEAVE' ? 'Leave' : mode)
+    : 'Not specified'
+
+  // Return variables in order: employeeName, action, time, mode
+  return [
+    employeeName,
+    actionText,
+    formattedTime,
+    modeDisplay,
+  ]
 }
 

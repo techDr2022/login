@@ -300,6 +300,7 @@ export function AddEmployeeDialog({
                 Role <span className="text-destructive">*</span>
               </Label>
               <Select
+                id="role"
                 value={formData.role}
                 onValueChange={(value) => setFormData({ ...formData, role: value as UserRole })}
                 required
@@ -314,7 +315,7 @@ export function AddEmployeeDialog({
               </Select>
             </div>
             <div>
-              <Label htmlFor="joiningDate">Joining Date</Label>
+              <Label>Joining Date</Label>
               <DatePicker
                 date={formData.joiningDate ? new Date(formData.joiningDate) : null}
                 onSelect={(date) =>

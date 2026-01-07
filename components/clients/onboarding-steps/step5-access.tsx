@@ -134,6 +134,7 @@ export function Step5Access({ clientId, data, onComplete, loading }: Step5Access
           <div>
             <Label htmlFor="accessType">Type</Label>
             <Select
+              id="accessType"
               value={formData.type}
               onValueChange={(value: any) => {
                 setFormData({ ...formData, type: value })

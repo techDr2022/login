@@ -8,7 +8,7 @@ import { createTaskSchema, updateTaskSchema, updateTaskStatusSchema } from '@/li
 import { logActivity } from '@/lib/activity-log'
 import { canManageTasks, canApproveTasks } from '@/lib/rbac'
 import { UserRole, TaskStatus } from '@prisma/client'
-import { sendWhatsAppNotification, formatTaskAssignmentMessage } from '@/lib/whatsapp'
+import { sendWhatsAppNotification, formatTaskAssignmentMessage, getTaskAssignmentTemplateVariables } from '@/lib/whatsapp'
 
 export async function createTask(data: {
   title: string
@@ -149,8 +149,16 @@ export async function createTask(data: {
   if (task.assignedToId && task.User_Task_assignedToIdToUser) {
     const assignedToUser = task.User_Task_assignedToIdToUser
     
+    console.log(`[WhatsApp] Task assigned to user: ${assignedToUser.name} (${assignedToUser.id})`)
+    console.log(`[WhatsApp] Phone number: ${assignedToUser.phoneNumber || 'NOT SET'}`)
+    console.log(`[WhatsApp] Notify task updates: ${assignedToUser.notifyTaskUpdates}`)
+    
     // Only send if user has phone number and notifications enabled
-    if (assignedToUser.phoneNumber && assignedToUser.notifyTaskUpdates) {
+    if (!assignedToUser.phoneNumber) {
+      console.warn(`[WhatsApp] Skipping notification: User ${assignedToUser.name} does not have a phone number`)
+    } else if (!assignedToUser.notifyTaskUpdates) {
+      console.warn(`[WhatsApp] Skipping notification: User ${assignedToUser.name} has task notifications disabled`)
+    } else {
       try {
         const message = formatTaskAssignmentMessage(
           task.title,
@@ -160,17 +168,31 @@ export async function createTask(data: {
           task.Client?.name
         )
 
-        const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message)
+        // Get template variables for template-based messages
+        const templateVariables = getTaskAssignmentTemplateVariables(
+          task.title,
+          task.User_Task_assignedByIdToUser.name,
+          task.priority,
+          task.dueDate || undefined,
+          task.Client?.name
+        )
+
+        console.log(`[WhatsApp] Attempting to send notification to ${assignedToUser.phoneNumber}`)
+        const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message, templateVariables)
         
-        if (!result.success) {
-          console.error('Failed to send WhatsApp notification:', result.error)
+        if (result.success) {
+          console.log(`[WhatsApp] ✅ Notification sent successfully. Message ID: ${result.messageId || 'N/A'}`)
+        } else {
+          console.error(`[WhatsApp] ❌ Failed to send notification: ${result.error}`)
           // Don't throw error - task creation should succeed even if notification fails
         }
       } catch (error) {
-        console.error('Error sending WhatsApp notification:', error)
+        console.error('[WhatsApp] ❌ Error sending WhatsApp notification:', error)
         // Don't throw error - task creation should succeed even if notification fails
       }
     }
+  } else {
+    console.log('[WhatsApp] Task not assigned to any user, skipping notification')
   }
 
   return task
@@ -214,14 +236,23 @@ export async function updateTask(id: string, data: {
     }
   }
 
+  const userRole = session.user.role as UserRole
+  const isEmployee = userRole === UserRole.EMPLOYEE
+
   // Check if user can approve/reject
-  if (data.status === 'Approved' || data.status === 'Rejected') {
-    if (!canApproveTasks(session.user.role as UserRole)) {
-      throw new Error('Only admins can approve/reject tasks')
+  // Employees can approve their own tasks, but cannot reject them
+  if (data.status === 'Rejected') {
+    if (!canApproveTasks(userRole)) {
+      throw new Error('Only admins can reject tasks')
     }
-    if (data.status === 'Rejected' && !data.rejectionFeedback) {
+    if (!data.rejectionFeedback) {
       throw new Error('Rejection feedback is required when rejecting a task')
     }
+  }
+
+  // Allow employees to approve their own tasks
+  if (data.status === 'Approved' && isEmployee && task.assignedToId !== session.user.id) {
+    throw new Error('You can only approve tasks assigned to you')
   }
 
   const validated = updateTaskSchema.parse(data)
@@ -277,8 +308,17 @@ export async function updateTask(id: string, data: {
   if (data.assignedToId !== undefined && data.assignedToId && data.assignedToId !== task.assignedToId) {
     const assignedToUser = updatedTask.User_Task_assignedToIdToUser
     
-    // Only send if user has phone number and notifications enabled
-    if (assignedToUser && assignedToUser.phoneNumber && assignedToUser.notifyTaskUpdates) {
+    if (assignedToUser) {
+      console.log(`[WhatsApp] Task reassigned to user: ${assignedToUser.name} (${assignedToUser.id})`)
+      console.log(`[WhatsApp] Phone number: ${assignedToUser.phoneNumber || 'NOT SET'}`)
+      console.log(`[WhatsApp] Notify task updates: ${assignedToUser.notifyTaskUpdates}`)
+      
+      // Only send if user has phone number and notifications enabled
+      if (!assignedToUser.phoneNumber) {
+        console.warn(`[WhatsApp] Skipping notification: User ${assignedToUser.name} does not have a phone number`)
+      } else if (!assignedToUser.notifyTaskUpdates) {
+        console.warn(`[WhatsApp] Skipping notification: User ${assignedToUser.name} has task notifications disabled`)
+      } else {
       try {
         const message = formatTaskAssignmentMessage(
           updatedTask.title,
@@ -288,16 +328,31 @@ export async function updateTask(id: string, data: {
           updatedTask.Client?.name
         )
 
-        const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message)
-        
-        if (!result.success) {
-          console.error('Failed to send WhatsApp notification:', result.error)
+        // Get template variables for template-based messages
+        const templateVariables = getTaskAssignmentTemplateVariables(
+          updatedTask.title,
+          updatedTask.User_Task_assignedByIdToUser.name,
+          updatedTask.priority,
+          updatedTask.dueDate || undefined,
+          updatedTask.Client?.name
+        )
+
+        console.log(`[WhatsApp] Attempting to send notification to ${assignedToUser.phoneNumber}`)
+        const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message, templateVariables)
+          
+          if (result.success) {
+            console.log(`[WhatsApp] ✅ Notification sent successfully. Message ID: ${result.messageId || 'N/A'}`)
+          } else {
+            console.error(`[WhatsApp] ❌ Failed to send notification: ${result.error}`)
+            // Don't throw error - task update should succeed even if notification fails
+          }
+        } catch (error) {
+          console.error('[WhatsApp] ❌ Error sending WhatsApp notification:', error)
           // Don't throw error - task update should succeed even if notification fails
         }
-      } catch (error) {
-        console.error('Error sending WhatsApp notification:', error)
-        // Don't throw error - task update should succeed even if notification fails
       }
+    } else {
+      console.warn('[WhatsApp] Assigned user not found, skipping notification')
     }
   }
 
@@ -326,18 +381,24 @@ export async function updateTaskStatus(id: string, data: {
   }
 
   // Check if user can approve/reject
-  if (data.status === 'Approved' || data.status === 'Rejected') {
+  // Employees can approve their own tasks, but cannot reject them
+  if (data.status === 'Rejected') {
     if (!canApproveTasks(userRole)) {
-      throw new Error('Only admins can approve/reject tasks')
+      throw new Error('Only admins can reject tasks')
     }
-    if (data.status === 'Rejected' && !data.rejectionFeedback) {
+    if (!data.rejectionFeedback) {
       throw new Error('Rejection feedback is required when rejecting a task')
     }
   }
 
-  // Employees can only set status to Pending, InProgress, or Review
-  if (isEmployee && (data.status === 'Approved' || data.status === 'Rejected')) {
-    throw new Error('Employees cannot approve or reject tasks. Please set status to Review when complete.')
+  // Employees can approve their own tasks, but cannot reject them
+  if (isEmployee && data.status === 'Rejected') {
+    throw new Error('Employees cannot reject tasks')
+  }
+
+  // Allow employees to approve their own tasks
+  if (isEmployee && data.status === 'Approved' && task.assignedToId !== session.user.id) {
+    throw new Error('You can only approve tasks assigned to you')
   }
 
   const validated = updateTaskStatusSchema.parse(data)

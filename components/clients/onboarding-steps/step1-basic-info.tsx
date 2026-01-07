@@ -77,6 +77,7 @@ export function Step1BasicInfo({ clientId, data, onComplete, loading }: Step1Bas
         <div>
           <Label htmlFor="type">Type *</Label>
           <Select
+            id="type"
             value={formData.type}
             onValueChange={(value: any) => setFormData({ ...formData, type: value })}
           >
@@ -166,6 +167,7 @@ export function Step1BasicInfo({ clientId, data, onComplete, loading }: Step1Bas
         <div>
           <Label htmlFor="preferredLanguage">Preferred Language</Label>
           <Select
+            id="preferredLanguage"
             value={formData.preferredLanguage}
             onValueChange={(value: any) => setFormData({ ...formData, preferredLanguage: value })}
           >

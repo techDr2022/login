@@ -500,6 +500,7 @@ export function TasksList() {
                     <div>
                       <Label htmlFor="priority">Priority</Label>
                       <Select
+                        id="priority"
                         value={formData.priority}
                         onValueChange={(value) => setFormData({ ...formData, priority: value as any })}
                         required
@@ -518,6 +519,7 @@ export function TasksList() {
                     <div>
                       <Label htmlFor="assignedToId">Assigned To</Label>
                       <Select
+                        id="assignedToId"
                         value={formData.assignedToId || undefined}
                         onValueChange={(value) => setFormData({ ...formData, assignedToId: value === 'unassigned' ? '' : value })}
                       >
@@ -548,6 +550,7 @@ export function TasksList() {
                   <div>
                     <Label htmlFor="clientId">Client</Label>
                       <Select
+                        id="clientId"
                         value={formData.clientId || undefined}
                         onValueChange={(value) => setFormData({ ...formData, clientId: value })}
                       >
@@ -566,6 +569,7 @@ export function TasksList() {
                   <div>
                     <Label htmlFor="taskType">Task Type</Label>
                     <Select
+                      id="taskType"
                       value={formData.taskType || undefined}
                       onValueChange={(value) => setFormData({ ...formData, taskType: value === 'none' ? '' : value, dueDate: '' })}
                     >
@@ -589,7 +593,7 @@ export function TasksList() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="dueDate">Due Date {formData.taskType ? '(Auto-calculated)' : ''}</Label>
+                      <Label>Due Date {formData.taskType ? '(Auto-calculated)' : ''}</Label>
                       <DatePicker
                         date={formData.dueDate ? new Date(formData.dueDate) : null}
                         onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString().split('T')[0] : '' })}
@@ -817,6 +821,7 @@ export function TasksList() {
               <div>
                 <Label htmlFor="status">Status</Label>
                 <Select
+                  id="status"
                   value={statusFormData.status}
                   onValueChange={(value) => setStatusFormData({ ...statusFormData, status: value as any })}
                   required
