@@ -23,6 +23,16 @@ interface Task {
     id: string
     name: string
   }
+  assignedTo?: {
+    id: string
+    name: string | null
+    email?: string | null
+  } | null
+  assignedBy?: {
+    id: string
+    name: string | null
+    email?: string | null
+  } | null
 }
 
 interface AttendanceSummary {
@@ -40,11 +50,13 @@ export function EmployeeDashboard() {
   const { data: session } = useSession()
   const [tasks, setTasks] = useState<Task[]>([])
   const [pendingTasks, setPendingTasks] = useState<Task[]>([])
+  const [pendingAssignedByMeTasks, setPendingAssignedByMeTasks] = useState<Task[]>([])
   const [todaysTasks, setTodaysTasks] = useState<Task[]>([])
   const [assignedByMeTasks, setAssignedByMeTasks] = useState<Task[]>([])
   const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [completingTasks, setCompletingTasks] = useState<Set<string>>(new Set())
+  const [startingTasks, setStartingTasks] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,9 +93,16 @@ export function EmployeeDashboard() {
           monthRes.json(),
         ])
 
-        // Filter pending tasks (Pending or InProgress status)
-        const pending = (allTasksData.tasks || []).filter((task: Task) => 
-          task.status === 'Pending' || task.status === 'InProgress'
+        // Filter pending tasks assigned to me (Pending or InProgress status)
+        const pending = (allTasksData.tasks || []).filter((task: Task) =>
+          (task.status === 'Pending' || task.status === 'InProgress') &&
+          task.assignedTo?.id === userId
+        )
+
+        // Filter pending tasks assigned by me (Pending or InProgress status)
+        const pendingAssignedByMe = (assignedByMeData.tasks || []).filter((task: Task) =>
+          (task.status === 'Pending' || task.status === 'InProgress') &&
+          task.assignedBy?.id === userId
         )
 
         // Filter tasks that are due today
@@ -95,6 +114,7 @@ export function EmployeeDashboard() {
 
         setTasks(tasksData.tasks?.slice(0, 5) || [])
         setPendingTasks(pending.slice(0, 10))
+        setPendingAssignedByMeTasks(pendingAssignedByMe.slice(0, 10))
         setTodaysTasks(todayTasks.slice(0, 5))
         setAssignedByMeTasks(assignedByMeData.tasks?.slice(0, 5) || [])
 
@@ -142,6 +162,29 @@ export function EmployeeDashboard() {
       alert('Failed to mark task as complete. Please try again.')
     } finally {
       setCompletingTasks(prev => {
+        const next = new Set(prev)
+        next.delete(taskId)
+        return next
+      })
+    }
+  }
+
+  const handleStartTask = async (taskId: string) => {
+    setStartingTasks(prev => new Set(prev).add(taskId))
+    try {
+      await updateTaskStatus(taskId, { status: 'InProgress' })
+      // Update status in local task lists
+      const updateStatus = (tasks: Task[]) =>
+        tasks.map(task => (task.id === taskId ? { ...task, status: 'InProgress' } : task))
+
+      setPendingTasks(prev => updateStatus(prev))
+      setTasks(prev => updateStatus(prev))
+      setTodaysTasks(prev => updateStatus(prev))
+    } catch (error) {
+      console.error('Failed to start task:', error)
+      alert('Failed to start task. Please try again.')
+    } finally {
+      setStartingTasks(prev => {
         const next = new Set(prev)
         next.delete(taskId)
         return next
@@ -201,7 +244,7 @@ export function EmployeeDashboard() {
       </div>
 
       {/* Your Pending Tasks - Highlighted Section */}
-      {pendingTasks.length > 0 && (
+      {(pendingTasks.length > 0 || pendingAssignedByMeTasks.length > 0) && (
         <Card className="rounded-xl border-2 border-blue-500 shadow-lg bg-gradient-to-br from-blue-50 to-white">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -211,55 +254,170 @@ export function EmployeeDashboard() {
                   Your Pending Tasks
                 </CardTitle>
                 <CardDescription className="text-sm text-blue-700">
-                  {pendingTasks.length} task{pendingTasks.length !== 1 ? 's' : ''} waiting for you
+                  {pendingTasks.length} task{pendingTasks.length !== 1 ? 's' : ''} assigned to you,&nbsp;
+                  {pendingAssignedByMeTasks.length} task{pendingAssignedByMeTasks.length !== 1 ? 's' : ''} assigned by you
                 </CardDescription>
               </div>
               <CheckSquare2 className="h-6 w-6 text-blue-600" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {pendingTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="flex items-center justify-between p-4 bg-white rounded-lg border border-blue-200 hover:border-blue-300 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Link href={`/tasks/${task.id}`} className="font-semibold text-gray-900 hover:text-blue-600 hover:underline">
-                        {task.title}
-                      </Link>
-                      {getPriorityBadge(task.priority)}
-                    </div>
-                    {task.client && (
-                      <p className="text-sm text-muted-foreground mt-1">{task.client.name}</p>
-                    )}
-                    {task.dueDate && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    onClick={() => handleMarkComplete(task.id)}
-                    disabled={completingTasks.has(task.id)}
-                    className="ml-4 bg-green-600 hover:bg-green-700 text-white"
-                    size="sm"
-                  >
-                    {completingTasks.has(task.id) ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Completing...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
-                        Mark Complete
-                      </>
-                    )}
-                  </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Pending tasks assigned to me */}
+              <div className="space-y-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-blue-900">Assigned to you</p>
+                  <span className="text-xs text-blue-700">
+                    {pendingTasks.length} pending
+                  </span>
                 </div>
-              ))}
+                {pendingTasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No pending tasks assigned to you.</p>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {pendingTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="flex items-start justify-between gap-4 p-4 bg-white rounded-lg border border-blue-200 hover:border-blue-300 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <Link
+                                href={`/tasks/${task.id}`}
+                                className="font-semibold text-gray-900 hover:text-blue-600 hover:underline"
+                              >
+                                {task.title}
+                              </Link>
+                              {getPriorityBadge(task.priority)}
+                            </div>
+                            <div className="shrink-0">
+                              {getStatusBadge(task.status)}
+                            </div>
+                          </div>
+                          {task.client && (
+                            <p className="text-sm text-muted-foreground mb-1">{task.client.name}</p>
+                          )}
+                          {(task.assignedBy || task.assignedTo) && (
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {task.assignedBy && (
+                                <>Assigned by: <span className="font-medium">{task.assignedBy.name || 'Unknown'}</span></>
+                              )}
+                              {task.assignedBy && task.assignedTo && ' · '}
+                              {task.assignedTo && (
+                                <>Assigned to: <span className="font-medium">{task.assignedTo.name || 'Unknown'}</span></>
+                              )}
+                            </p>
+                          )}
+                          {task.dueDate && (
+                            <p className="text-xs text-muted-foreground mb-3">
+                              Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          {task.status === 'Pending' && (
+                            <Button
+                              onClick={() => handleStartTask(task.id)}
+                              disabled={startingTasks.has(task.id)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              {startingTasks.has(task.id) ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                                  Starting...
+                                </>
+                              ) : (
+                                <>
+                                  Start
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          <Button
+                            onClick={() => handleMarkComplete(task.id)}
+                            disabled={completingTasks.has(task.id)}
+                            className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
+                            size="sm"
+                          >
+                            {completingTasks.has(task.id) ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                Completing...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                Mark Complete
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Pending tasks assigned by me */}
+              <div className="space-y-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-blue-900">Assigned by you</p>
+                  <span className="text-xs text-blue-700">
+                    {pendingAssignedByMeTasks.length} pending
+                  </span>
+                </div>
+                {pendingAssignedByMeTasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No pending tasks assigned by you.</p>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {pendingAssignedByMeTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="flex flex-col p-4 bg-white rounded-lg border border-blue-200 hover:border-blue-300 transition-colors"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <Link
+                                href={`/tasks/${task.id}`}
+                                className="font-semibold text-gray-900 hover:text-blue-600 hover:underline"
+                              >
+                                {task.title}
+                              </Link>
+                              {getPriorityBadge(task.priority)}
+                            </div>
+                            <div className="shrink-0">
+                              {getStatusBadge(task.status)}
+                            </div>
+                          </div>
+                          {task.client && (
+                            <p className="text-sm text-muted-foreground mb-1">{task.client.name}</p>
+                          )}
+                          {(task.assignedBy || task.assignedTo) && (
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {task.assignedBy && (
+                                <>Assigned by: <span className="font-medium">{task.assignedBy.name || 'Unknown'}</span></>
+                              )}
+                              {task.assignedBy && task.assignedTo && ' · '}
+                              {task.assignedTo && (
+                                <>Assigned to: <span className="font-medium">{task.assignedTo.name || 'Unknown'}</span></>
+                              )}
+                            </p>
+                          )}
+                          {task.dueDate && (
+                            <p className="text-xs text-muted-foreground">
+                              Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
+                            </p>
+                          )}
+                        </div>
+                        {/* No action button here since these tasks are for others */}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="pt-4">
               <Link href="/tasks">

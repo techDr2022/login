@@ -442,3 +442,41 @@ export function getAttendanceNotificationTemplateVariables(
   ]
 }
 
+/**
+ * Format attendance reminder message for WhatsApp
+ * Sent to employees who haven't clocked in by 10:20 AM
+ */
+export function formatAttendanceReminderMessage(employeeName: string): string {
+  const currentTime = new Date().toLocaleString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+
+  let message = `⏰ *Attendance Reminder*\n\n`
+  message += `Hi ${employeeName},\n\n`
+  message += `You haven't clocked in yet today (${currentTime}).\n\n`
+  message += `Please clock in as soon as possible to mark your attendance.\n\n`
+  message += `Thank you!`
+
+  return message
+}
+
+/**
+ * Get template variables for attendance reminder template
+ * Returns variables in the order: [employeeName, currentTime]
+ */
+export function getAttendanceReminderTemplateVariables(employeeName: string): string[] {
+  const currentTime = new Date().toLocaleString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+
+  // Return variables in order: employeeName, currentTime
+  return [
+    employeeName,
+    currentTime,
+  ]
+}
+
