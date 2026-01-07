@@ -474,11 +474,10 @@ export function ClientsList() {
                 <div>
                   <Label htmlFor="accountManagerId">Account Manager</Label>
                   <Select
-                    id="accountManagerId"
                     value={formData.accountManagerId || undefined}
                     onValueChange={(value) => setFormData({ ...formData, accountManagerId: value || '' })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="accountManagerId">
                       <SelectValue placeholder="Select account manager" />
                     </SelectTrigger>
                     <SelectContent>

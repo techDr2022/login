@@ -300,12 +300,11 @@ export function AddEmployeeDialog({
                 Role <span className="text-destructive">*</span>
               </Label>
               <Select
-                id="role"
                 value={formData.role}
                 onValueChange={(value) => setFormData({ ...formData, role: value as UserRole })}
                 required
               >
-                <SelectTrigger className="rounded-xl">
+                <SelectTrigger id="role" className="rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

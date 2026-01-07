@@ -500,12 +500,11 @@ export function TasksList() {
                     <div>
                       <Label htmlFor="priority">Priority</Label>
                       <Select
-                        id="priority"
                         value={formData.priority}
                         onValueChange={(value) => setFormData({ ...formData, priority: value as any })}
                         required
                       >
-                        <SelectTrigger>
+                        <SelectTrigger id="priority">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -519,11 +518,10 @@ export function TasksList() {
                     <div>
                       <Label htmlFor="assignedToId">Assigned To</Label>
                       <Select
-                        id="assignedToId"
                         value={formData.assignedToId || undefined}
                         onValueChange={(value) => setFormData({ ...formData, assignedToId: value === 'unassigned' ? '' : value })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger id="assignedToId">
                           <SelectValue placeholder="Select user (optional)" />
                         </SelectTrigger>
                         <SelectContent>
@@ -550,11 +548,10 @@ export function TasksList() {
                   <div>
                     <Label htmlFor="clientId">Client</Label>
                       <Select
-                        id="clientId"
                         value={formData.clientId || undefined}
                         onValueChange={(value) => setFormData({ ...formData, clientId: value })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger id="clientId">
                           <SelectValue placeholder="Select client (optional)" />
                         </SelectTrigger>
                         <SelectContent>
@@ -569,11 +566,10 @@ export function TasksList() {
                   <div>
                     <Label htmlFor="taskType">Task Type</Label>
                     <Select
-                      id="taskType"
                       value={formData.taskType || undefined}
                       onValueChange={(value) => setFormData({ ...formData, taskType: value === 'none' ? '' : value, dueDate: '' })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="taskType">
                         <SelectValue placeholder="Select task type (optional)" />
                       </SelectTrigger>
                       <SelectContent>
@@ -821,12 +817,11 @@ export function TasksList() {
               <div>
                 <Label htmlFor="status">Status</Label>
                 <Select
-                  id="status"
                   value={statusFormData.status}
                   onValueChange={(value) => setStatusFormData({ ...statusFormData, status: value as any })}
                   required
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

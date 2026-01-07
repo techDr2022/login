@@ -77,11 +77,10 @@ export function Step1BasicInfo({ clientId, data, onComplete, loading }: Step1Bas
         <div>
           <Label htmlFor="type">Type *</Label>
           <Select
-            id="type"
             value={formData.type}
             onValueChange={(value: any) => setFormData({ ...formData, type: value })}
           >
-            <SelectTrigger>
+            <SelectTrigger id="type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -167,11 +166,10 @@ export function Step1BasicInfo({ clientId, data, onComplete, loading }: Step1Bas
         <div>
           <Label htmlFor="preferredLanguage">Preferred Language</Label>
           <Select
-            id="preferredLanguage"
             value={formData.preferredLanguage}
             onValueChange={(value: any) => setFormData({ ...formData, preferredLanguage: value })}
           >
-            <SelectTrigger>
+            <SelectTrigger id="preferredLanguage">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

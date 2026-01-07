@@ -110,11 +110,10 @@ export function Step11Confirmation({ clientId, data, onFinalize, loading }: Step
           <div>
             <Label htmlFor="accountManagerId">Account Manager</Label>
             <Select
-              id="accountManagerId"
               value={accountManagerId || undefined}
               onValueChange={(value) => setAccountManagerId(value || '')}
             >
-              <SelectTrigger>
+              <SelectTrigger id="accountManagerId">
                 <SelectValue placeholder="Select account manager (optional)" />
               </SelectTrigger>
               <SelectContent>
