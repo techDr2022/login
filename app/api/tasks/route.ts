@@ -165,6 +165,10 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
+      // Set to end of business day (6 PM) if it's a date-only value (midnight or early morning)
+      if (parsedDate.getHours() === 0 || parsedDate.getHours() < 9) {
+        parsedDate.setHours(18, 0, 0, 0) // 6:00 PM
+      }
       body.dueDate = parsedDate
     }
 

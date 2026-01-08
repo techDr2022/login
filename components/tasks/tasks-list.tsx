@@ -174,7 +174,10 @@ export function TasksList() {
 
       // Only include dueDate if taskType is not provided (backward compatibility)
       if (!formData.taskType && formData.dueDate) {
-        taskData.dueDate = new Date(formData.dueDate)
+        // Set to end of business day (6 PM) in local timezone to avoid early morning times
+        const dueDate = new Date(formData.dueDate)
+        dueDate.setHours(18, 0, 0, 0) // 6:00 PM
+        taskData.dueDate = dueDate
       }
 
       if (editingTask) {

@@ -169,13 +169,11 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
         role: UserRole.SUPER_ADMIN,
         isActive: true,
         phoneNumber: { not: null },
-        notifyClientChanges: true, // Use notifyClientChanges as proxy for attendance notifications
       },
       select: {
         id: true,
         name: true,
         phoneNumber: true,
-        notifyClientChanges: true,
       },
     })
 
@@ -199,7 +197,7 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
 
       // Send notifications to all super admins (don't wait for all to complete)
       const notificationPromises = superAdmins
-        .filter(admin => admin.phoneNumber && admin.notifyClientChanges)
+        .filter(admin => admin.phoneNumber)
         .map(admin => {
           console.log(`[WhatsApp] Sending clock-in notification to ${admin.name} (${admin.phoneNumber})`)
           return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables).then(result => {
@@ -220,7 +218,7 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
         console.error('[WhatsApp] Error sending attendance notifications:', error)
       })
     } else {
-      console.log('[WhatsApp] No super admins found with phone numbers or notifications disabled')
+      console.log('[WhatsApp] No super admins found with phone numbers')
     }
   } catch (error) {
     // Don't fail the clock-in if notification fails
@@ -404,13 +402,11 @@ export async function clockOut() {
         role: UserRole.SUPER_ADMIN,
         isActive: true,
         phoneNumber: { not: null },
-        notifyClientChanges: true, // Use notifyClientChanges as proxy for attendance notifications
       },
       select: {
         id: true,
         name: true,
         phoneNumber: true,
-        notifyClientChanges: true,
       },
     })
 
@@ -434,7 +430,7 @@ export async function clockOut() {
 
       // Send notifications to all super admins (don't wait for all to complete)
       const notificationPromises = superAdmins
-        .filter(admin => admin.phoneNumber && admin.notifyClientChanges)
+        .filter(admin => admin.phoneNumber)
         .map(admin => {
           console.log(`[WhatsApp] Sending clock-out notification to ${admin.name} (${admin.phoneNumber})`)
           return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables).then(result => {
@@ -455,7 +451,7 @@ export async function clockOut() {
         console.error('[WhatsApp] Error sending attendance notifications:', error)
       })
     } else {
-      console.log('[WhatsApp] No super admins found with phone numbers or notifications disabled')
+      console.log('[WhatsApp] No super admins found with phone numbers')
     }
   } catch (error) {
     // Don't fail the clock-out if notification fails

@@ -95,10 +95,22 @@ export async function createTask(data: {
     }
     
     // Calculate due date: startDate + durationHours
-    dueDate = new Date(startDate.getTime() + template.durationHours * 60 * 60 * 1000)
+    // Ensure the result is at end of business day (6 PM) if it's a full day calculation
+    const calculatedDate = new Date(startDate.getTime() + template.durationHours * 60 * 60 * 1000)
+    // If duration results in a date (not just hours), set to end of business day
+    if (template.durationHours >= 24 || calculatedDate.getDate() !== startDate.getDate()) {
+      calculatedDate.setHours(18, 0, 0, 0) // 6:00 PM
+    }
+    dueDate = calculatedDate
   } else if (validated.dueDate) {
     // If no taskType but dueDate provided, use it (backward compatibility)
-    dueDate = validated.dueDate
+    // Ensure it's set to end of business day if it's a date-only value
+    const providedDate = new Date(validated.dueDate)
+    // Check if time is midnight or early morning (likely a date-only selection)
+    if (providedDate.getHours() === 0 || providedDate.getHours() < 9) {
+      providedDate.setHours(18, 0, 0, 0) // 6:00 PM
+    }
+    dueDate = providedDate
   }
   
   // Convert empty string to undefined for optional fields
@@ -276,7 +288,12 @@ export async function updateTask(id: string, data: {
       
       // Use existing startDate or current time
       const startDate = task.startDate || new Date()
-      const dueDate = new Date(startDate.getTime() + template.durationHours * 60 * 60 * 1000)
+      const calculatedDate = new Date(startDate.getTime() + template.durationHours * 60 * 60 * 1000)
+      // If duration results in a date (not just hours), set to end of business day
+      if (template.durationHours >= 24 || calculatedDate.getDate() !== startDate.getDate()) {
+        calculatedDate.setHours(18, 0, 0, 0) // 6:00 PM
+      }
+      const dueDate = calculatedDate
       
       updateData.startDate = startDate
       updateData.dueDate = dueDate
