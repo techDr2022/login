@@ -45,8 +45,15 @@ export function initChatSound() {
     chatSoundEnabled = chatSaved === 'true'
   }
   
+  // Task sounds default to enabled (true) if not set
   const taskSaved = localStorage.getItem('taskSoundEnabled')
-  taskSoundEnabled = taskSaved === 'true' // Default to false for tasks (disabled by default)
+  if (taskSaved === null) {
+    // First time - enable by default for tasks and save to localStorage
+    taskSoundEnabled = true
+    localStorage.setItem('taskSoundEnabled', 'true')
+  } else {
+    taskSoundEnabled = taskSaved === 'true'
+  }
 
   // Listen for first user interaction
   const enableSound = () => {
@@ -208,8 +215,14 @@ export function setTaskSoundEnabled(enabled: boolean) {
 }
 
 export function getTaskSoundEnabled(): boolean {
+  if (typeof window === 'undefined') return true // Default to enabled on server
   const saved = localStorage.getItem('taskSoundEnabled')
-  return saved === 'true' // Default to false (disabled by default)
+  // Default to enabled (true) if not set
+  if (saved === null) {
+    localStorage.setItem('taskSoundEnabled', 'true')
+    return true
+  }
+  return saved === 'true'
 }
 
 // Test function to verify sound is working (can be called from browser console)

@@ -36,27 +36,41 @@ export async function GET(request: NextRequest) {
 
       // Send initial connection message
       sendEvent({ type: 'connected', userId })
+      console.log(`[SSE] User ${userId} connected to task notifications`)
 
       // Track last known task statuses for detecting changes
       const taskStatusMap = new Map<string, string>()
       
       // Initialize task status map with user-specific filtering
-      const initialTasksWhere: any = {}
-      if (!canViewAll && userId) {
-        initialTasksWhere.OR = [
-          { assignedToId: userId },
-          { assignedById: userId },
-        ]
+      try {
+        const initialTasksWhere: any = {}
+        if (!canViewAll && userId) {
+          initialTasksWhere.OR = [
+            { assignedToId: userId },
+            { assignedById: userId },
+          ]
+        }
+        
+        const initialTasks = await prisma.task.findMany({
+          where: initialTasksWhere,
+          select: { id: true, status: true },
+          take: 100, // Track up to 100 most recent tasks
+        })
+        initialTasks.forEach((task) => {
+          taskStatusMap.set(task.id, task.status)
+        })
+        console.log(`[SSE] Initialized with ${initialTasks.length} tasks for user ${userId}`)
+      } catch (error) {
+        console.error('[SSE] Error initializing task status map:', error)
+        sendEvent({ type: 'error', message: 'Failed to initialize task status map' })
       }
-      
-      const initialTasks = await prisma.task.findMany({
-        where: initialTasksWhere,
-        select: { id: true, status: true },
-        take: 100, // Track up to 100 most recent tasks
-      })
-      initialTasks.forEach((task) => {
-        taskStatusMap.set(task.id, task.status)
-      })
+
+      // Send heartbeat every 30 seconds to keep connection alive
+      const heartbeatInterval = setInterval(() => {
+        if (!isClosed) {
+          sendEvent({ type: 'heartbeat', timestamp: new Date().toISOString() })
+        }
+      }, 30000)
 
       // Poll for new tasks every 2 seconds
       let lastCheck = new Date()
@@ -308,15 +322,26 @@ export async function GET(request: NextRequest) {
 
           lastCheck = new Date()
         } catch (error) {
-          console.error('Error in task SSE poll:', error)
+          console.error('[SSE] Error in task SSE poll:', error)
+          // Send error event to client (but don't close connection)
+          if (!isClosed) {
+            sendEvent({ 
+              type: 'error', 
+              message: 'Error polling for tasks',
+              error: error instanceof Error ? error.message : 'Unknown error'
+            })
+          }
         }
       }, 2000)
 
       // Cleanup function
       let timeout: NodeJS.Timeout | null = null
       const cleanup = () => {
+        if (isClosed) return
         isClosed = true
+        console.log(`[SSE] Cleaning up connection for user ${userId}`)
         clearInterval(pollInterval)
+        clearInterval(heartbeatInterval)
         if (timeout) {
           clearTimeout(timeout)
         }
@@ -324,6 +349,7 @@ export async function GET(request: NextRequest) {
           controller.close()
         } catch (error) {
           // Ignore errors on close
+          console.error('[SSE] Error closing controller:', error)
         }
       }
 
