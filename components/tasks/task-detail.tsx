@@ -57,6 +57,13 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
   useEffect(() => {
     if (taskId) {
       fetchTask()
+      
+      // Poll for task updates every 5 seconds for real-time updates
+      const interval = setInterval(() => {
+        fetchTask()
+      }, 5000) // Poll every 5 seconds
+
+      return () => clearInterval(interval)
     } else {
       setError('Invalid task ID')
       setLoading(false)
@@ -71,7 +78,9 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
     }
     
     try {
-      const res = await fetch(`/api/tasks/${taskId}`)
+      const res = await fetch(`/api/tasks/${taskId}?_t=${Date.now()}`, {
+        cache: 'no-store', // Ensure no caching
+      })
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Failed to fetch task' }))
         setError(errorData.error || `Failed to load task: ${res.status} ${res.statusText}`)
@@ -106,8 +115,9 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
         status: 'Pending',
         rejectionFeedback: '',
       })
+      // Immediately refresh task without waiting
+      await fetchTask()
       router.refresh()
-      fetchTask()
     } catch (err: any) {
       setError(err.message || 'Failed to update task status')
     } finally {
@@ -122,8 +132,9 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
       await updateTaskStatus(taskId, {
         status: newStatus,
       })
+      // Immediately refresh task without waiting
+      await fetchTask()
       router.refresh()
-      fetchTask()
     } catch (err: any) {
       setError(err.message || 'Failed to update task status')
     } finally {

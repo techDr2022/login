@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic'
-export const revalidate = 30 // Revalidate every 30 seconds for better caching
+export const revalidate = 0 // No caching - always fetch fresh data for real-time updates
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'

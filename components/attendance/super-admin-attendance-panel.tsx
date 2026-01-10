@@ -88,6 +88,7 @@ export function SuperAdminAttendancePanel() {
     from: subMonths(new Date(), 1),
     to: new Date(),
   })
+  const [payrollSelectedEmployee, setPayrollSelectedEmployee] = useState<string>('all')
   const [exportingPayroll, setExportingPayroll] = useState(false)
   const [payrollExportError, setPayrollExportError] = useState<string | null>(null)
   const [markAllDialogOpen, setMarkAllDialogOpen] = useState(false)
@@ -289,7 +290,12 @@ export function SuperAdminAttendancePanel() {
     try {
       const startDate = formatDateLocal(payrollDateRange.from)
       const endDate = formatDateLocal(payrollDateRange.to)
-      const url = `/api/attendance/payroll-export?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+      let url = `/api/attendance/payroll-export?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+      
+      // Add employee filter if specific employee is selected
+      if (payrollSelectedEmployee !== 'all') {
+        url += `&userId=${encodeURIComponent(payrollSelectedEmployee)}`
+      }
 
       const response = await fetch(url)
       
@@ -704,6 +710,7 @@ export function SuperAdminAttendancePanel() {
         setPayrollDialogOpen(open)
         if (!open) {
           setPayrollExportError(null)
+          setPayrollSelectedEmployee('all')
         }
       }}>
         <DialogContent>
@@ -717,6 +724,27 @@ export function SuperAdminAttendancePanel() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div>
+              <Label>Employee (Optional)</Label>
+              <Select value={payrollSelectedEmployee} onValueChange={setPayrollSelectedEmployee}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Employees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Employees</SelectItem>
+                  {employees.map(emp => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {payrollSelectedEmployee === 'all' 
+                  ? 'Export data for all employees' 
+                  : `Export data for: ${employees.find(e => e.id === payrollSelectedEmployee)?.name || 'Selected employee'}`}
+              </p>
+            </div>
             <div>
               <Label>Date Range (Maximum 3 months)</Label>
               <DateRangePicker

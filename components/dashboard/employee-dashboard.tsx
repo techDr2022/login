@@ -76,12 +76,13 @@ export function EmployeeDashboard() {
         const todayEnd = new Date()
         todayEnd.setHours(23, 59, 59, 999)
 
-        // Fetch all data in parallel for better performance
+        // Fetch all data in parallel for better performance with cache busting
+        const cacheBuster = Date.now()
         const [tasksRes, allTasksRes, todaysTasksRes, assignedByMeRes, attendanceRes, monthRes] = await Promise.all([
-          fetch(`/api/tasks?assignedToId=${userId}&limit=5`),
-          fetch(`/api/tasks?assignedToId=${userId}&limit=50`), // Fetch more to get all pending/in-progress
-          fetch(`/api/tasks?assignedToId=${userId}&limit=10`),
-          fetch(`/api/tasks?assignedById=${userId}&limit=5`),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=5&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=50&_t=${cacheBuster}`, { cache: 'no-store' }), // Fetch more to get all pending/in-progress
+          fetch(`/api/tasks?assignedToId=${userId}&limit=10&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedById=${userId}&limit=5&_t=${cacheBuster}`, { cache: 'no-store' }),
           fetch(`/api/attendance?userId=${userId}&startDate=${today}&endDate=${today}`),
           fetch(`/api/attendance?userId=${userId}&startDate=${firstDayOfMonth}&endDate=${lastDayOfMonth}`),
         ])
@@ -144,22 +145,61 @@ export function EmployeeDashboard() {
     }
 
     fetchData()
+    
+    // Poll for task updates every 5 seconds for real-time updates
+    const interval = setInterval(() => {
+      fetchData()
+    }, 5000) // Poll every 5 seconds
+
+    return () => clearInterval(interval)
   }, [session?.user?.id])
 
   const handleMarkComplete = async (taskId: string) => {
     setCompletingTasks(prev => new Set(prev).add(taskId))
     try {
       await updateTaskStatus(taskId, { status: 'Approved' })
+      // Refresh dashboard data to get latest updates
+      const userId = session?.user?.id
+      if (userId) {
+        const cacheBuster = Date.now()
+        const today = new Date().toISOString().split('T')[0]
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const todayEnd = new Date()
+        todayEnd.setHours(23, 59, 59, 999)
+        
+        const [tasksRes, allTasksRes, todaysTasksRes, assignedByMeRes] = await Promise.all([
+          fetch(`/api/tasks?assignedToId=${userId}&limit=5&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=50&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=10&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedById=${userId}&limit=5&_t=${cacheBuster}`, { cache: 'no-store' }),
+        ])
+        const [tasksData, allTasksData, todaysTasksData, assignedByMeData] = await Promise.all([
+          tasksRes.json(),
+          allTasksRes.json(),
+          todaysTasksRes.json(),
+          assignedByMeRes.json(),
+        ])
+        const pending = (allTasksData.tasks || []).filter((task: Task) =>
+          (task.status === 'Pending' || task.status === 'InProgress') &&
+          task.assignedTo?.id === userId
+        )
+        const pendingAssignedByMe = (assignedByMeData.tasks || []).filter((task: Task) =>
+          (task.status === 'Pending' || task.status === 'InProgress') &&
+          task.assignedBy?.id === userId
+        )
+        const todayTasks = (todaysTasksData.tasks || []).filter((task: Task) => {
+          if (!task.dueDate) return false
+          const dueDate = new Date(task.dueDate)
+          return dueDate >= todayStart && dueDate <= todayEnd
+        })
+        setTasks(tasksData.tasks?.slice(0, 5) || [])
+        setPendingTasks(pending.slice(0, 10))
+        setPendingAssignedByMeTasks(pendingAssignedByMe.slice(0, 10))
+        setTodaysTasks(todayTasks.slice(0, 5))
+        setAssignedByMeTasks(assignedByMeData.tasks?.slice(0, 5) || [])
+      }
       router.refresh()
-      // Remove the completed task from pending tasks
-      setPendingTasks(prev => prev.filter(task => task.id !== taskId))
-      // Also update in other task lists
-      setTasks(prev => prev.map(task => 
-        task.id === taskId ? { ...task, status: 'Approved' } : task
-      ))
-      setTodaysTasks(prev => prev.map(task => 
-        task.id === taskId ? { ...task, status: 'Approved' } : task
-      ))
     } catch (error) {
       console.error('Failed to mark task as complete:', error)
       alert('Failed to mark task as complete. Please try again.')
@@ -176,14 +216,40 @@ export function EmployeeDashboard() {
     setStartingTasks(prev => new Set(prev).add(taskId))
     try {
       await updateTaskStatus(taskId, { status: 'InProgress' })
+      // Refresh dashboard data to get latest updates
+      const userId = session?.user?.id
+      if (userId) {
+        const cacheBuster = Date.now()
+        const today = new Date().toISOString().split('T')[0]
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const todayEnd = new Date()
+        todayEnd.setHours(23, 59, 59, 999)
+        
+        const [tasksRes, allTasksRes, todaysTasksRes] = await Promise.all([
+          fetch(`/api/tasks?assignedToId=${userId}&limit=5&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=50&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=10&_t=${cacheBuster}`, { cache: 'no-store' }),
+        ])
+        const [tasksData, allTasksData, todaysTasksData] = await Promise.all([
+          tasksRes.json(),
+          allTasksRes.json(),
+          todaysTasksRes.json(),
+        ])
+        const pending = (allTasksData.tasks || []).filter((task: Task) =>
+          (task.status === 'Pending' || task.status === 'InProgress') &&
+          task.assignedTo?.id === userId
+        )
+        const todayTasks = (todaysTasksData.tasks || []).filter((task: Task) => {
+          if (!task.dueDate) return false
+          const dueDate = new Date(task.dueDate)
+          return dueDate >= todayStart && dueDate <= todayEnd
+        })
+        setTasks(tasksData.tasks?.slice(0, 5) || [])
+        setPendingTasks(pending.slice(0, 10))
+        setTodaysTasks(todayTasks.slice(0, 5))
+      }
       router.refresh()
-      // Update status in local task lists
-      const updateStatus = (tasks: Task[]) =>
-        tasks.map(task => (task.id === taskId ? { ...task, status: 'InProgress' } : task))
-
-      setPendingTasks(prev => updateStatus(prev))
-      setTasks(prev => updateStatus(prev))
-      setTodaysTasks(prev => updateStatus(prev))
     } catch (error) {
       console.error('Failed to start task:', error)
       alert('Failed to start task. Please try again.')

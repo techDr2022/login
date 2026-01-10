@@ -81,10 +81,11 @@ export function TopBar() {
     setNotificationDropdownOpen(open)
     if (open && session?.user?.id) {
       try {
-        // Refresh all pending and in-progress tasks
+        // Refresh all pending and in-progress tasks with cache busting
+        const cacheBuster = Date.now()
         const [pendingRes, inProgressRes] = await Promise.all([
-          fetch(`/api/tasks?assignedToId=${session.user.id}&status=Pending&limit=1000`),
-          fetch(`/api/tasks?assignedToId=${session.user.id}&status=InProgress&limit=1000`),
+          fetch(`/api/tasks?assignedToId=${session.user.id}&status=Pending&limit=1000&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedToId=${session.user.id}&status=InProgress&limit=1000&_t=${cacheBuster}`, { cache: 'no-store' }),
         ])
         
         const [pendingData, inProgressData] = await Promise.all([
@@ -125,16 +126,17 @@ export function TopBar() {
     return () => document.removeEventListener('keydown', down)
   }, [])
 
-  // Fetch initial task count and all tasks
+  // Fetch initial task count and all tasks, then poll for updates
   useEffect(() => {
     const fetchTasks = async () => {
       if (!session?.user?.id) return
       
       try {
-        // Fetch all pending and in-progress tasks assigned to user
+        // Fetch all pending and in-progress tasks assigned to user with cache busting
+        const cacheBuster = Date.now()
         const [pendingRes, inProgressRes] = await Promise.all([
-          fetch(`/api/tasks?assignedToId=${session.user.id}&status=Pending&limit=1000`),
-          fetch(`/api/tasks?assignedToId=${session.user.id}&status=InProgress&limit=1000`),
+          fetch(`/api/tasks?assignedToId=${session.user.id}&status=Pending&limit=1000&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedToId=${session.user.id}&status=InProgress&limit=1000&_t=${cacheBuster}`, { cache: 'no-store' }),
         ])
         
         const [pendingData, inProgressData] = await Promise.all([
@@ -162,6 +164,13 @@ export function TopBar() {
     }
 
     fetchTasks()
+    
+    // Poll for task updates every 5 seconds for real-time updates
+    const interval = setInterval(() => {
+      fetchTasks()
+    }, 5000) // Poll every 5 seconds
+
+    return () => clearInterval(interval)
   }, [session?.user?.id])
 
   if (!session) return null

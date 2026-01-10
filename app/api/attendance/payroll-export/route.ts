@@ -262,10 +262,18 @@ export async function GET(request: NextRequest) {
 
     const csvContent = csvRows.join('\n')
 
-    // Generate filename with date range
+    // Generate filename with date range and employee name if filtered
     const startDateStr = formatDateLocal(start)
     const endDateStr = formatDateLocal(end)
-    const filename = `payroll-export-${startDateStr}-to-${endDateStr}.csv`
+    let filename = `payroll-export-${startDateStr}-to-${endDateStr}`
+    
+    // If filtering by specific employee, add employee name to filename
+    if (userId && allEmployees.length === 1) {
+      const employeeName = allEmployees[0].name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
+      filename += `-${employeeName}`
+    }
+    
+    filename += '.csv'
 
     // Return CSV file
     return new NextResponse(csvContent, {

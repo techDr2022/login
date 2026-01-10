@@ -97,6 +97,15 @@ export function TasksList() {
     fetchTaskTemplates()
   }, [page, search, statusFilter, priorityFilter, assignedByMeFilter, employeeFilter])
 
+  // Poll for task updates every 5 seconds for real-time updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchTasks()
+    }, 5000) // Poll every 5 seconds
+
+    return () => clearInterval(interval)
+  }, [page, search, statusFilter, priorityFilter, assignedByMeFilter, employeeFilter])
+
   useEffect(() => {
     // Clear selection when tasks change (e.g., after deletion or filter change)
     setSelectedTasks(new Set())
@@ -149,8 +158,11 @@ export function TasksList() {
         ...(priorityFilter && { priority: priorityFilter }),
         ...(assignedByMeFilter && session?.user?.id && { assignedById: session.user.id }),
         ...(employeeFilter && canManage && { assignedToId: employeeFilter }),
+        _t: Date.now().toString(), // Cache busting parameter
       })
-      const res = await fetch(`/api/tasks?${params}`)
+      const res = await fetch(`/api/tasks?${params}`, {
+        cache: 'no-store', // Ensure no caching
+      })
       const data = await res.json()
       setTasks(data.tasks || [])
       setTotalPages(data.pagination?.totalPages || 1)
@@ -193,8 +205,9 @@ export function TasksList() {
       
       setDialogOpen(false)
       resetForm()
+      // Immediately refresh tasks without waiting
+      await fetchTasks()
       router.refresh()
-      fetchTasks()
     } catch (err: any) {
       setError(err.message || 'Failed to save task')
     } finally {
@@ -224,8 +237,9 @@ export function TasksList() {
         status: 'Pending',
         rejectionFeedback: '',
       })
+      // Immediately refresh tasks without waiting
+      await fetchTasks()
       router.refresh()
-      fetchTasks()
     } catch (err: any) {
       setError(err.message || 'Failed to update task status')
     } finally {
@@ -239,9 +253,10 @@ export function TasksList() {
     setIsDeleting(id)
     try {
       await deleteTask(id)
-      router.refresh()
-      fetchTasks()
+      // Immediately refresh tasks without waiting
+      await fetchTasks()
       setSelectedTasks(new Set())
+      router.refresh()
     } catch (err: any) {
       setError(err.message || 'Failed to delete task')
     } finally {
@@ -276,7 +291,8 @@ export function TasksList() {
     try {
       await deleteTasks(Array.from(selectedTasks))
       setSelectedTasks(new Set())
-      fetchTasks()
+      // Immediately refresh tasks without waiting
+      await fetchTasks()
     } catch (err: any) {
       setError(err.message || 'Failed to delete tasks')
     }
@@ -751,8 +767,9 @@ export function TasksList() {
                                   setIsQuickUpdating(task.id)
                                   try {
                                     await updateTaskStatus(task.id, { status: 'InProgress' })
+                                    // Immediately refresh tasks without waiting
+                                    await fetchTasks()
                                     router.refresh()
-                                    fetchTasks()
                                   } catch (err: any) {
                                     setError(err.message || 'Failed to update task status')
                                   } finally {
@@ -773,8 +790,9 @@ export function TasksList() {
                                   setIsQuickUpdating(task.id)
                                   try {
                                     await updateTaskStatus(task.id, { status: 'Review' })
+                                    // Immediately refresh tasks without waiting
+                                    await fetchTasks()
                                     router.refresh()
-                                    fetchTasks()
                                   } catch (err: any) {
                                     setError(err.message || 'Failed to update task status')
                                   } finally {
