@@ -84,6 +84,12 @@ export function SuperAdminAttendancePanel() {
   // Settings
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   const [payrollDialogOpen, setPayrollDialogOpen] = useState(false)
+  const [payrollDateRange, setPayrollDateRange] = useState<{ from?: Date; to?: Date }>({
+    from: subMonths(new Date(), 1),
+    to: new Date(),
+  })
+  const [exportingPayroll, setExportingPayroll] = useState(false)
+  const [payrollExportError, setPayrollExportError] = useState<string | null>(null)
   const [markAllDialogOpen, setMarkAllDialogOpen] = useState(false)
   const [markAllDate, setMarkAllDate] = useState<Date | null>(new Date())
   const [markAllMode, setMarkAllMode] = useState<AttendanceMode>(AttendanceMode.OFFICE)
@@ -260,7 +266,74 @@ export function SuperAdminAttendancePanel() {
   }
 
   const exportPayroll = () => {
+    setPayrollExportError(null)
     setPayrollDialogOpen(true)
+  }
+
+  const handlePayrollExport = async () => {
+    if (!payrollDateRange.from || !payrollDateRange.to) {
+      setPayrollExportError('Please select both start and end dates')
+      return
+    }
+
+    // Check date range doesn't exceed 3 months
+    const monthsDiff = (payrollDateRange.to.getTime() - payrollDateRange.from.getTime()) / (1000 * 60 * 60 * 24 * 30)
+    if (monthsDiff > 3) {
+      setPayrollExportError('Date range cannot exceed 3 months')
+      return
+    }
+
+    setExportingPayroll(true)
+    setPayrollExportError(null)
+
+    try {
+      const startDate = formatDateLocal(payrollDateRange.from)
+      const endDate = formatDateLocal(payrollDateRange.to)
+      const url = `/api/attendance/payroll-export?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+
+      const response = await fetch(url)
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to export payroll' }))
+        throw new Error(errorData.error || 'Failed to export payroll')
+      }
+
+      // Get the CSV content
+      const csvContent = await response.text()
+      
+      // Get filename from Content-Disposition header or generate one
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = 'payroll-export.csv'
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      }
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url_blob = URL.createObjectURL(blob)
+      link.setAttribute('href', url_blob)
+      link.setAttribute('download', filename)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url_blob)
+
+      // Close dialog after successful export
+      setTimeout(() => {
+        setPayrollDialogOpen(false)
+        setPayrollExportError(null)
+      }, 500)
+    } catch (error) {
+      console.error('Error exporting payroll:', error)
+      setPayrollExportError(error instanceof Error ? error.message : 'Failed to export payroll. Please try again.')
+    } finally {
+      setExportingPayroll(false)
+    }
   }
 
   const saveSettings = async () => {
@@ -626,8 +699,13 @@ export function SuperAdminAttendancePanel() {
         </CardContent>
       </Card>
 
-      {/* Payroll Export Coming Soon Dialog */}
-      <Dialog open={payrollDialogOpen} onOpenChange={setPayrollDialogOpen}>
+      {/* Payroll Export Dialog */}
+      <Dialog open={payrollDialogOpen} onOpenChange={(open) => {
+        setPayrollDialogOpen(open)
+        if (!open) {
+          setPayrollExportError(null)
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -635,26 +713,76 @@ export function SuperAdminAttendancePanel() {
               Payroll Export
             </DialogTitle>
             <DialogDescription>
-              Export attendance data for payroll processing
+              Export attendance data for payroll processing (CSV format)
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <div className="flex flex-col items-center justify-center space-y-4 text-center">
-              <div className="rounded-full bg-primary/10 p-4">
-                <AlertCircle className="h-8 w-8 text-primary" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Coming Soon</h3>
-                <p className="text-sm text-muted-foreground max-w-sm">
-                  The payroll export feature is currently under development. 
-                  This will allow you to export attendance data in various formats 
-                  for payroll processing.
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Date Range (Maximum 3 months)</Label>
+              <DateRangePicker
+                dateRange={payrollDateRange}
+                onSelect={(range) => {
+                  if (range?.from && range?.to) {
+                    const monthsDiff = (range.to.getTime() - range.from.getTime()) / (1000 * 60 * 60 * 24 * 30)
+                    if (monthsDiff > 3) {
+                      setPayrollExportError('Date range cannot exceed 3 months')
+                      return
+                    }
+                    setPayrollExportError(null)
+                  }
+                  setPayrollDateRange(range || {})
+                }}
+              />
+              {payrollDateRange.from && payrollDateRange.to && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Exporting from {format(new Date(payrollDateRange.from), 'MMM dd, yyyy')} to {format(new Date(payrollDateRange.to), 'MMM dd, yyyy')}
                 </p>
+              )}
+            </div>
+            {payrollExportError && (
+              <div className="p-3 rounded-md bg-red-50 text-red-800 border border-red-200 flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <p className="text-sm">{payrollExportError}</p>
               </div>
+            )}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> The export will include all attendance records for the selected date range, including:
+              </p>
+              <ul className="text-xs text-blue-700 mt-2 ml-4 list-disc space-y-1">
+                <li>Employee name, email, and job title</li>
+                <li>Date, day, status, and mode</li>
+                <li>Login/logout times and total hours</li>
+                <li>Late minutes and early sign-in/out minutes</li>
+                <li>WFH activity pings and remarks</li>
+                <li>Public holiday indicators</li>
+              </ul>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setPayrollDialogOpen(false)}>Close</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPayrollDialogOpen(false)
+                setPayrollExportError(null)
+              }}
+              disabled={exportingPayroll}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handlePayrollExport} disabled={exportingPayroll || !payrollDateRange.from || !payrollDateRange.to}>
+              {exportingPayroll ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export CSV
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

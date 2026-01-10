@@ -199,27 +199,33 @@ export async function POST(
       if (thread.user2Id) participants.push(thread.user2Id)
     }
 
-    // Update unread counts (excluding sender)
+    // Update unread counts (excluding sender) - use parallel batch operations
     const recipients = participants.filter((id) => id !== userId)
 
-    for (const recipientId of recipients) {
-      await prisma.chat_unread_counts.upsert({
-        where: {
-          threadId_userId: {
-            threadId,
-            userId: recipientId,
-          },
-        },
-        update: {
-          count: { increment: 1 },
-        },
-        create: {
-          id: randomUUID(),
-          threadId,
-          userId: recipientId,
-          count: 1,
-        },
-      })
+    if (recipients.length > 0) {
+      // Execute all upserts in parallel for maximum performance
+      // Using Promise.allSettled to ensure all operations complete even if some fail
+      await Promise.allSettled(
+        recipients.map((recipientId) =>
+          prisma.chat_unread_counts.upsert({
+            where: {
+              threadId_userId: {
+                threadId,
+                userId: recipientId,
+              },
+            },
+            update: {
+              count: { increment: 1 },
+            },
+            create: {
+              id: randomUUID(),
+              threadId,
+              userId: recipientId,
+              count: 1,
+            },
+          })
+        )
+      )
     }
 
     return NextResponse.json({ message })

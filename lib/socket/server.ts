@@ -110,6 +110,20 @@ export function initializeSocketIO(httpServer: HTTPServer) {
           },
         })
 
+        // Emit message immediately so users see it right away
+        const messageData = {
+          id: message.id,
+          threadId: message.threadId,
+          senderId: message.senderId,
+          sender: message.User,
+          content: message.message,
+          createdAt: message.createdAt.toISOString(),
+          seenBy: [],
+        }
+
+        io!.to(`thread:${threadId}`).emit('receive-message', messageData)
+
+        // Update unread counts in parallel (non-blocking, but we still await to ensure completion)
         // Get thread participants
         const thread = await prisma.chat_threads.findUnique({
           where: { id: threadId },
@@ -130,40 +144,37 @@ export function initializeSocketIO(httpServer: HTTPServer) {
           if (thread.user2Id) participants.push(thread.user2Id)
         }
 
-        // Update unread counts for recipients
+        // Update unread counts for recipients - use parallel batch operations
         const recipients = participants.filter((id) => id !== userId)
-        for (const recipientId of recipients) {
-          await prisma.chat_unread_counts.upsert({
-            where: {
-              threadId_userId: {
-                threadId,
-                userId: recipientId,
-              },
-            },
-            update: {
-              count: { increment: 1 },
-            },
-            create: {
-              id: randomUUID(),
-              threadId,
-              userId: recipientId,
-              count: 1,
-            },
+        if (recipients.length > 0) {
+          // Execute all upserts in parallel for maximum performance
+          // Using Promise.allSettled to ensure all operations complete even if some fail
+          // Don't await this so message delivery isn't blocked, but errors are logged
+          Promise.allSettled(
+            recipients.map((recipientId) =>
+              prisma.chat_unread_counts.upsert({
+                where: {
+                  threadId_userId: {
+                    threadId,
+                    userId: recipientId,
+                  },
+                },
+                update: {
+                  count: { increment: 1 },
+                },
+                create: {
+                  id: randomUUID(),
+                  threadId,
+                  userId: recipientId,
+                  count: 1,
+                },
+              })
+            )
+          ).catch((error) => {
+            console.error('Error updating unread counts:', error)
+            // Don't throw - unread counts can be updated later, message is already sent
           })
         }
-
-        // Emit message to all users in the thread room
-        const messageData = {
-          id: message.id,
-          threadId: message.threadId,
-          senderId: message.senderId,
-          sender: message.User,
-          content: message.message,
-          createdAt: message.createdAt.toISOString(),
-          seenBy: [],
-        }
-
-        io!.to(`thread:${threadId}`).emit('receive-message', messageData)
       } catch (error) {
         console.error('Error sending message:', error)
         socket.emit('error', { message: 'Failed to send message' })

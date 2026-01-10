@@ -16,7 +16,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="md:pl-[var(--sidebar-width,256px)] transition-all duration-300">
         <TopBar />
-        <main className="p-6 space-y-6">
+        <main className="p-6 space-y-6 pb-48">
           {children}
         </main>
       </div>

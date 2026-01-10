@@ -49,7 +49,7 @@ export function ChatWidget() {
     <div
       className={cn(
         'fixed bottom-24 right-6 z-50',
-        'w-[420px] h-[650px]',
+        'w-[420px]',
         'bg-white border border-gray-200 rounded-2xl shadow-2xl',
         'flex flex-col overflow-hidden',
         'backdrop-blur-sm',
@@ -57,13 +57,17 @@ export function ChatWidget() {
         'animate-in slide-in-from-bottom-4 fade-in'
       )}
       style={{
-        maxHeight: 'calc(100vh - 120px)',
+        height: 'calc(100vh - 140px)',
+        maxHeight: 'calc(100vh - 140px)',
+        minHeight: '500px',
       }}
     >
-      <ChatHeader />
+      <div className="flex-shrink-0">
+        <ChatHeader />
+      </div>
       {showThreadList ? (
         <>
-          <div className="flex-1 overflow-y-auto bg-gray-50/50">
+          <div className="flex-1 overflow-y-auto bg-gray-50/50 min-h-0">
             <ChatThreadList
               threads={directThreads}
               selectedThreadId={selectedThreadId}
@@ -72,7 +76,7 @@ export function ChatWidget() {
               }}
             />
           </div>
-          <div className="border-t border-gray-200 bg-white/80 backdrop-blur-sm p-4">
+          <div className="border-t border-gray-200 bg-white/80 backdrop-blur-sm p-4 flex-shrink-0">
             <div className="text-sm text-gray-500 text-center">
               Select a conversation to start messaging
             </div>
@@ -80,8 +84,12 @@ export function ChatWidget() {
         </>
       ) : (
         <>
-          <MessageList />
-          <ChatInput />
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <MessageList />
+          </div>
+          <div className="flex-shrink-0">
+            <ChatInput />
+          </div>
         </>
       )}
     </div>
