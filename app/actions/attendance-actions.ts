@@ -15,6 +15,7 @@ import {
   getAbsentThresholdTime
 } from '@/lib/attendance-config'
 import { sendWhatsAppNotification, formatAttendanceNotificationMessage, getAttendanceNotificationTemplateVariables } from '@/lib/whatsapp'
+import { revalidatePath } from 'next/cache'
 
 export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFFICE) {
   const session = await getServerSession(authOptions)
@@ -56,13 +57,131 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
     },
   })
 
-  // Only prevent clock in if user is already clocked in AND hasn't clocked out yet
-  if (existing && existing.loginTime && !existing.logoutTime) {
-    throw new Error('Already clocked in today')
-  }
-
   // Cast mode to AttendanceMode enum
   const attendanceMode = mode as AttendanceMode
+
+  // If already clocked in and not clocked out, allow mode change instead of throwing error
+  // This is useful for WFH period when employees might need to switch modes
+  if (existing && existing.loginTime && !existing.logoutTime) {
+    // If mode is the same, prevent duplicate clock in
+    if (existing.mode === attendanceMode) {
+      throw new Error('Already clocked in today with the same mode')
+    }
+    
+    // Allow mode change - update existing attendance with new mode
+    // Keep the original loginTime but update mode and related fields
+    const originalLoginTime = existing.loginTime
+    
+    // For WFH mode, initialize activity tracking
+    if (attendanceMode === AttendanceMode.WFH) {
+      await prisma.attendances.update({
+        where: { id: existing.id },
+        data: {
+          mode: attendanceMode,
+          status: AttendanceStatus.Present,
+          earlySignInMinutes: null,
+          lateSignInMinutes: null,
+          lastActivityTime: now,
+          wfhActivityPings: 1,
+        },
+      })
+      
+      await logActivity(session.user.id, 'UPDATE', 'Attendance', existing.id)
+      
+      // Revalidate paths to refresh UI
+      revalidatePath('/attendance')
+      revalidatePath('/dashboard')
+      
+      return {
+        id: existing.id,
+        userId: existing.userId,
+        date: existing.date.toISOString(),
+        loginTime: originalLoginTime.toISOString(),
+        logoutTime: null,
+        status: AttendanceStatus.Present,
+        mode: attendanceMode,
+        earlySignInMinutes: null,
+        lateSignInMinutes: null,
+        earlyLogoutMinutes: null,
+        lateLogoutMinutes: null,
+        totalHours: null,
+        lastActivityTime: now.toISOString(),
+        wfhActivityPings: 1,
+      }
+    }
+    
+    // For OFFICE or LEAVE mode changes
+    let status: AttendanceStatus = AttendanceStatus.Present
+    let earlySignInMinutes: number | null = null
+    let lateSignInMinutes: number | null = null
+    
+    if (attendanceMode === AttendanceMode.OFFICE) {
+      const expectedLoginTime = getOfficeStartTime(today)
+      const halfDayThreshold = getHalfDayThresholdTime(today)
+      const absentThreshold = getAbsentThresholdTime(today)
+      
+      if (originalLoginTime >= absentThreshold) {
+        earlySignInMinutes = 0
+        lateSignInMinutes = Math.round((originalLoginTime.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+        status = AttendanceStatus.Absent
+      } else if (originalLoginTime >= halfDayThreshold) {
+        lateSignInMinutes = Math.round((originalLoginTime.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+        status = AttendanceStatus.HalfDay
+      } else if (checkIsLate(originalLoginTime, expectedLoginTime)) {
+        lateSignInMinutes = Math.round((originalLoginTime.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+        status = AttendanceStatus.Late
+      } else {
+        const diffMinutes = Math.round((originalLoginTime.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+        if (diffMinutes < 0) {
+          earlySignInMinutes = Math.abs(diffMinutes)
+          lateSignInMinutes = 0
+        } else {
+          earlySignInMinutes = 0
+          lateSignInMinutes = 0
+        }
+        status = AttendanceStatus.Present
+      }
+    } else if (attendanceMode === AttendanceMode.LEAVE) {
+      status = AttendanceStatus.Present
+      earlySignInMinutes = null
+      lateSignInMinutes = null
+    }
+    
+    const updated = await prisma.attendances.update({
+      where: { id: existing.id },
+      data: {
+        mode: attendanceMode,
+        status,
+        earlySignInMinutes,
+        lateSignInMinutes,
+        lastActivityTime: null, // Clear WFH tracking for non-WFH modes
+        wfhActivityPings: 0, // Clear WFH pings for non-WFH modes
+      },
+    })
+    
+    await logActivity(session.user.id, 'UPDATE', 'Attendance', existing.id)
+    
+    // Revalidate paths to refresh UI
+    revalidatePath('/attendance')
+    revalidatePath('/dashboard')
+    
+    return {
+      id: updated.id,
+      userId: updated.userId,
+      date: updated.date.toISOString(),
+      loginTime: originalLoginTime.toISOString(),
+      logoutTime: updated.logoutTime?.toISOString() ?? null,
+      status: updated.status,
+      mode: updated.mode,
+      earlySignInMinutes: updated.earlySignInMinutes,
+      lateSignInMinutes: updated.lateSignInMinutes,
+      earlyLogoutMinutes: updated.earlyLogoutMinutes,
+      lateLogoutMinutes: updated.lateLogoutMinutes,
+      totalHours: updated.totalHours,
+      lastActivityTime: updated.lastActivityTime?.toISOString() ?? null,
+      wfhActivityPings: updated.wfhActivityPings,
+    }
+  }
 
   let status: AttendanceStatus = AttendanceStatus.Present
   let earlySignInMinutes: number | null = null
@@ -160,7 +279,11 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
 
   await logActivity(session.user.id, 'CREATE', 'Attendance', attendance.id)
 
-  // Notify super admins via WhatsApp
+  // Revalidate paths to refresh UI
+  revalidatePath('/attendance')
+  revalidatePath('/dashboard')
+
+  // Notify specific super admins (raviteja and abhista) via WhatsApp
   try {
     console.log(`[WhatsApp] Clock-in event: ${user.name} (${session.user.id})`)
     
@@ -169,6 +292,7 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
         role: UserRole.SUPER_ADMIN,
         isActive: true,
         phoneNumber: { not: null },
+        email: { in: ['raviteja@techdr.in', 'abhista@techdr.in'] },
       },
       select: {
         id: true,
@@ -195,7 +319,7 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
         attendanceMode
       )
 
-      // Send notifications to all super admins (don't wait for all to complete)
+      // Send notifications to specific super admins (raviteja and abhista) - don't wait for all to complete
       const notificationPromises = superAdmins
         .filter(admin => admin.phoneNumber)
         .map(admin => {
@@ -392,7 +516,11 @@ export async function clockOut() {
 
   await logActivity(session.user.id, 'UPDATE', 'Attendance', updated.id)
 
-  // Notify super admins via WhatsApp
+  // Revalidate paths to refresh UI
+  revalidatePath('/attendance')
+  revalidatePath('/dashboard')
+
+  // Notify specific super admins (raviteja and abhista) via WhatsApp
   try {
     console.log(`[WhatsApp] Clock-out event: ${user.name} (${session.user.id})`)
     console.log(`[WhatsApp] Total hours worked: ${totalHours.toFixed(2)}`)
@@ -402,6 +530,7 @@ export async function clockOut() {
         role: UserRole.SUPER_ADMIN,
         isActive: true,
         phoneNumber: { not: null },
+        email: { in: ['raviteja@techdr.in', 'abhista@techdr.in'] },
       },
       select: {
         id: true,
@@ -428,7 +557,7 @@ export async function clockOut() {
         updated.mode
       )
 
-      // Send notifications to all super admins (don't wait for all to complete)
+      // Send notifications to specific super admins (raviteja and abhista) - don't wait for all to complete
       const notificationPromises = superAdmins
         .filter(admin => admin.phoneNumber)
         .map(admin => {
@@ -519,6 +648,10 @@ export async function startLunchBreak() {
 
   await logActivity(session.user.id, 'UPDATE', 'Attendance', updated.id)
 
+  // Revalidate paths to refresh UI
+  revalidatePath('/attendance')
+  revalidatePath('/dashboard')
+
   return updated
 }
 
@@ -567,6 +700,10 @@ export async function endLunchBreak() {
   })
 
   await logActivity(session.user.id, 'UPDATE', 'Attendance', updated.id)
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/attendance')
+  revalidatePath('/dashboard')
 
   return updated
 }
@@ -715,6 +852,10 @@ export async function markAllAttendanceForDay(date: Date, mode: AttendanceMode =
       errors.push({ userId: employee.id, error: error instanceof Error ? error.message : 'Unknown error' })
     }
   }
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/attendance')
+  revalidatePath('/dashboard')
 
   return {
     success: true,

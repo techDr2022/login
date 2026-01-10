@@ -26,6 +26,7 @@ import { clockIn, clockOut } from '@/app/actions/attendance-actions'
 import { AttendanceMode } from '@prisma/client'
 import { formatDateLocal } from '@/lib/utils'
 import { useWFHActivity } from '@/lib/hooks/use-wfh-activity'
+import { useRouter } from 'next/navigation'
 
 interface AttendanceRecord {
   id: string
@@ -41,6 +42,7 @@ interface AttendanceRecord {
 
 export function EmployeeAttendancePanel() {
   const { data: session } = useSession()
+  const router = useRouter()
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null)
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,6 +53,13 @@ export function EmployeeAttendancePanel() {
   const [inactivityWarning, setInactivityWarning] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+
+  // Update selected mode when today's attendance is loaded
+  useEffect(() => {
+    if (todayAttendance?.mode) {
+      setSelectedMode(todayAttendance.mode as AttendanceMode)
+    }
+  }, [todayAttendance?.mode])
 
   // Enable WFH activity tracking when in WFH mode and clocked in
   const isWFHActive = todayAttendance?.mode === AttendanceMode.WFH && 
@@ -64,17 +73,21 @@ export function EmployeeAttendancePanel() {
     },
   })
 
-  const fetchTodayAttendance = useCallback(async () => {
+  const fetchTodayAttendance = useCallback(async (forceRefresh = false) => {
     try {
       const todayDate = new Date()
       todayDate.setHours(0, 0, 0, 0)
       const today = formatDateLocal(todayDate)
-      const res = await fetch(`/api/attendance?userId=${session?.user?.id}&startDate=${today}&endDate=${today}`)
+      // Add cache-busting parameter to force fresh data
+      const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : ''
+      const res = await fetch(`/api/attendance?userId=${session?.user?.id}&startDate=${today}&endDate=${today}${cacheBuster}`, {
+        cache: forceRefresh ? 'no-store' : 'default',
+      })
       const data = await res.json()
       
       if (data.attendances && data.attendances.length > 0) {
         const att = data.attendances[0]
-        setTodayAttendance({
+        const updatedAttendance: AttendanceRecord = {
           id: att.id,
           date: att.date,
           loginTime: att.loginTime,
@@ -84,12 +97,20 @@ export function EmployeeAttendancePanel() {
           totalHours: att.totalHours,
           lateSignInMinutes: att.lateSignInMinutes,
           earlyLogoutMinutes: att.earlyLogoutMinutes,
-        })
+        }
+        setTodayAttendance(updatedAttendance)
+        // Update selected mode to match current attendance
+        if (att.mode) {
+          setSelectedMode(att.mode as AttendanceMode)
+        }
+        return updatedAttendance
       } else {
         setTodayAttendance(null)
+        return null
       }
     } catch (err) {
       console.error('Failed to fetch today attendance:', err)
+      return null
     }
   }, [session?.user?.id])
 
@@ -170,11 +191,58 @@ export function EmployeeAttendancePanel() {
   const handleClockIn = async () => {
     try {
       setClockingIn(true)
-      await clockIn(selectedMode)
-      await fetchTodayAttendance()
+      const result = await clockIn(selectedMode)
+      
+      // Immediately update state from the result if available
+      // This ensures UI updates immediately without waiting for server fetch
+      if (result && result.loginTime) {
+        // Parse date correctly - handle both ISO string and date string
+        const dateStr = result.date.includes('T') 
+          ? result.date.split('T')[0] 
+          : result.date
+        
+        const updatedAttendance: AttendanceRecord = {
+          id: result.id,
+          date: dateStr,
+          loginTime: result.loginTime,
+          logoutTime: result.logoutTime,
+          status: result.status as string,
+          mode: result.mode as string,
+          totalHours: result.totalHours,
+          lateSignInMinutes: result.lateSignInMinutes || null,
+          earlyLogoutMinutes: result.earlyLogoutMinutes || null,
+        }
+        
+        // Update state immediately - this should trigger re-render
+        // Use React's batch update to ensure state updates together
+        setTodayAttendance(updatedAttendance)
+        if (result.mode) {
+          setSelectedMode(result.mode as AttendanceMode)
+        }
+        
+        console.log('Clock in successful, updated attendance:', updatedAttendance)
+        console.log('canClockIn will be:', !updatedAttendance || !updatedAttendance.loginTime)
+        console.log('canClockOut will be:', !!(updatedAttendance?.loginTime && !updatedAttendance?.logoutTime))
+      }
+      
+      // Force refresh attendance data after clock in to ensure we have latest data
+      // Use a small delay to ensure database is fully updated
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Force refresh with cache-busting to get server state (double-check)
+      router.refresh()
+      const refreshed = await fetchTodayAttendance(true)
+      console.log('Refreshed attendance after clock in:', refreshed)
+      
+      // Refresh history as well
       await fetchAttendanceHistory()
     } catch (error: any) {
-      alert(error.message || 'Failed to clock in')
+      console.error('Clock in error:', error)
+      const errorMessage = error.message || 'Failed to clock in'
+      alert(errorMessage)
+      // Even on error, try to refresh to sync UI with server state
+      await new Promise(resolve => setTimeout(resolve, 300))
+      await fetchTodayAttendance(true)
     } finally {
       setClockingIn(false)
     }
@@ -184,12 +252,16 @@ export function EmployeeAttendancePanel() {
     try {
       setClockingOut(true)
       await clockOut()
-      await fetchTodayAttendance()
+      
+      // Force refresh attendance data after clock out
+      router.refresh()
+      await new Promise(resolve => setTimeout(resolve, 300))
+      await fetchTodayAttendance(true)
       await fetchAttendanceHistory()
     } catch (error: any) {
       alert(error.message || 'Failed to clock out')
       // Refresh data even on error to sync UI state with database
-      await fetchTodayAttendance()
+      await fetchTodayAttendance(true)
     } finally {
       setClockingOut(false)
     }
@@ -226,8 +298,10 @@ export function EmployeeAttendancePanel() {
     )
   }
 
-  const canClockIn = !todayAttendance || !todayAttendance.loginTime
-  const canClockOut = todayAttendance?.loginTime && !todayAttendance?.logoutTime
+  // Compute these values based on current state
+  // Using useMemo to ensure they update when state changes
+  const canClockIn = !todayAttendance || !todayAttendance.loginTime || !!todayAttendance.logoutTime
+  const canClockOut = !!(todayAttendance?.loginTime && !todayAttendance?.logoutTime)
 
   return (
     <div className="space-y-6">
@@ -249,6 +323,7 @@ export function EmployeeAttendancePanel() {
                   <Select 
                     value={selectedMode} 
                     onValueChange={(value) => setSelectedMode(value as AttendanceMode)}
+                    disabled={clockingIn}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -277,7 +352,7 @@ export function EmployeeAttendancePanel() {
                 </div>
                 <Button 
                   onClick={handleClockIn} 
-                  disabled={clockingIn}
+                  disabled={clockingIn || loading}
                   className="w-full"
                   size="lg"
                 >
@@ -288,16 +363,72 @@ export function EmployeeAttendancePanel() {
             )}
 
             {canClockOut && (
-              <Button 
-                onClick={handleClockOut} 
-                disabled={clockingOut}
-                variant="destructive"
-                className="w-full"
-                size="lg"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                {clockingOut ? 'Clocking Out...' : 'Clock Out'}
-              </Button>
+              <>
+                {/* Allow mode change when already clocked in */}
+                {todayAttendance?.mode && todayAttendance.mode !== selectedMode && (
+                  <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm text-blue-900 font-medium mb-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Change Attendance Mode
+                    </div>
+                    <p className="text-xs text-blue-700 mb-3">
+                      You're currently clocked in as <strong>{todayAttendance.mode}</strong>. 
+                      You can change your mode without clocking out.
+                    </p>
+                    <div>
+                      <Label>Change to Mode</Label>
+                      <Select 
+                        value={selectedMode} 
+                        onValueChange={(value) => setSelectedMode(value as AttendanceMode)}
+                        disabled={clockingIn}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={AttendanceMode.OFFICE}>
+                            <div className="flex items-center gap-2">
+                              <Home className="h-4 w-4" />
+                              Office
+                            </div>
+                          </SelectItem>
+                          <SelectItem value={AttendanceMode.WFH}>
+                            <div className="flex items-center gap-2">
+                              <Laptop className="h-4 w-4" />
+                              Work From Home
+                            </div>
+                          </SelectItem>
+                          <SelectItem value={AttendanceMode.LEAVE}>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4" />
+                              Leave
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button 
+                      onClick={handleClockIn} 
+                      disabled={clockingIn || loading}
+                      className="w-full"
+                      size="sm"
+                      variant="outline"
+                    >
+                      {clockingIn ? 'Changing Mode...' : `Switch to ${selectedMode}`}
+                    </Button>
+                  </div>
+                )}
+                <Button 
+                  onClick={handleClockOut} 
+                  disabled={clockingOut || loading}
+                  variant="destructive"
+                  className="w-full"
+                  size="lg"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {clockingOut ? 'Clocking Out...' : 'Clock Out'}
+                </Button>
+              </>
             )}
 
             {todayAttendance?.logoutTime && (

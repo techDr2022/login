@@ -71,6 +71,10 @@ export function ClientsList() {
   const selectAllCheckboxRef = useRef<HTMLButtonElement>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null)
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false)
 
   const canManage = session?.user.role && canManageClients(session.user.role as UserRole)
   const canEdit = session?.user.role && canEditClient(session.user.role as UserRole)
@@ -129,6 +133,7 @@ export function ClientsList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setIsSubmitting(true)
 
     try {
       const services = formData.services.split(',').map(s => s.trim()).filter(s => s)
@@ -149,20 +154,27 @@ export function ClientsList() {
       
       setDialogOpen(false)
       resetForm()
+      router.refresh()
       fetchClients()
     } catch (err: any) {
       setError(err.message || 'Failed to save client')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this client?')) return
 
+    setIsDeleting(id)
     try {
       await deleteClient(id)
+      router.refresh()
       fetchClients()
     } catch (err: any) {
       setError(err.message || 'Failed to delete client')
+    } finally {
+      setIsDeleting(null)
     }
   }
 
@@ -179,23 +191,31 @@ export function ClientsList() {
   }
 
   const handleStatusChange = async (clientId: string, newStatus: ClientStatus) => {
+    setIsUpdatingStatus(clientId)
     try {
       await updateClientStatus(clientId, newStatus)
+      router.refresh()
       fetchClients()
     } catch (err: any) {
       setError(err.message || 'Failed to update client status')
+    } finally {
+      setIsUpdatingStatus(null)
     }
   }
 
   const handleBulkStatusChange = async (newStatus: ClientStatus) => {
     if (selectedClients.size === 0) return
     
+    setIsBulkUpdating(true)
     try {
       await bulkUpdateClientStatus(Array.from(selectedClients), newStatus)
       setSelectedClients(new Set())
+      router.refresh()
       fetchClients()
     } catch (err: any) {
       setError(err.message || 'Failed to update client statuses')
+    } finally {
+      setIsBulkUpdating(false)
     }
   }
 
@@ -397,10 +417,11 @@ export function ClientsList() {
               {selectedClients.size} selected
             </span>
             <Select
+              disabled={isBulkUpdating}
               onValueChange={(value) => handleBulkStatusChange(value as ClientStatus)}
             >
               <SelectTrigger className="w-[140px] rounded-xl">
-                <SelectValue placeholder="Change status" />
+                <SelectValue placeholder={isBulkUpdating ? "Updating..." : "Change status"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ONBOARDING">Onboarding</SelectItem>
@@ -491,10 +512,12 @@ export function ClientsList() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button type="submit">Save</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving...' : 'Save'}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -555,6 +578,7 @@ export function ClientsList() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
+                              disabled={isDeleting === client.id || isUpdatingStatus === client.id}
                               onClick={() => handleDelete(client.id)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -569,6 +593,7 @@ export function ClientsList() {
                       {canManage ? (
                         <Select
                           value={client.status || 'ONBOARDING'}
+                          disabled={isUpdatingStatus === client.id || isDeleting === client.id || isBulkUpdating}
                           onValueChange={(value) => handleStatusChange(client.id, value as ClientStatus)}
                         >
                           <SelectTrigger className="w-full">
@@ -716,6 +741,7 @@ export function ClientsList() {
                       {canManage ? (
                         <Select
                           value={client.status || 'ONBOARDING'}
+                          disabled={isUpdatingStatus === client.id || isDeleting === client.id || isBulkUpdating}
                           onValueChange={(value) => handleStatusChange(client.id, value as ClientStatus)}
                         >
                           <SelectTrigger className="w-[120px]">
@@ -761,6 +787,7 @@ export function ClientsList() {
                             <Button
                             variant="ghost"
                             size="icon"
+                            disabled={isDeleting === client.id || isUpdatingStatus === client.id}
                             onClick={() => handleDelete(client.id)}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />

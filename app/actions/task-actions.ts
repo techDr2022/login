@@ -9,6 +9,7 @@ import { logActivity } from '@/lib/activity-log'
 import { canManageTasks, canApproveTasks } from '@/lib/rbac'
 import { UserRole, TaskStatus } from '@prisma/client'
 import { sendWhatsAppNotification, formatTaskAssignmentMessage, getTaskAssignmentTemplateVariables } from '@/lib/whatsapp'
+import { revalidatePath } from 'next/cache'
 
 export async function createTask(data: {
   title: string
@@ -156,6 +157,11 @@ export async function createTask(data: {
   })
 
   await logActivity(userId, 'CREATE', 'Task', task.id)
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/tasks')
+  revalidatePath('/dashboard')
+  revalidatePath(`/tasks/${task.id}`)
 
   // Send WhatsApp notification if task is assigned to an employee
   if (task.assignedToId && task.User_Task_assignedToIdToUser) {
@@ -321,12 +327,27 @@ export async function updateTask(id: string, data: {
 
   await logActivity(session.user.id, 'UPDATE', 'Task', updatedTask.id)
 
+  // Revalidate paths to refresh UI
+  revalidatePath('/tasks')
+  revalidatePath('/dashboard')
+  revalidatePath(`/tasks/${id}`)
+
   // Send WhatsApp notification if task assignment changed to a new employee
-  if (data.assignedToId !== undefined && data.assignedToId && data.assignedToId !== task.assignedToId) {
+  // This handles both: initial assignment (null -> employee) and reassignment (employee -> employee)
+  const assignmentChanged = 
+    data.assignedToId !== undefined && 
+    data.assignedToId !== null && 
+    data.assignedToId !== '' &&
+    data.assignedToId !== task.assignedToId
+  
+  if (assignmentChanged) {
     const assignedToUser = updatedTask.User_Task_assignedToIdToUser
     
     if (assignedToUser) {
-      console.log(`[WhatsApp] Task reassigned to user: ${assignedToUser.name} (${assignedToUser.id})`)
+      const isInitialAssignment = !task.assignedToId
+      const isReassignment = task.assignedToId && task.assignedToId !== data.assignedToId
+      
+      console.log(`[WhatsApp] Task ${isInitialAssignment ? 'assigned' : 'reassigned'} to user: ${assignedToUser.name} (${assignedToUser.id})`)
       console.log(`[WhatsApp] Phone number: ${assignedToUser.phoneNumber || 'NOT SET'}`)
       console.log(`[WhatsApp] Notify task updates: ${assignedToUser.notifyTaskUpdates}`)
       
@@ -336,27 +357,27 @@ export async function updateTask(id: string, data: {
       } else if (!assignedToUser.notifyTaskUpdates) {
         console.warn(`[WhatsApp] Skipping notification: User ${assignedToUser.name} has task notifications disabled`)
       } else {
-      try {
-        const message = formatTaskAssignmentMessage(
-          updatedTask.title,
-          updatedTask.User_Task_assignedByIdToUser.name,
-          updatedTask.priority,
-          updatedTask.dueDate || undefined,
-          updatedTask.Client?.name
-        )
+        try {
+          const message = formatTaskAssignmentMessage(
+            updatedTask.title,
+            updatedTask.User_Task_assignedByIdToUser.name,
+            updatedTask.priority,
+            updatedTask.dueDate || undefined,
+            updatedTask.Client?.name
+          )
 
-        // Get template variables for template-based messages
-        const templateVariables = getTaskAssignmentTemplateVariables(
-          updatedTask.title,
-          updatedTask.User_Task_assignedByIdToUser.name,
-          updatedTask.priority,
-          updatedTask.dueDate || undefined,
-          updatedTask.Client?.name
-        )
+          // Get template variables for template-based messages
+          const templateVariables = getTaskAssignmentTemplateVariables(
+            updatedTask.title,
+            updatedTask.User_Task_assignedByIdToUser.name,
+            updatedTask.priority,
+            updatedTask.dueDate || undefined,
+            updatedTask.Client?.name
+          )
 
-        console.log(`[WhatsApp] Attempting to send notification to ${assignedToUser.phoneNumber}`)
-        const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message, templateVariables)
-          
+          console.log(`[WhatsApp] Attempting to send notification to ${assignedToUser.phoneNumber}`)
+          const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message, templateVariables)
+            
           if (result.success) {
             console.log(`[WhatsApp] ✅ Notification sent successfully. Message ID: ${result.messageId || 'N/A'}`)
           } else {
@@ -427,6 +448,11 @@ export async function updateTaskStatus(id: string, data: {
 
   await logActivity(session.user.id, 'UPDATE', 'Task', updatedTask.id)
 
+  // Revalidate paths to refresh UI
+  revalidatePath('/tasks')
+  revalidatePath('/dashboard')
+  revalidatePath(`/tasks/${id}`)
+
   return updatedTask
 }
 
@@ -443,6 +469,10 @@ export async function deleteTask(id: string) {
   })
 
   await logActivity(session.user.id, 'DELETE', 'Task', id)
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/tasks')
+  revalidatePath('/dashboard')
 
   return { success: true }
 }
@@ -470,6 +500,10 @@ export async function deleteTasks(ids: string[]) {
 
   // Log activity for bulk delete
   await logActivity(session.user.id, 'DELETE', 'Task', `Bulk delete: ${ids.length} tasks`)
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/tasks')
+  revalidatePath('/dashboard')
 
   return { success: true, deletedCount: ids.length }
 }

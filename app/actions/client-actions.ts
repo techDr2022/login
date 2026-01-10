@@ -8,6 +8,7 @@ import { logActivity } from '@/lib/activity-log'
 import { canManageClients, canCreateClient, canEditClient } from '@/lib/rbac'
 import { UserRole } from '@prisma/client'
 import { randomUUID } from 'crypto'
+import { revalidatePath } from 'next/cache'
 
 // Helper function to generate initial tasks for a client
 export async function generateInitialTasksForClient(clientId: string, clientName: string, doctorOrHospitalName: string, assignedById: string) {
@@ -211,6 +212,11 @@ export async function createClient(data: {
     }
   }
 
+  // Revalidate paths to refresh UI
+  revalidatePath('/clients')
+  revalidatePath('/dashboard')
+  revalidatePath(`/clients/${client.id}`)
+
   return client
 }
 
@@ -237,6 +243,11 @@ export async function updateClient(id: string, data: {
 
   await logActivity(session.user.id, 'UPDATE', 'Client', client.id)
 
+  // Revalidate paths to refresh UI
+  revalidatePath('/clients')
+  revalidatePath('/dashboard')
+  revalidatePath(`/clients/${id}`)
+
   return client
 }
 
@@ -253,6 +264,10 @@ export async function deleteClient(id: string) {
   })
 
   await logActivity(session.user.id, 'DELETE', 'Client', id)
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/clients')
+  revalidatePath('/dashboard')
 
   return { success: true }
 }
@@ -271,6 +286,11 @@ export async function updateClientStatus(id: string, status: 'ONBOARDING' | 'ACT
   })
 
   await logActivity(session.user.id, 'UPDATE', 'Client', id)
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/clients')
+  revalidatePath('/dashboard')
+  revalidatePath(`/clients/${id}`)
 
   return client
 }
@@ -298,6 +318,10 @@ export async function bulkUpdateClientStatus(ids: string[], status: 'ONBOARDING'
   for (const id of ids) {
     await logActivity(session.user.id, 'UPDATE', 'Client', id)
   }
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/clients')
+  revalidatePath('/dashboard')
 
   return { success: true, count: result.count }
 }
@@ -338,6 +362,12 @@ export async function generateTasksForExistingClient(clientId: string) {
     client.doctorOrHospitalName || client.name,
     session.user.id
   )
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/clients')
+  revalidatePath('/tasks')
+  revalidatePath('/dashboard')
+  revalidatePath(`/clients/${clientId}`)
 
   return { success: true, message: 'Tasks generated successfully' }
 }
@@ -400,6 +430,11 @@ export async function generateTasksForAllEligibleClients() {
       errors.push(`${client.name}: ${error.message}`)
     }
   }
+
+  // Revalidate paths to refresh UI
+  revalidatePath('/clients')
+  revalidatePath('/tasks')
+  revalidatePath('/dashboard')
 
   return {
     success: true,

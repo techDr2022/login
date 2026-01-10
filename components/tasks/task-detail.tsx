@@ -48,6 +48,8 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
     rejectionFeedback: '',
   })
   const [error, setError] = useState('')
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [isQuickUpdating, setIsQuickUpdating] = useState(false)
 
   const canApprove = session?.user.role && canApproveTasks(session.user.role as UserRole)
   const isAssignedToMe = task && task.assignedToId === session?.user.id
@@ -91,6 +93,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
   const handleStatusSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setIsUpdating(true)
 
     try {
       await updateTaskStatus(taskId, {
@@ -103,21 +106,28 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
         status: 'Pending',
         rejectionFeedback: '',
       })
+      router.refresh()
       fetchTask()
     } catch (err: any) {
       setError(err.message || 'Failed to update task status')
+    } finally {
+      setIsUpdating(false)
     }
   }
 
   const handleQuickStatusUpdate = async (newStatus: 'Pending' | 'InProgress' | 'Review') => {
     setError('')
+    setIsQuickUpdating(true)
     try {
       await updateTaskStatus(taskId, {
         status: newStatus,
       })
+      router.refresh()
       fetchTask()
     } catch (err: any) {
       setError(err.message || 'Failed to update task status')
+    } finally {
+      setIsQuickUpdating(false)
     }
   }
 
@@ -263,19 +273,21 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                 {task.status === 'Pending' && (
                   <Button 
                     onClick={() => handleQuickStatusUpdate('InProgress')}
+                    disabled={isQuickUpdating}
                     className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
                   >
                     <PlayCircle className="w-4 h-4 mr-2" />
-                    Start Task
+                    {isQuickUpdating ? 'Updating...' : 'Start Task'}
                   </Button>
                 )}
                 {task.status === 'InProgress' && (
                   <Button 
                     onClick={() => handleQuickStatusUpdate('Review')}
+                    disabled={isQuickUpdating}
                     className="bg-green-600 hover:bg-green-700 text-white rounded-xl"
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    Mark Complete
+                    {isQuickUpdating ? 'Updating...' : 'Mark Complete'}
                   </Button>
                 )}
                 {(task.status === 'Pending' || task.status === 'InProgress') && (
@@ -541,10 +553,12 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
               )}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setStatusDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setStatusDialogOpen(false)} disabled={isUpdating}>
                 Cancel
               </Button>
-              <Button type="submit">Update</Button>
+              <Button type="submit" disabled={isUpdating}>
+                {isUpdating ? 'Updating...' : 'Update'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

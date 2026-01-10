@@ -82,6 +82,10 @@ export function TasksList() {
   })
   const [error, setError] = useState('')
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set())
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [isQuickUpdating, setIsQuickUpdating] = useState<string | null>(null)
 
   const canManage = session?.user.role && canManageTasks(session.user.role as UserRole)
 
@@ -160,6 +164,7 @@ export function TasksList() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setIsSubmitting(true)
 
     try {
       const taskData: any = {
@@ -188,17 +193,24 @@ export function TasksList() {
       
       setDialogOpen(false)
       resetForm()
+      router.refresh()
       fetchTasks()
     } catch (err: any) {
       setError(err.message || 'Failed to save task')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const handleStatusSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setIsUpdatingStatus(true)
 
-    if (!updatingStatusTask) return
+    if (!updatingStatusTask) {
+      setIsUpdatingStatus(false)
+      return
+    }
 
     try {
       await updateTaskStatus(updatingStatusTask.id, {
@@ -212,21 +224,28 @@ export function TasksList() {
         status: 'Pending',
         rejectionFeedback: '',
       })
+      router.refresh()
       fetchTasks()
     } catch (err: any) {
       setError(err.message || 'Failed to update task status')
+    } finally {
+      setIsUpdatingStatus(false)
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this task?')) return
 
+    setIsDeleting(id)
     try {
       await deleteTask(id)
+      router.refresh()
       fetchTasks()
       setSelectedTasks(new Set())
     } catch (err: any) {
       setError(err.message || 'Failed to delete task')
+    } finally {
+      setIsDeleting(null)
     }
   }
 
@@ -618,10 +637,12 @@ export function TasksList() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>
                     Cancel
                   </Button>
-                  <Button type="submit">Save</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Saving...' : 'Save'}
+                  </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -725,34 +746,44 @@ export function TasksList() {
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                disabled={isQuickUpdating === task.id}
                                 onClick={async () => {
+                                  setIsQuickUpdating(task.id)
                                   try {
                                     await updateTaskStatus(task.id, { status: 'InProgress' })
+                                    router.refresh()
                                     fetchTasks()
                                   } catch (err: any) {
                                     setError(err.message || 'Failed to update task status')
+                                  } finally {
+                                    setIsQuickUpdating(null)
                                   }
                                 }}
                                 className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
                               >
-                                Start
+                                {isQuickUpdating === task.id ? 'Updating...' : 'Start'}
                               </Button>
                             )}
                             {task.status === 'InProgress' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                disabled={isQuickUpdating === task.id}
                                 onClick={async () => {
+                                  setIsQuickUpdating(task.id)
                                   try {
                                     await updateTaskStatus(task.id, { status: 'Review' })
+                                    router.refresh()
                                     fetchTasks()
                                   } catch (err: any) {
                                     setError(err.message || 'Failed to update task status')
+                                  } finally {
+                                    setIsQuickUpdating(null)
                                   }
                                 }}
                                 className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
                               >
-                                Mark Complete
+                                {isQuickUpdating === task.id ? 'Updating...' : 'Mark Complete'}
                               </Button>
                             )}
                             <Button
@@ -784,6 +815,7 @@ export function TasksList() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              disabled={isDeleting === task.id}
                               onClick={() => handleDelete(task.id)}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -854,10 +886,12 @@ export function TasksList() {
               )}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setStatusDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setStatusDialogOpen(false)} disabled={isUpdatingStatus}>
                 Cancel
               </Button>
-              <Button type="submit">Update</Button>
+              <Button type="submit" disabled={isUpdatingStatus}>
+                {isUpdatingStatus ? 'Updating...' : 'Update'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -480,3 +480,78 @@ export function getAttendanceReminderTemplateVariables(employeeName: string): st
   ]
 }
 
+/**
+ * Format WFH inactivity warning message for WhatsApp
+ * Sent to admins when an employee becomes inactive during WFH
+ */
+export function formatWFHInactivityWarningMessage(
+  employeeName: string,
+  minutesInactive: number,
+  lastActivityTime?: Date,
+  activityScore?: number
+): string {
+  const formattedLastActivity = lastActivityTime
+    ? new Date(lastActivityTime).toLocaleString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : 'Unknown'
+
+  const hoursInactive = Math.floor(minutesInactive / 60)
+  const remainingMinutes = minutesInactive % 60
+  const inactiveDuration = hoursInactive > 0
+    ? `${hoursInactive}h ${remainingMinutes}m`
+    : `${remainingMinutes}m`
+
+  let message = `⚠️ *WFH Inactivity Alert*\n\n`
+  message += `*Employee:* ${employeeName}\n`
+  message += `*Status:* Inactive for ${inactiveDuration}\n`
+  message += `*Last Activity:* ${formattedLastActivity}\n`
+  
+  if (activityScore !== undefined) {
+    message += `*Activity Score:* ${activityScore}%\n`
+  }
+  
+  message += `\nPlease check the WFH Activity Monitor for details.`
+
+  return message
+}
+
+/**
+ * Get template variables for WFH inactivity warning template
+ * Returns variables in the order: [employeeName, inactiveDuration, lastActivityTime, activityScore]
+ */
+export function getWFHInactivityWarningTemplateVariables(
+  employeeName: string,
+  minutesInactive: number,
+  lastActivityTime?: Date,
+  activityScore?: number
+): string[] {
+  const hoursInactive = Math.floor(minutesInactive / 60)
+  const remainingMinutes = minutesInactive % 60
+  const inactiveDuration = hoursInactive > 0
+    ? `${hoursInactive} hours ${remainingMinutes} minutes`
+    : `${remainingMinutes} minutes`
+
+  const formattedLastActivity = lastActivityTime
+    ? new Date(lastActivityTime).toLocaleString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : 'Unknown'
+
+  const activityScoreText = activityScore !== undefined ? `${activityScore}%` : 'Not available'
+
+  return [
+    employeeName,
+    inactiveDuration,
+    formattedLastActivity,
+    activityScoreText,
+  ]
+}

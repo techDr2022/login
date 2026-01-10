@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -48,6 +49,7 @@ interface AttendanceSummary {
 
 export function EmployeeDashboard() {
   const { data: session } = useSession()
+  const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [pendingTasks, setPendingTasks] = useState<Task[]>([])
   const [pendingAssignedByMeTasks, setPendingAssignedByMeTasks] = useState<Task[]>([])
@@ -148,6 +150,7 @@ export function EmployeeDashboard() {
     setCompletingTasks(prev => new Set(prev).add(taskId))
     try {
       await updateTaskStatus(taskId, { status: 'Approved' })
+      router.refresh()
       // Remove the completed task from pending tasks
       setPendingTasks(prev => prev.filter(task => task.id !== taskId))
       // Also update in other task lists
@@ -173,6 +176,7 @@ export function EmployeeDashboard() {
     setStartingTasks(prev => new Set(prev).add(taskId))
     try {
       await updateTaskStatus(taskId, { status: 'InProgress' })
+      router.refresh()
       // Update status in local task lists
       const updateStatus = (tasks: Task[]) =>
         tasks.map(task => (task.id === taskId ? { ...task, status: 'InProgress' } : task))
