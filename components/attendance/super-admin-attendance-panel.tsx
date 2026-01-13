@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { DatePicker } from '@/components/ui/date-picker'
-import { markAllAttendanceForDay, updateAttendanceMode } from '@/app/actions/attendance-actions'
+import { markAllAttendanceForDay } from '@/app/actions/attendance-actions'
 import { AttendanceMode } from '@prisma/client'
 import { 
   Users, 
@@ -30,10 +30,7 @@ import {
   XCircle,
   Calendar as CalendarIcon,
   CheckSquare,
-  Activity,
-  Edit,
-  Save,
-  X
+  Activity
 } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
 import { formatDateLocal } from '@/lib/utils'
@@ -101,10 +98,6 @@ export function SuperAdminAttendancePanel() {
   const [markAllResult, setMarkAllResult] = useState<{ success: boolean; message: string } | null>(null)
   const [existingAttendanceCount, setExistingAttendanceCount] = useState<number | null>(null)
   const [checkingExisting, setCheckingExisting] = useState(false)
-  const [editingAttendanceId, setEditingAttendanceId] = useState<string | null>(null)
-  const [editingMode, setEditingMode] = useState<AttendanceMode | null>(null)
-  const [updatingMode, setUpdatingMode] = useState(false)
-  const [updateModeError, setUpdateModeError] = useState<string | null>(null)
   const [settings, setSettings] = useState({
     officeStartHour: 10,
     officeStartMinute: 0,
@@ -643,13 +636,12 @@ export function SuperAdminAttendancePanel() {
                 <TableHead>IP Address</TableHead>
                 <TableHead>Device</TableHead>
                 <TableHead>Edited</TableHead>
-                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {attendanceLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                     No attendance logs found
                   </TableCell>
                 </TableRow>
@@ -662,24 +654,7 @@ export function SuperAdminAttendancePanel() {
                     <TableCell>{formatTime(log.logoutTime)}</TableCell>
                     <TableCell>{getStatusBadge(log.status)}</TableCell>
                     <TableCell>
-                      {editingAttendanceId === log.id ? (
-                        <Select
-                          value={editingMode || log.mode}
-                          onValueChange={(value) => setEditingMode(value as AttendanceMode)}
-                          disabled={updatingMode}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={AttendanceMode.OFFICE}>Office</SelectItem>
-                            <SelectItem value={AttendanceMode.WFH}>WFH</SelectItem>
-                            <SelectItem value={AttendanceMode.LEAVE}>Leave</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Badge variant="outline">{log.mode}</Badge>
-                      )}
+                      <Badge variant="outline">{log.mode}</Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {log.ipAddress || '-'}
@@ -697,78 +672,11 @@ export function SuperAdminAttendancePanel() {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {editingAttendanceId === log.id ? (
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={async () => {
-                              if (!editingMode || editingMode === log.mode) {
-                                setEditingAttendanceId(null)
-                                setEditingMode(null)
-                                setUpdateModeError(null)
-                                return
-                              }
-                              
-                              setUpdatingMode(true)
-                              setUpdateModeError(null)
-                              
-                              try {
-                                await updateAttendanceMode(log.id, editingMode)
-                                setEditingAttendanceId(null)
-                                setEditingMode(null)
-                                // Refresh the attendance logs
-                                fetchAttendanceLogs()
-                                fetchGlobalStats()
-                              } catch (error) {
-                                setUpdateModeError(error instanceof Error ? error.message : 'Failed to update mode')
-                              } finally {
-                                setUpdatingMode(false)
-                              }
-                            }}
-                            disabled={updatingMode || !editingMode || editingMode === log.mode}
-                          >
-                            <Save className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditingAttendanceId(null)
-                              setEditingMode(null)
-                              setUpdateModeError(null)
-                            }}
-                            disabled={updatingMode}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingAttendanceId(log.id)
-                            setEditingMode(log.mode as AttendanceMode)
-                            setUpdateModeError(null)
-                          }}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
-          {updateModeError && (
-            <div className="p-3 m-4 rounded-md bg-red-50 text-red-800 border border-red-200 flex items-start gap-2">
-              <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
-              <p className="text-sm">{updateModeError}</p>
-            </div>
-          )}
           {totalPages > 1 && (
             <div className="flex items-center justify-between border-t px-4 py-3">
               <p className="text-sm text-muted-foreground">

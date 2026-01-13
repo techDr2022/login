@@ -101,6 +101,7 @@ model User {
   chat_messages                           chat_messages[]
   chat_threads_chat_threads_user1IdToUser chat_threads[]  @relation("chat_threads_user1IdToUser")
   chat_threads_chat_threads_user2IdToUser chat_threads[]  @relation("chat_threads_user2IdToUser")
+  chat_message_reads                      chat_message_reads[]
   client_assets                           client_assets[]
   client_tasks                            client_tasks[]
 
@@ -162,6 +163,7 @@ model chat_messages {
   createdAt    DateTime     @default(now())
   User         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
   chat_threads chat_threads @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  chat_message_reads chat_message_reads[]
 
   @@index([createdAt])
   @@index([senderId])
@@ -195,6 +197,20 @@ model chat_unread_counts {
 
   @@unique([threadId, userId])
   @@index([userId])
+}
+
+model chat_message_reads {
+  id        String   @id
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+  chat_messages chat_messages @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+  @@index([readAt])
 }
 
 model client_accesses {
