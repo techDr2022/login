@@ -1,0 +1,294 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { ArrowLeft, Check, ChevronRight } from 'lucide-react'
+import { createClient } from '@/app/actions/client-actions'
+import {
+  updateClientBasicInfo,
+  finalizeClientOnboarding,
+} from '@/app/actions/client-onboarding-actions'
+import { Step1BasicInfo } from './onboarding-steps/step1-basic-info'
+import { Step2Doctors } from './onboarding-steps/step2-doctors'
+import { Step3Services } from './onboarding-steps/step3-services'
+import { Step4Branding } from './onboarding-steps/step4-branding'
+import { Step5Access } from './onboarding-steps/step5-access'
+import { Step6Targeting } from './onboarding-steps/step6-targeting'
+import { Step7Competitors } from './onboarding-steps/step7-competitors'
+import { Step8Marketing } from './onboarding-steps/step8-marketing'
+import { Step9Approvals } from './onboarding-steps/step9-approvals'
+import { Step10KPIs } from './onboarding-steps/step10-kpis'
+import { Step11Confirmation } from './onboarding-steps/step11-confirmation'
+
+type StepComponent = React.ComponentType<any>
+type Step = { id: number; title: string; component: StepComponent }
+
+const STEPS: Step[] = [
+  { id: 1, title: 'Basic Info', component: Step1BasicInfo },
+  { id: 2, title: 'Doctors', component: Step2Doctors },
+  { id: 3, title: 'Services', component: Step3Services },
+  { id: 4, title: 'Branding', component: Step4Branding },
+  { id: 5, title: 'Access', component: Step5Access },
+  { id: 6, title: 'Targeting', component: Step6Targeting },
+  { id: 7, title: 'Competitors', component: Step7Competitors },
+  { id: 8, title: 'Marketing', component: Step8Marketing },
+  { id: 9, title: 'Approvals', component: Step9Approvals },
+  { id: 10, title: 'KPIs', component: Step10KPIs },
+  { id: 11, title: 'Confirmation', component: Step11Confirmation },
+]
+
+interface OnboardingData {
+  // Step 1
+  basicInfo?: {
+    name: string
+    type: 'CLINIC' | 'HOSPITAL' | 'DOCTOR'
+    primaryContactName?: string
+    phonePrimary?: string
+    phoneWhatsApp?: string
+    email?: string
+    addressLine?: string
+    area?: string
+    city?: string
+    pincode?: string
+    googleMapLink?: string
+    workingDays?: number[]
+    workingTimings?: string
+    preferredLanguage?: 'TELUGU' | 'ENGLISH' | 'BOTH'
+  }
+  // Step 2
+  doctors?: any[]
+  // Step 3
+  services?: any[]
+  usps?: any[]
+  // Step 4
+  branding?: any
+  assets?: any[]
+  // Step 5
+  accesses?: any[]
+  // Step 6
+  targeting?: any
+  // Step 7
+  competitors?: any[]
+  // Step 8
+  marketing?: any
+  // Step 9
+  approvals?: any
+  // Step 10
+  kpis?: any[]
+  // Step 11
+  startDate?: Date
+  accountManagerId?: string
+}
+
+export function ClientOnboardingWizard() {
+  const router = useRouter()
+  const [currentStep, setCurrentStep] = useState(1)
+  const [clientId, setClientId] = useState<string | null>(null)
+  const [data, setData] = useState<OnboardingData>({})
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const CurrentStepComponent = STEPS.find(s => s.id === currentStep)?.component
+
+  const handleStepComplete = async (stepData: any) => {
+    setLoading(true)
+    setError('')
+
+    try {
+      // Create client on first step if not exists
+      if (!clientId && currentStep === 1) {
+        const client = await createClient({
+          name: stepData.name,
+          doctorOrHospitalName: stepData.name, // Will be updated
+          location: stepData.addressLine || stepData.city || stepData.area || 'TBD',
+          services: ['Onboarding'], // Temporary service to satisfy validation
+          type: stepData.type,
+        })
+        setClientId(client.id)
+        await updateClientBasicInfo(client.id, stepData)
+        setData({ ...data, basicInfo: stepData })
+      } else if (clientId) {
+        // Update existing client data
+        if (currentStep === 1) {
+          await updateClientBasicInfo(clientId, stepData)
+          setData({ ...data, basicInfo: stepData })
+        } else {
+          setData({ ...data, ...stepData })
+        }
+      }
+
+      if (currentStep < STEPS.length) {
+        setCurrentStep(currentStep + 1)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to save step')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFinalize = async (startDate: Date, accountManagerId?: string) => {
+    if (!clientId) return
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await finalizeClientOnboarding(clientId, startDate, accountManagerId)
+      
+      // Generate and download PDF
+      try {
+        const response = await fetch(`/api/clients/${clientId}/pdf`)
+        if (response.ok) {
+          const blob = await response.blob()
+          const url = window.URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `client-onboarding-${data.basicInfo?.name?.replace(/[^a-z0-9]/gi, '_') || clientId}-${new Date().toISOString().split('T')[0]}.pdf`
+          document.body.appendChild(a)
+          a.click()
+          window.URL.revokeObjectURL(url)
+          document.body.removeChild(a)
+        }
+      } catch (pdfError) {
+        console.error('Failed to generate PDF:', pdfError)
+        // Don't block navigation if PDF generation fails
+      }
+      
+      router.push(`/clients/${clientId}`)
+    } catch (err: any) {
+      setError(err.message || 'Failed to finalize onboarding')
+      setLoading(false)
+    }
+  }
+
+  const calculateProgress = () => {
+    let completed = 0
+    if (data.basicInfo) completed++
+    if (data.doctors && data.doctors.length > 0) completed++
+    if (data.services && data.services.length > 0) completed++
+    if (data.branding) completed++
+    if (data.accesses && data.accesses.length > 0) completed++
+    if (data.targeting) completed++
+    if (data.competitors && data.competitors.length > 0) completed++
+    if (data.marketing) completed++
+    if (data.approvals) completed++
+    if (data.kpis && data.kpis.length > 0) completed++
+    return Math.round((completed / 10) * 100)
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" onClick={() => router.back()}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
+        <h1 className="text-3xl font-bold">Client Onboarding</h1>
+      </div>
+
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-md">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Sidebar with steps */}
+        <div className="lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Progress</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Completion</span>
+                  <span className="text-sm text-muted-foreground">{calculateProgress()}%</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all"
+                    style={{ width: `${calculateProgress()}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {STEPS.map((step) => {
+                  const isActive = step.id === currentStep
+                  const isCompleted = step.id < currentStep
+                  const hasData = step.id === 1 ? !!data.basicInfo :
+                                 step.id === 2 ? !!(data.doctors && data.doctors.length > 0) :
+                                 step.id === 3 ? !!(data.services && data.services.length > 0) :
+                                 step.id === 4 ? !!data.branding :
+                                 step.id === 5 ? !!(data.accesses && data.accesses.length > 0) :
+                                 step.id === 6 ? !!data.targeting :
+                                 step.id === 7 ? !!(data.competitors && data.competitors.length > 0) :
+                                 step.id === 8 ? !!data.marketing :
+                                 step.id === 9 ? !!data.approvals :
+                                 step.id === 10 ? !!(data.kpis && data.kpis.length > 0) :
+                                 false
+
+                  return (
+                    <button
+                      key={step.id}
+                      onClick={() => setCurrentStep(step.id)}
+                      className={`w-full text-left p-3 rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-primary text-primary-foreground'
+                          : isCompleted || hasData
+                          ? 'bg-muted hover:bg-muted/80'
+                          : 'hover:bg-muted/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isCompleted ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <span className="w-4 h-4 flex items-center justify-center text-xs font-medium">
+                            {step.id}
+                          </span>
+                        )}
+                        <span className="text-sm font-medium">{step.title}</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main form area */}
+        <div className="lg:col-span-3">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Step {currentStep}: {STEPS.find(s => s.id === currentStep)?.title}</CardTitle>
+                <Badge variant="outline">
+                  {currentStep} of {STEPS.length}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {CurrentStepComponent && (
+                <CurrentStepComponent
+                  clientId={clientId}
+                  data={data}
+                  onComplete={handleStepComplete}
+                  onFinalize={handleFinalize}
+                  loading={loading}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+

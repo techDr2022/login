@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/attendance-reminder",
+      "schedule": "50 4 * * *"
+    },
+    {
+      "path": "/api/cron/wfh-inactivity-check",
+      "schedule": "0,30 * * * *"
+    }
+  ]
+}
+
