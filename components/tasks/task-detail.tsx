@@ -301,7 +301,8 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                     {isQuickUpdating ? 'Updating...' : 'Mark Complete'}
                   </Button>
                 )}
-                {(task.status === 'Pending' || task.status === 'InProgress') && (
+                {/* Hide Update Status button for employees when task is Approved or Rejected */}
+                {task.status !== 'Approved' && task.status !== 'Rejected' && (
                   <Button 
                     variant="outline" 
                     onClick={() => {

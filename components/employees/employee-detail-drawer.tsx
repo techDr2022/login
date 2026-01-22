@@ -17,6 +17,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Edit, Trash2, TrendingUp, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
 import dynamic from 'next/dynamic'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { updateTaskStatus } from '@/app/actions/task-actions'
+import { useSession } from 'next-auth/react'
+import { canManageTasks, canApproveTasks } from '@/lib/rbac'
+import { UserRole } from '@prisma/client'
+import { useRouter } from 'next/navigation'
 
 // Lazy load recharts to reduce initial bundle size
 const RechartsChart = dynamic(
@@ -96,8 +105,21 @@ export function EmployeeDetailDrawer({
   onEdit,
   onDelete,
 }: EmployeeDetailDrawerProps) {
+  const { data: session } = useSession()
+  const router = useRouter()
   const [details, setDetails] = useState<EmployeeDetails | null>(null)
   const [loading, setLoading] = useState(false)
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false)
+  const [updatingStatusTask, setUpdatingStatusTask] = useState<any>(null)
+  const [statusFormData, setStatusFormData] = useState({
+    status: 'Pending' as 'Pending' | 'InProgress' | 'Review' | 'Approved' | 'Rejected',
+    rejectionFeedback: '',
+  })
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [error, setError] = useState('')
+
+  const canManage = session?.user.role && canManageTasks(session.user.role as UserRole)
+  const canApprove = session?.user.role && canApproveTasks(session.user.role as UserRole)
 
   useEffect(() => {
     if (employee && open) {
@@ -216,6 +238,47 @@ export function EmployeeDetailDrawer({
     } catch (error) {
       console.error('Failed to delete employee:', error)
       alert('Failed to delete employee')
+    }
+  }
+
+  const handleStatusUpdate = (task: any) => {
+    setUpdatingStatusTask(task)
+    setStatusFormData({
+      status: task.status as any,
+      rejectionFeedback: task.rejectionFeedback || '',
+    })
+    setStatusDialogOpen(true)
+  }
+
+  const handleStatusSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setIsUpdatingStatus(true)
+
+    if (!updatingStatusTask) {
+      setIsUpdatingStatus(false)
+      return
+    }
+
+    try {
+      await updateTaskStatus(updatingStatusTask.id, {
+        status: statusFormData.status,
+        rejectionFeedback: statusFormData.rejectionFeedback || undefined,
+      })
+      
+      setStatusDialogOpen(false)
+      setUpdatingStatusTask(null)
+      setStatusFormData({
+        status: 'Pending',
+        rejectionFeedback: '',
+      })
+      // Refresh employee details to show updated task status
+      await fetchEmployeeDetails()
+      router.refresh()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update task status')
+    } finally {
+      setIsUpdatingStatus(false)
     }
   }
 
@@ -356,43 +419,72 @@ export function EmployeeDetailDrawer({
                       </p>
                     ) : (
                       <div className="space-y-2">
-                        {details.recentTasks.slice(0, 10).map((task: any) => (
-                          <div
-                            key={task.id}
-                            className="flex items-center justify-between p-3 rounded-lg border"
-                          >
-                            <div className="flex-1">
-                              <p className="font-medium">{task.title}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline">{task.status}</Badge>
-                                <Badge 
-                                  variant="outline"
-                                  className={
-                                    task.priority === 'Urgent' ? 'bg-red-100 text-red-800 border-red-200' :
-                                    task.priority === 'High' ? 'bg-orange-100 text-orange-800 border-orange-200' :
-                                    task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                                    task.priority === 'Low' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-                                    ''
-                                  }
-                                >
-                                  {task.priority}
-                                </Badge>
-                                {task.Client && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {task.Client.name}
-                                  </span>
+                        {details.recentTasks.slice(0, 10).map((task: any) => {
+                          // For employees: hide update button if task is Approved or Rejected
+                          // For admins: always show update button
+                          const shouldShowUpdateButton = canManage || 
+                            (task.status !== 'Approved' && task.status !== 'Rejected')
+                          
+                          return (
+                            <div
+                              key={task.id}
+                              className="flex items-center justify-between p-3 rounded-lg border"
+                            >
+                              <div className="flex-1">
+                                <p className="font-medium">{task.title}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge 
+                                    variant="outline"
+                                    className={
+                                      task.status === 'Approved' ? 'bg-green-100 text-green-800 border-green-200' :
+                                      task.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
+                                      ''
+                                    }
+                                  >
+                                    {task.status}
+                                  </Badge>
+                                  <Badge 
+                                    variant="outline"
+                                    className={
+                                      task.priority === 'Urgent' ? 'bg-red-100 text-red-800 border-red-200' :
+                                      task.priority === 'High' ? 'bg-orange-100 text-orange-800 border-orange-200' :
+                                      task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                                      task.priority === 'Low' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                                      ''
+                                    }
+                                  >
+                                    {task.priority}
+                                  </Badge>
+                                  {task.Client && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {task.Client.name}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right flex flex-col items-end gap-1">
+                                {task.dueDate && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(task.dueDate).toLocaleDateString()}
+                                  </p>
+                                )}
+                                {shouldShowUpdateButton && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleStatusUpdate(task)
+                                    }}
+                                    className="h-7 text-xs"
+                                  >
+                                    Update Status
+                                  </Button>
                                 )}
                               </div>
                             </div>
-                            <div className="text-right">
-                              {task.dueDate && (
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(task.dueDate).toLocaleDateString()}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -474,6 +566,77 @@ export function EmployeeDetailDrawer({
             )}
           </div>
         ) : null}
+
+        {/* Status Update Dialog */}
+        <Dialog open={statusDialogOpen} onOpenChange={(open) => {
+          setStatusDialogOpen(open)
+          if (!open) {
+            setUpdatingStatusTask(null)
+            setStatusFormData({ status: 'Pending', rejectionFeedback: '' })
+            setError('')
+          }
+        }}>
+          <DialogContent>
+            <form onSubmit={handleStatusSubmit}>
+              <DialogHeader>
+                <DialogTitle>Update Task Status</DialogTitle>
+                <DialogDescription>
+                  Update the status of this task
+                </DialogDescription>
+              </DialogHeader>
+              {error && (
+                <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-md text-sm">
+                  {error}
+                </div>
+              )}
+              <div className="space-y-4 py-4">
+                <div>
+                  <Label htmlFor="status">Status</Label>
+                  <Select
+                    value={statusFormData.status}
+                    onValueChange={(value) => setStatusFormData({ ...statusFormData, status: value as any })}
+                    required
+                  >
+                    <SelectTrigger id="status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="InProgress">In Progress</SelectItem>
+                      <SelectItem value="Review">Review</SelectItem>
+                      {canApprove && (
+                        <>
+                          <SelectItem value="Approved">Approved</SelectItem>
+                          <SelectItem value="Rejected">Rejected</SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {statusFormData.status === 'Rejected' && (
+                  <div>
+                    <Label htmlFor="rejectionFeedback">Rejection Feedback *</Label>
+                    <Textarea
+                      id="rejectionFeedback"
+                      value={statusFormData.rejectionFeedback}
+                      onChange={(e) => setStatusFormData({ ...statusFormData, rejectionFeedback: e.target.value })}
+                      required
+                      placeholder="Please provide feedback for rejection..."
+                    />
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setStatusDialogOpen(false)} disabled={isUpdatingStatus}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isUpdatingStatus}>
+                  {isUpdatingStatus ? 'Updating...' : 'Update'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </SheetContent>
     </Sheet>
   )

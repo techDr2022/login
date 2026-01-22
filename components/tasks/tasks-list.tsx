@@ -804,13 +804,16 @@ export function TasksList() {
                                 {isQuickUpdating === task.id ? 'Updating...' : 'Mark Complete'}
                               </Button>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleStatusUpdate(task)}
-                            >
-                              Update Status
-                            </Button>
+                            {/* Hide Update Status button for employees when task is Approved or Rejected */}
+                            {task.status !== 'Approved' && task.status !== 'Rejected' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleStatusUpdate(task)}
+                              >
+                                Update Status
+                              </Button>
+                            )}
                           </>
                         )}
                         {/* Admin actions */}

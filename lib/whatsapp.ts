@@ -20,6 +20,7 @@ interface WhatsAppMessage {
   to: string
   message: string
   templateVariables?: string[] // Optional: For template-based messages
+  forceFreeform?: boolean // Optional: Force freeform message instead of template
 }
 
 interface WhatsAppResponse {
@@ -105,7 +106,7 @@ async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse
       to: `whatsapp:${normalizedTo}`,
     }
 
-    if (templateSid && useTemplate) {
+    if (templateSid && useTemplate && !message.forceFreeform) {
       // Use Content Template (requires pre-approved template in Twilio)
       console.log('[WhatsApp] Using Content Template:', templateSid)
       messagePayload.contentSid = templateSid
@@ -127,9 +128,13 @@ async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse
       }
     } else {
       // Use freeform message (works only within 24h window after user messages you)
-      console.log('[WhatsApp] Using freeform message (24h window only)')
-      console.warn('[WhatsApp] ⚠️ Freeform messages only work within 24h of user messaging you.')
-      console.warn('[WhatsApp] ⚠️ For production, set TWILIO_WHATSAPP_TEMPLATE_SID and TWILIO_USE_TEMPLATE=true')
+      if (message.forceFreeform) {
+        console.log('[WhatsApp] Using freeform message (forced for attendance notifications)')
+      } else {
+        console.log('[WhatsApp] Using freeform message (24h window only)')
+        console.warn('[WhatsApp] ⚠️ Freeform messages only work within 24h of user messaging you.')
+        console.warn('[WhatsApp] ⚠️ For production, set TWILIO_WHATSAPP_TEMPLATE_SID and TWILIO_USE_TEMPLATE=true')
+      }
       messagePayload.body = message.message
     }
 
@@ -237,12 +242,14 @@ async function sendViaWebhook(message: WhatsAppMessage): Promise<WhatsAppRespons
  * @param to - Phone number of the recipient (will be normalized)
  * @param message - Message text to send (for freeform messages)
  * @param templateVariables - Optional array of template variables (for template-based messages)
+ * @param forceFreeform - Optional: Force freeform message instead of using templates
  * @returns Promise with success status and optional message ID or error
  */
 export async function sendWhatsAppNotification(
   to: string,
   message: string,
-  templateVariables?: string[]
+  templateVariables?: string[],
+  forceFreeform?: boolean
 ): Promise<WhatsAppResponse> {
   // Check if WhatsApp notifications are enabled
   const provider = process.env.WHATSAPP_PROVIDER || 'none'
@@ -270,6 +277,7 @@ export async function sendWhatsAppNotification(
     to,
     message,
     templateVariables,
+    forceFreeform,
   }
 
   switch (provider) {
@@ -389,6 +397,7 @@ export function formatAttendanceNotificationMessage(
   const actionText = action === 'clock-in' ? 'Clocked In' : 'Clocked Out'
   
   const formattedTime = time.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -428,6 +437,7 @@ export function getAttendanceNotificationTemplateVariables(
   const actionText = action === 'clock-in' ? 'Clocked In' : 'Clocked Out'
   
   const formattedTime = time.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -460,6 +470,7 @@ export function getAttendanceNotificationTemplateVariables(
  */
 export function formatAttendanceReminderMessage(employeeName: string): string {
   const currentTime = new Date().toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
@@ -480,6 +491,7 @@ export function formatAttendanceReminderMessage(employeeName: string): string {
  */
 export function getAttendanceReminderTemplateVariables(employeeName: string): string[] {
   const currentTime = new Date().toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
@@ -504,6 +516,7 @@ export function formatWFHInactivityWarningMessage(
 ): string {
   const formattedLastActivity = lastActivityTime
     ? new Date(lastActivityTime).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
         day: 'numeric',
         month: 'short',
         hour: '2-digit',
@@ -550,6 +563,7 @@ export function getWFHInactivityWarningTemplateVariables(
 
   const formattedLastActivity = lastActivityTime
     ? new Date(lastActivityTime).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
         day: 'numeric',
         month: 'short',
         hour: '2-digit',

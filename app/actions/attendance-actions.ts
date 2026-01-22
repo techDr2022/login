@@ -324,7 +324,7 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
         .filter(admin => admin.phoneNumber)
         .map(admin => {
           console.log(`[WhatsApp] Sending clock-in notification to ${admin.name} (${admin.phoneNumber})`)
-          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables).then(result => {
+          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables, true).then(result => {
             if (result.success) {
               console.log(`[WhatsApp] ✅ Clock-in notification sent to ${admin.name}. Message ID: ${result.messageId || 'N/A'}`)
             } else {
@@ -564,7 +564,7 @@ export async function clockOut() {
         .filter(admin => admin.phoneNumber)
         .map(admin => {
           console.log(`[WhatsApp] Sending clock-out notification to ${admin.name} (${admin.phoneNumber})`)
-          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables).then(result => {
+          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables, true).then(result => {
             if (result.success) {
               console.log(`[WhatsApp] ✅ Clock-out notification sent to ${admin.name}. Message ID: ${result.messageId || 'N/A'}`)
             } else {

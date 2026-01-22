@@ -34,13 +34,37 @@ export async function GET(request: NextRequest) {
     const andConditions: any[] = []
     
     // For non-admin users, only show tasks assigned to them or assigned by them
+    // But if they explicitly filter by assignedToId or assignedById, respect that filter
     if (!canViewAll && userId) {
-      andConditions.push({
-        OR: [
-          { assignedToId: userId },
-          { assignedById: userId },
-        ]
-      })
+      // If explicit assignment filters are provided, use them and ensure user has access
+      if (assignedToId || assignedById) {
+        // User is explicitly filtering, so respect the filter but ensure they have access
+        if (assignedToId && assignedToId === userId) {
+          andConditions.push({ assignedToId: userId })
+        } else if (assignedById && assignedById === userId) {
+          andConditions.push({ assignedById: userId })
+        } else {
+          // User is trying to filter by someone else's tasks - not allowed for non-admins
+          // Return empty result
+          return NextResponse.json({
+            tasks: [],
+            pagination: {
+              page: 1,
+              limit,
+              total: 0,
+              totalPages: 0,
+            },
+          })
+        }
+      } else {
+        // No explicit filter, show tasks assigned to them OR assigned by them
+        andConditions.push({
+          OR: [
+            { assignedToId: userId },
+            { assignedById: userId },
+          ]
+        })
+      }
     }
     
     // Add search filter
@@ -66,7 +90,7 @@ export async function GET(request: NextRequest) {
       andConditions.push({ clientId })
     }
 
-    // Super admins can filter by assignedToId or assignedById
+    // Super admins can filter by assignedToId or assignedById for any user
     if (assignedToId && canViewAll) {
       andConditions.push({ assignedToId })
     }
