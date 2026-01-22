@@ -382,10 +382,11 @@ export function formatAttendanceNotificationMessage(
   employeeName: string,
   action: 'clock-in' | 'clock-out',
   time: Date,
-  mode?: string
+  mode?: string,
+  totalHours?: number
 ): string {
   const actionEmoji = action === 'clock-in' ? '✅' : '🔴'
-  const actionText = action === 'clock-in' ? 'Clock In' : 'Clock Out'
+  const actionText = action === 'clock-in' ? 'Clocked In' : 'Clocked Out'
   
   const formattedTime = time.toLocaleString('en-IN', {
     day: 'numeric',
@@ -396,13 +397,18 @@ export function formatAttendanceNotificationMessage(
     hour12: true,
   })
 
-  let message = `${actionEmoji} *Employee ${actionText}*\n\n`
-  message += `*Employee:* ${employeeName}\n`
+  let message = `${actionEmoji} *Attendance Update*\n\n`
+  message += `*Employee Name:* ${employeeName}\n`
+  message += `*Action:* ${actionText}\n`
   message += `*Time:* ${formattedTime}\n`
   
   if (mode) {
     const modeDisplay = mode === 'OFFICE' ? 'Office' : mode === 'WFH' ? 'Work From Home' : mode === 'LEAVE' ? 'Leave' : mode
-    message += `*Mode:* ${modeDisplay}\n`
+    message += `*Work Mode:* ${modeDisplay}\n`
+  }
+
+  if (action === 'clock-out' && totalHours !== undefined && totalHours !== null) {
+    message += `*Total Hours:* ${totalHours.toFixed(2)} hours\n`
   }
 
   return message
@@ -410,15 +416,16 @@ export function formatAttendanceNotificationMessage(
 
 /**
  * Get template variables for attendance notification template
- * Returns variables in the order: [employeeName, action, time, mode]
+ * Returns variables in the order: [employeeName, action, time, mode, totalHours]
  */
 export function getAttendanceNotificationTemplateVariables(
   employeeName: string,
   action: 'clock-in' | 'clock-out',
   time: Date,
-  mode?: string
+  mode?: string,
+  totalHours?: number
 ): string[] {
-  const actionText = action === 'clock-in' ? 'Clock In' : 'Clock Out'
+  const actionText = action === 'clock-in' ? 'Clocked In' : 'Clocked Out'
   
   const formattedTime = time.toLocaleString('en-IN', {
     day: 'numeric',
@@ -433,12 +440,17 @@ export function getAttendanceNotificationTemplateVariables(
     ? (mode === 'OFFICE' ? 'Office' : mode === 'WFH' ? 'Work From Home' : mode === 'LEAVE' ? 'Leave' : mode)
     : 'Not specified'
 
-  // Return variables in order: employeeName, action, time, mode
+  const totalHoursText = action === 'clock-out' && totalHours !== undefined && totalHours !== null
+    ? `${totalHours.toFixed(2)} hours`
+    : 'N/A'
+
+  // Return variables in order: employeeName, action, time, mode, totalHours
   return [
     employeeName,
     actionText,
     formattedTime,
     modeDisplay,
+    totalHoursText,
   ]
 }
 

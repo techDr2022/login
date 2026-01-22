@@ -546,7 +546,8 @@ export async function clockOut() {
         user.name,
         'clock-out',
         now,
-        updated.mode
+        updated.mode,
+        totalHours
       )
 
       // Get template variables for template-based messages
@@ -554,7 +555,8 @@ export async function clockOut() {
         user.name,
         'clock-out',
         now,
-        updated.mode
+        updated.mode,
+        totalHours
       )
 
       // Send notifications to specific super admins (raviteja and abhista) - don't wait for all to complete
