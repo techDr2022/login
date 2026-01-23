@@ -62,7 +62,7 @@ export async function checkSubscriptionStatus() {
     subscription.status === 'ACTIVE' || 
     subscription.status === 'TRIALING'
 
-  const isExpired = subscription.currentPeriodEnd < now
+  const isExpired = new Date(subscription.currentPeriodEnd) < now
 
   return {
     hasActiveSubscription: isActive && !isExpired,
