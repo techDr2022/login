@@ -256,6 +256,20 @@ export async function updateTask(id: string, data: {
 
   const userRole = session.user.role as UserRole
   const isEmployee = userRole === UserRole.EMPLOYEE
+  const canManage = canManageTasks(userRole)
+  const isTaskCreator = task.assignedById === session.user.id
+
+  // Check if user has permission to edit this task
+  // Employees can only edit tasks they created (assignedById === userId)
+  // Admins can edit any task
+  if (isEmployee && !isTaskCreator) {
+    throw new Error('You can only edit tasks that you created')
+  }
+
+  // Employees cannot change status through edit - they must use status update
+  if (isEmployee && data.status !== undefined && data.status !== task.status) {
+    throw new Error('You cannot change task status through edit. Use the status update button instead.')
+  }
 
   // Check if user can approve/reject
   // Employees can approve their own tasks, but cannot reject them

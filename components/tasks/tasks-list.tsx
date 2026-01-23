@@ -59,6 +59,7 @@ export function TasksList() {
   const [statusFilter, setStatusFilter] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
   const [assignedByMeFilter, setAssignedByMeFilter] = useState(false)
+  const [assignedToMeFilter, setAssignedToMeFilter] = useState(false)
   const [employeeFilter, setEmployeeFilter] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -74,7 +75,8 @@ export function TasksList() {
     clientId: '',
     taskType: '',
     dueDate: '',
-    timeSpent: 0,
+    timeSpentHours: 0,
+    timeSpentMinutes: 0,
   })
   const [statusFormData, setStatusFormData] = useState({
     status: 'Pending' as 'Pending' | 'InProgress' | 'Review' | 'Approved' | 'Rejected',
@@ -95,7 +97,7 @@ export function TasksList() {
     fetchClients()
     fetchUsers()
     fetchTaskTemplates()
-  }, [page, search, statusFilter, priorityFilter, assignedByMeFilter, employeeFilter])
+  }, [page, search, statusFilter, priorityFilter, assignedByMeFilter, assignedToMeFilter, employeeFilter])
 
   // Poll for task updates every 5 seconds for real-time updates
   useEffect(() => {
@@ -104,7 +106,7 @@ export function TasksList() {
     }, 5000) // Poll every 5 seconds
 
     return () => clearInterval(interval)
-  }, [page, search, statusFilter, priorityFilter, assignedByMeFilter, employeeFilter])
+  }, [page, search, statusFilter, priorityFilter, assignedByMeFilter, assignedToMeFilter, employeeFilter])
 
   useEffect(() => {
     // Clear selection when tasks change (e.g., after deletion or filter change)
@@ -157,7 +159,9 @@ export function TasksList() {
         ...(statusFilter && { status: statusFilter }),
         ...(priorityFilter && { priority: priorityFilter }),
         ...(assignedByMeFilter && session?.user?.id && { assignedById: session.user.id }),
-        ...(employeeFilter && canManage && { assignedToId: employeeFilter }),
+        // Prioritize assignedToMeFilter over employeeFilter if both are active
+        ...(assignedToMeFilter && session?.user?.id && { assignedToId: session.user.id }),
+        ...(employeeFilter && canManage && !assignedToMeFilter && { assignedToId: employeeFilter }),
         _t: Date.now().toString(), // Cache busting parameter
       })
       const res = await fetch(`/api/tasks?${params}`, {
@@ -179,6 +183,9 @@ export function TasksList() {
     setIsSubmitting(true)
 
     try {
+      // Convert hours and minutes to decimal hours for storage
+      const timeSpentInHours = formData.timeSpentHours + (formData.timeSpentMinutes / 60)
+
       const taskData: any = {
         title: formData.title,
         description: formData.description || undefined,
@@ -186,14 +193,14 @@ export function TasksList() {
         assignedToId: formData.assignedToId || undefined,
         clientId: formData.clientId || undefined,
         taskType: formData.taskType || undefined,
-        timeSpent: formData.timeSpent,
+        timeSpent: timeSpentInHours > 0 ? timeSpentInHours : undefined,
       }
 
       // Only include dueDate if taskType is not provided (backward compatibility)
       if (!formData.taskType && formData.dueDate) {
-        // Set to end of business day (6 PM) in local timezone to avoid early morning times
-        const dueDate = new Date(formData.dueDate)
-        dueDate.setHours(18, 0, 0, 0) // 6:00 PM
+        // Parse date string (YYYY-MM-DD) in local timezone to avoid timezone conversion issues
+        const [year, month, day] = formData.dueDate.split('-').map(Number)
+        const dueDate = new Date(year, month - 1, day, 18, 0, 0) // 6:00 PM in local timezone
         taskData.dueDate = dueDate
       }
 
@@ -301,6 +308,11 @@ export function TasksList() {
 
   const handleEdit = (task: Task) => {
     setEditingTask(task)
+    // Convert decimal hours back to hours and minutes
+    const totalHours = task.timeSpent || 0
+    const hours = Math.floor(totalHours)
+    const minutes = Math.round((totalHours - hours) * 60)
+    
     setFormData({
       title: task.title,
       description: task.description || '',
@@ -308,8 +320,16 @@ export function TasksList() {
       taskType: (task as any).taskType || '',
       assignedToId: task.assignedToId || '',
       clientId: task.clientId || '',
-      dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
-      timeSpent: task.timeSpent || 0,
+      dueDate: task.dueDate ? (() => {
+        // Parse date in local timezone to avoid timezone conversion issues
+        const date = new Date(task.dueDate)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+      })() : '',
+      timeSpentHours: hours,
+      timeSpentMinutes: minutes,
     })
     setDialogOpen(true)
   }
@@ -333,7 +353,8 @@ export function TasksList() {
       clientId: '',
       taskType: '',
       dueDate: '',
-      timeSpent: 0,
+      timeSpentHours: 0,
+      timeSpentMinutes: 0,
     })
     setError('')
   }
@@ -476,28 +497,44 @@ export function TasksList() {
             </SelectContent>
           </Select>
         )}
-        {canManage && (
-          <Button
-            variant={assignedByMeFilter ? "default" : "outline"}
-            onClick={() => {
-              setAssignedByMeFilter(!assignedByMeFilter)
-              setPage(1)
-            }}
-            className="rounded-xl"
-          >
-            {assignedByMeFilter ? (
-              <>
-                <CheckSquare2 className="w-4 h-4 mr-2" />
-                Assigned by You
-              </>
-            ) : (
-              <>
-                <CheckSquare2 className="w-4 h-4 mr-2" />
-                Show Assigned by You
-              </>
-            )}
-          </Button>
-        )}
+        {/* Assigned to Me filter - available to all users */}
+        <Button
+          variant={assignedToMeFilter ? "default" : "outline"}
+          onClick={() => {
+            if (assignedToMeFilter) {
+              // If already active, deactivate it
+              setAssignedToMeFilter(false)
+            } else {
+              // Activate this filter and deactivate the other
+              setAssignedToMeFilter(true)
+              setAssignedByMeFilter(false)
+            }
+            setPage(1)
+          }}
+          className="rounded-xl"
+        >
+          <CheckSquare2 className="w-4 h-4 mr-2" />
+          Assigned to Me
+        </Button>
+        {/* Assigned by Me filter - available to all users */}
+        <Button
+          variant={assignedByMeFilter ? "default" : "outline"}
+          onClick={() => {
+            if (assignedByMeFilter) {
+              // If already active, deactivate it
+              setAssignedByMeFilter(false)
+            } else {
+              // Activate this filter and deactivate the other
+              setAssignedByMeFilter(true)
+              setAssignedToMeFilter(false)
+            }
+            setPage(1)
+          }}
+          className="rounded-xl"
+        >
+          <CheckSquare2 className="w-4 h-4 mr-2" />
+          Assigned by Me
+        </Button>
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open)
           if (!open) resetForm()
@@ -629,8 +666,19 @@ export function TasksList() {
                     <div>
                       <Label>Due Date {formData.taskType ? '(Auto-calculated)' : ''}</Label>
                       <DatePicker
-                        date={formData.dueDate ? new Date(formData.dueDate) : null}
-                        onSelect={(date) => setFormData({ ...formData, dueDate: date ? date.toISOString().split('T')[0] : '' })}
+                        date={formData.dueDate ? new Date(formData.dueDate + 'T00:00:00') : null}
+                        onSelect={(date) => {
+                          if (date) {
+                            // Format date in local timezone to avoid timezone conversion issues
+                            const year = date.getFullYear()
+                            const month = String(date.getMonth() + 1).padStart(2, '0')
+                            const day = String(date.getDate()).padStart(2, '0')
+                            const dateString = `${year}-${month}-${day}`
+                            setFormData({ ...formData, dueDate: dateString })
+                          } else {
+                            setFormData({ ...formData, dueDate: '' })
+                          }
+                        }}
                         placeholder={formData.taskType ? "Auto-calculated from task type" : "Select due date"}
                         disabled={!!formData.taskType}
                       />
@@ -640,15 +688,31 @@ export function TasksList() {
                         </p>
                       )}
                     </div>
-                    <div>
-                      <Label htmlFor="timeSpent">Time Spent (hours)</Label>
-                      <Input
-                        id="timeSpent"
-                        type="number"
-                        step="0.1"
-                        value={formData.timeSpent}
-                        onChange={(e) => setFormData({ ...formData, timeSpent: parseFloat(e.target.value) || 0 })}
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="timeSpentHours">Time Spent - Hours</Label>
+                        <Input
+                          id="timeSpentHours"
+                          type="number"
+                          min="0"
+                          value={formData.timeSpentHours}
+                          onChange={(e) => setFormData({ ...formData, timeSpentHours: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="timeSpentMinutes">Minutes</Label>
+                        <Input
+                          id="timeSpentMinutes"
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={formData.timeSpentMinutes}
+                          onChange={(e) => {
+                            const minutes = parseInt(e.target.value) || 0
+                            setFormData({ ...formData, timeSpentMinutes: Math.min(59, Math.max(0, minutes)) })
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -789,7 +853,7 @@ export function TasksList() {
                                 onClick={async () => {
                                   setIsQuickUpdating(task.id)
                                   try {
-                                    await updateTaskStatus(task.id, { status: 'Review' })
+                                    await updateTaskStatus(task.id, { status: 'Approved' })
                                     // Immediately refresh tasks without waiting
                                     await fetchTasks()
                                     router.refresh()
@@ -815,6 +879,19 @@ export function TasksList() {
                               </Button>
                             )}
                           </>
+                        )}
+                        {/* Employee edit button for tasks they created */}
+                        {!canManage && task.assignedBy?.id === session?.user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleEdit(task)
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
                         )}
                         {/* Admin actions */}
                         {canManage && (
@@ -883,11 +960,16 @@ export function TasksList() {
                   <SelectContent>
                     <SelectItem value="Pending">Pending</SelectItem>
                     <SelectItem value="InProgress">In Progress</SelectItem>
-                    <SelectItem value="Review">Review</SelectItem>
                     {canManage && (
                       <>
+                        <SelectItem value="Review">Review</SelectItem>
                         <SelectItem value="Approved">Approved</SelectItem>
                         <SelectItem value="Rejected">Rejected</SelectItem>
+                      </>
+                    )}
+                    {!canManage && updatingStatusTask?.assignedToId === session?.user?.id && (
+                      <>
+                        <SelectItem value="Approved">Approved (Completed)</SelectItem>
                       </>
                     )}
                   </SelectContent>

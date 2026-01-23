@@ -116,6 +116,11 @@ export function ClientsList() {
         filteredClients = filteredClients.filter((c: Client) => c.status === statusFilter)
       }
       
+      // Sort clients alphabetically by name
+      filteredClients.sort((a: Client, b: Client) => 
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      )
+      
       setClients(filteredClients)
       setTotalPages(data.pagination?.totalPages || 1)
       

@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
         },
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { name: 'asc' },
       }),
       prisma.client.count({ where }),
       // Get stats for all clients (not filtered by search or pagination)

@@ -125,7 +125,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
     }
   }
 
-  const handleQuickStatusUpdate = async (newStatus: 'Pending' | 'InProgress' | 'Review') => {
+  const handleQuickStatusUpdate = async (newStatus: 'Pending' | 'InProgress' | 'Approved') => {
     setError('')
     setIsQuickUpdating(true)
     try {
@@ -293,7 +293,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                 )}
                 {task.status === 'InProgress' && (
                   <Button 
-                    onClick={() => handleQuickStatusUpdate('Review')}
+                    onClick={() => handleQuickStatusUpdate('Approved')}
                     disabled={isQuickUpdating}
                     className="bg-green-600 hover:bg-green-700 text-white rounded-xl"
                   >
@@ -443,12 +443,26 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                 )}
 
                 {/* Time Spent */}
-                {task.timeSpent !== undefined && (
+                {task.timeSpent !== undefined && task.timeSpent > 0 && (
                   <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
                     <Timer className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground mb-1">Time Spent</p>
-                      <p className="font-semibold">{task.timeSpent} hours</p>
+                      <p className="font-semibold">
+                        {(() => {
+                          const totalHours = task.timeSpent
+                          const hours = Math.floor(totalHours)
+                          const minutes = Math.round((totalHours - hours) * 60)
+                          if (hours > 0 && minutes > 0) {
+                            return `${hours} hour${hours !== 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}`
+                          } else if (hours > 0) {
+                            return `${hours} hour${hours !== 1 ? 's' : ''}`
+                          } else if (minutes > 0) {
+                            return `${minutes} minute${minutes !== 1 ? 's' : ''}`
+                          }
+                          return '0 hours'
+                        })()}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -536,16 +550,16 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                   <SelectContent>
                     <SelectItem value="Pending">Pending</SelectItem>
                     <SelectItem value="InProgress">In Progress</SelectItem>
-                    <SelectItem value="Review">Review</SelectItem>
                     {canApprove && (
                       <>
+                        <SelectItem value="Review">Review</SelectItem>
                         <SelectItem value="Approved">Approved</SelectItem>
                         <SelectItem value="Rejected">Rejected</SelectItem>
                       </>
                     )}
                     {isAssignedToMe && !canApprove && (
                       <>
-                        {/* Employees can only select these statuses */}
+                        <SelectItem value="Approved">Approved (Completed)</SelectItem>
                       </>
                     )}
                   </SelectContent>

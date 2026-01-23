@@ -104,6 +104,7 @@ model User {
   chat_message_reads                      chat_message_reads[]
   client_assets                           client_assets[]
   client_tasks                            client_tasks[]
+  subscription                            Subscription?
 
   @@index([isActive])
   @@index([role])
@@ -523,4 +524,65 @@ enum UserRole {
   SUPER_ADMIN
   MANAGER
   EMPLOYEE
+}
+
+model SubscriptionPlan {
+  id                String         @id @default(cuid())
+  name              String
+  description       String?
+  price             Float
+  currency          String         @default("USD")
+  interval          SubscriptionInterval
+  stripePriceId     String?        @unique
+  stripeProductId   String?
+  features          Json?          // Array of feature strings
+  maxClients        Int?           // null = unlimited
+  maxUsers          Int?           // null = unlimited
+  maxStorageGB      Int?           // null = unlimited
+  isActive          Boolean        @default(true)
+  isPopular         Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  subscriptions     Subscription[]
+
+  @@index([isActive])
+  @@index([interval])
+}
+
+model Subscription {
+  id                    String             @id @default(cuid())
+  userId                String             @unique
+  planId                String
+  status                SubscriptionStatus @default(ACTIVE)
+  stripeSubscriptionId  String?           @unique
+  stripeCustomerId      String?           @unique
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean           @default(false)
+  canceledAt            DateTime?
+  trialEndsAt           DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  User                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  SubscriptionPlan      SubscriptionPlan   @relation(fields: [planId], references: [id])
+
+  @@index([status])
+  @@index([userId])
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+}
+
+enum SubscriptionInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  UNPAID
+  TRIALING
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
 }

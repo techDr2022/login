@@ -155,6 +155,103 @@ For production (Vercel, Railway, etc.):
 - Encrypted passwords cannot be recovered with a different key
 - You'll need to re-enter passwords if the key changes
 
+## Optional: Stripe Subscriptions (SaaS)
+
+These variables are **required** if you want to enable subscription-based billing for your SaaS application.
+
+### Stripe Variables:
+```env
+STRIPE_SECRET_KEY="sk_test_..."  # Your Stripe secret key
+STRIPE_WEBHOOK_SECRET="whsec_..."  # Webhook signing secret from Stripe
+NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID="price_..."  # Starter plan price ID
+NEXT_PUBLIC_STRIPE_PROFESSIONAL_PRICE_ID="price_..."  # Professional plan price ID
+NEXT_PUBLIC_STRIPE_ENTERPRISE_PRICE_ID="price_..."  # Enterprise plan price ID
+NEXT_PUBLIC_APP_URL="https://yourdomain.com"  # Your app URL for redirects
+```
+
+### Setting up Stripe:
+
+1. **Create a Stripe Account:**
+   - Sign up at https://stripe.com
+   - Complete account verification
+
+2. **Get API Keys:**
+   - Go to Stripe Dashboard → Developers → API keys
+   - Copy your **Secret key** (starts with `sk_test_` for test mode, `sk_live_` for production)
+   - Set `STRIPE_SECRET_KEY` in your environment variables
+
+3. **Create Products and Prices:**
+   - Go to Stripe Dashboard → Products
+   - Create three products:
+     - **Starter** ($29/month)
+     - **Professional** ($79/month)
+     - **Enterprise** ($199/month)
+   - For each product, create a recurring price (monthly)
+   - Copy the **Price ID** (starts with `price_`) for each plan
+   - Set the corresponding environment variables:
+     - `NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID`
+     - `NEXT_PUBLIC_STRIPE_PROFESSIONAL_PRICE_ID`
+     - `NEXT_PUBLIC_STRIPE_ENTERPRISE_PRICE_ID`
+
+4. **Set up Webhooks:**
+   - Go to Stripe Dashboard → Developers → Webhooks
+   - Click "Add endpoint"
+   - Endpoint URL: `https://yourdomain.com/api/subscriptions/webhook`
+   - Select events to listen to:
+     - `checkout.session.completed`
+     - `customer.subscription.updated`
+     - `customer.subscription.deleted`
+   - Copy the **Signing secret** (starts with `whsec_`)
+   - Set `STRIPE_WEBHOOK_SECRET` in your environment variables
+
+5. **Set App URL:**
+   - Set `NEXT_PUBLIC_APP_URL` to your production domain
+   - For local development, use `http://localhost:3000`
+
+### Testing Stripe:
+
+1. **Use Test Mode:**
+   - Use test API keys (start with `sk_test_`)
+   - Use Stripe test cards: https://stripe.com/docs/testing
+   - Test card: `4242 4242 4242 4242` (any future expiry, any CVC)
+
+2. **Test Webhooks Locally:**
+   - Use Stripe CLI: `stripe listen --forward-to localhost:3000/api/subscriptions/webhook`
+   - This will give you a webhook signing secret for local testing
+
+### Database Migration:
+
+After setting up Stripe, run the database migration to add subscription tables:
+
+```bash
+npx prisma db push
+# or
+npx prisma migrate dev
+```
+
+### Subscription Features:
+
+- **Landing Page:** Public landing page at `/` with features and pricing
+- **Pricing Page:** `/pricing` with subscription plans
+- **Checkout:** Stripe Checkout integration for secure payments
+- **Subscription Management:** Users can manage subscriptions in Settings
+- **Webhook Handling:** Automatic subscription status updates via Stripe webhooks
+
+### Troubleshooting Stripe:
+
+**"Stripe secret key not set" error:**
+- Ensure `STRIPE_SECRET_KEY` is set in your environment variables
+- Restart your server after setting environment variables
+
+**Webhook not receiving events:**
+- Verify webhook URL is correct and accessible
+- Check webhook signing secret matches
+- Ensure webhook endpoint is not behind authentication (middleware allows it)
+
+**Checkout not redirecting:**
+- Verify `NEXT_PUBLIC_APP_URL` is set correctly
+- Check that price IDs are correct and active in Stripe
+
 ## Optional: WhatsApp Notifications
 
 These variables are **optional**. If not set, WhatsApp notifications for task assignments will be disabled.

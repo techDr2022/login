@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { ChangePasswordForm } from '@/components/settings/change-password-form'
 import { NotificationsSettings } from '@/components/settings/notifications-settings'
 import { PhoneNumberForm } from '@/components/settings/phone-number-form'
+import { SubscriptionSettings } from '@/components/settings/subscription-settings'
 import { prisma } from '@/lib/prisma'
 
 export default async function SettingsPage() {
@@ -71,6 +72,8 @@ export default async function SettingsPage() {
           </div>
           <ChangePasswordForm />
         </Card>
+
+        <SubscriptionSettings />
       </div>
     </LayoutWrapper>
   )

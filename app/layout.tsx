@@ -12,8 +12,8 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Internal Web App',
-  description: 'Internal web application',
+  title: 'TaskFlow - Client & Task Management Platform',
+  description: 'Streamline your workflow with powerful task management, client onboarding, and team collaboration tools.',
 }
 
 export default function RootLayout({
