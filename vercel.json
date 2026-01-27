@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/wfh-inactivity-check",
       "schedule": "0,30 * * * *"
+    },
+    {
+      "path": "/api/cron/payment-reminder",
+      "schedule": "0 9 * * *"
     }
   ]
 }

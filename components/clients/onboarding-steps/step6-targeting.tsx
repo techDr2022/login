@@ -11,11 +11,12 @@ interface Step6TargetingProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step6Targeting({ clientId, data, onComplete, loading }: Step6TargetingProps) {
+export function Step6Targeting({ clientId, data, onComplete, onSave, loading }: Step6TargetingProps) {
   const [primaryLocation, setPrimaryLocation] = useState(data.targeting?.primaryLocation || '')
   const [nearbyAreas, setNearbyAreas] = useState(data.targeting?.nearbyAreas?.join(', ') || '')
   const [mainKeywords, setMainKeywords] = useState(data.targeting?.mainKeywords?.join(', ') || '')
@@ -38,7 +39,7 @@ export function Step6Targeting({ clientId, data, onComplete, loading }: Step6Tar
           ? exampleKeywords.split(',').map((s: string) => s.trim()).filter((s: string) => s)
           : undefined,
       })
-      onComplete({
+      const stepData = {
         targeting: {
           primaryLocation,
           nearbyAreas: nearbyAreas
@@ -51,7 +52,17 @@ export function Step6Targeting({ clientId, data, onComplete, loading }: Step6Tar
             ? exampleKeywords.split(',').map((s: string) => s.trim()).filter((s: string) => s)
             : [],
         },
-      })
+      }
+      
+      // Save and then move to next step
+      if (onSave) {
+        try {
+          await onSave(stepData)
+        } catch (err) {
+          return // Error handling is done in parent
+        }
+      }
+      onComplete(stepData)
     } catch (err: any) {
       console.error('Failed to save targeting:', err)
     }
@@ -104,7 +115,7 @@ export function Step6Targeting({ clientId, data, onComplete, loading }: Step6Tar
 
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={loading}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </form>

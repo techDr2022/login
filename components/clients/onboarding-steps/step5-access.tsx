@@ -15,11 +15,12 @@ interface Step5AccessProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step5Access({ clientId, data, onComplete, loading }: Step5AccessProps) {
+export function Step5Access({ clientId, data, onComplete, onSave, loading }: Step5AccessProps) {
   const [accesses, setAccesses] = useState<any[]>(data.accesses || [])
   const [formData, setFormData] = useState({
     type: 'GMB' as 'GMB' | 'WEBSITE' | 'FACEBOOK' | 'INSTAGRAM' | 'WHATSAPP',
@@ -117,7 +118,15 @@ export function Step5Access({ clientId, data, onComplete, loading }: Step5Access
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    // Save and then move to next step
+    if (onSave) {
+      try {
+        await onSave({ accesses })
+      } catch (err) {
+        return // Error handling is done in parent
+      }
+    }
     onComplete({ accesses })
   }
 
@@ -271,7 +280,7 @@ export function Step5Access({ clientId, data, onComplete, loading }: Step5Access
 
       <div className="flex justify-end gap-2">
         <Button onClick={handleNext} disabled={loading}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </div>

@@ -14,11 +14,12 @@ interface Step2DoctorsProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step2Doctors({ clientId, data, onComplete, loading }: Step2DoctorsProps) {
+export function Step2Doctors({ clientId, data, onComplete, onSave, loading }: Step2DoctorsProps) {
   const [doctors, setDoctors] = useState<any[]>(data.doctors || [])
   const [formData, setFormData] = useState({
     fullName: '',
@@ -128,7 +129,15 @@ export function Step2Doctors({ clientId, data, onComplete, loading }: Step2Docto
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    // Save and then move to next step
+    if (onSave) {
+      try {
+        await onSave({ doctors })
+      } catch (err) {
+        return // Error handling is done in parent
+      }
+    }
     onComplete({ doctors })
   }
 
@@ -288,7 +297,7 @@ export function Step2Doctors({ clientId, data, onComplete, loading }: Step2Docto
 
       <div className="flex justify-end gap-2">
         <Button onClick={handleNext} disabled={loading}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </div>

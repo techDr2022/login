@@ -12,11 +12,12 @@ interface Step1BasicInfoProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step1BasicInfo({ clientId, data, onComplete, loading }: Step1BasicInfoProps) {
+export function Step1BasicInfo({ clientId, data, onComplete, onSave, loading }: Step1BasicInfoProps) {
   const [formData, setFormData] = useState({
     name: data.basicInfo?.name || '',
     type: data.basicInfo?.type || 'CLINIC',
@@ -53,10 +54,18 @@ export function Step1BasicInfo({ clientId, data, onComplete, loading }: Step1Bas
     })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name.trim()) {
       return
+    }
+    // Save and then move to next step
+    if (onSave) {
+      try {
+        await onSave(formData)
+      } catch (err) {
+        return // Error handling is done in parent
+      }
     }
     onComplete(formData)
   }
@@ -221,7 +230,7 @@ export function Step1BasicInfo({ clientId, data, onComplete, loading }: Step1Bas
 
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={loading || !formData.name.trim()}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </form>

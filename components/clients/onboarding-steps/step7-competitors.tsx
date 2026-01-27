@@ -12,11 +12,12 @@ interface Step7CompetitorsProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step7Competitors({ clientId, data, onComplete, loading }: Step7CompetitorsProps) {
+export function Step7Competitors({ clientId, data, onComplete, onSave, loading }: Step7CompetitorsProps) {
   const [competitors, setCompetitors] = useState<any[]>(data.competitors || [])
   const [name, setName] = useState('')
   const [googleMapLink, setGoogleMapLink] = useState('')
@@ -46,7 +47,15 @@ export function Step7Competitors({ clientId, data, onComplete, loading }: Step7C
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    // Save and then move to next step
+    if (onSave) {
+      try {
+        await onSave({ competitors })
+      } catch (err) {
+        return // Error handling is done in parent
+      }
+    }
     onComplete({ competitors })
   }
 
@@ -116,7 +125,7 @@ export function Step7Competitors({ clientId, data, onComplete, loading }: Step7C
 
       <div className="flex justify-end gap-2">
         <Button onClick={handleNext} disabled={loading}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </div>

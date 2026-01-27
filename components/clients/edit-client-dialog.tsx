@@ -8,9 +8,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Upload, X, Plus, Trash2, Image as ImageIcon, Globe, Facebook, Instagram, MessageCircle, Link as LinkIcon } from 'lucide-react'
+import { Upload, X, Plus, Trash2, Image as ImageIcon, Globe, Facebook, Instagram, MessageCircle, Link as LinkIcon, DollarSign } from 'lucide-react'
+import { DatePicker } from '@/components/ui/date-picker'
+import { updateClientInvoice } from '@/app/actions/invoice-actions'
 import {
   updateClientBasicInfo,
   createClientAccess,
@@ -40,6 +42,13 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('basic')
+
+  // Reset to basic tab if employee tries to access invoice tab
+  useEffect(() => {
+    if (activeTab === 'invoice' && session?.user.role !== UserRole.SUPER_ADMIN) {
+      setActiveTab('basic')
+    }
+  }, [activeTab, session?.user.role])
   
   // Basic Info State
   const [basicInfo, setBasicInfo] = useState({
@@ -116,6 +125,16 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
   const [assets, setAssets] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Invoice State
+  const [invoiceInfo, setInvoiceInfo] = useState({
+    startDate: null as Date | null,
+    endDate: null as Date | null,
+    monthlyAmount: '' as string | number,
+    planDuration: '' as string,
+    nextPaymentDate: null as Date | null,
+    lastPaymentDate: null as Date | null,
+  })
 
   const canEdit = session?.user.role && canEditClient(session.user.role as UserRole)
 
@@ -198,6 +217,16 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
 
       // Load assets
       setAssets(client.assets || client.client_assets || [])
+
+      // Load invoice info
+      setInvoiceInfo({
+        startDate: client.startDate ? new Date(client.startDate) : null,
+        endDate: client.endDate ? new Date(client.endDate) : null,
+        monthlyAmount: client.monthlyAmount || '',
+        planDuration: client.planDuration || '',
+        nextPaymentDate: client.nextPaymentDate ? new Date(client.nextPaymentDate) : null,
+        lastPaymentDate: client.lastPaymentDate ? new Date(client.lastPaymentDate) : null,
+      })
     }
   }, [client, open])
 
@@ -331,6 +360,18 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
           : undefined,
       })
 
+      // Save invoice info (only if user is super admin)
+      if (session?.user.role === UserRole.SUPER_ADMIN) {
+        await updateClientInvoice(client.id, {
+          startDate: invoiceInfo.startDate,
+          endDate: invoiceInfo.endDate,
+          monthlyAmount: invoiceInfo.monthlyAmount ? Number(invoiceInfo.monthlyAmount) : null,
+          planDuration: invoiceInfo.planDuration ? (invoiceInfo.planDuration as 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS') : null,
+          nextPaymentDate: invoiceInfo.nextPaymentDate,
+          lastPaymentDate: invoiceInfo.lastPaymentDate,
+        })
+      }
+
       onSuccess?.()
       onOpenChange(false)
     } catch (err: any) {
@@ -371,12 +412,15 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className={`grid w-full ${session?.user.role === UserRole.SUPER_ADMIN ? 'grid-cols-7' : 'grid-cols-6'}`}>
             <TabsTrigger value="basic">Basic</TabsTrigger>
             <TabsTrigger value="social">Social Media</TabsTrigger>
             <TabsTrigger value="photos">Photos</TabsTrigger>
             <TabsTrigger value="branding">Branding</TabsTrigger>
             <TabsTrigger value="targeting">Targeting</TabsTrigger>
+            {session?.user.role === UserRole.SUPER_ADMIN && (
+              <TabsTrigger value="invoice">Invoice</TabsTrigger>
+            )}
             <TabsTrigger value="other">Other</TabsTrigger>
           </TabsList>
 
@@ -828,6 +872,113 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
                 />
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="invoice" className="space-y-4">
+            {session?.user.role === UserRole.SUPER_ADMIN ? (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <DollarSign className="w-4 h-4" />
+                      Invoice & Payment Information
+                    </CardTitle>
+                    <CardDescription>
+                      Manage project dates and payment schedules for this client
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Project Start Date</Label>
+                        <DatePicker
+                          date={invoiceInfo.startDate}
+                          onSelect={(date) => setInvoiceInfo({ ...invoiceInfo, startDate: date })}
+                          placeholder="Select start date"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Project End Date</Label>
+                        <DatePicker
+                          date={invoiceInfo.endDate}
+                          onSelect={(date) => setInvoiceInfo({ ...invoiceInfo, endDate: date })}
+                          placeholder="Select end date"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Monthly Amount (₹)</Label>
+                        <Input
+                          type="number"
+                          value={invoiceInfo.monthlyAmount}
+                          onChange={(e) => setInvoiceInfo({ ...invoiceInfo, monthlyAmount: e.target.value })}
+                          placeholder="Enter monthly payment amount"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Plan Duration</Label>
+                        <Select
+                          value={invoiceInfo.planDuration}
+                          onValueChange={(value) => {
+                            setInvoiceInfo({ ...invoiceInfo, planDuration: value })
+                            // Auto-calculate end date if start date is set
+                            if (value && invoiceInfo.startDate) {
+                              const startDate = new Date(invoiceInfo.startDate)
+                              let monthsToAdd = 0
+                              if (value === 'ONE_MONTH') monthsToAdd = 1
+                              else if (value === 'THREE_MONTHS') monthsToAdd = 3
+                              else if (value === 'SIX_MONTHS') monthsToAdd = 6
+                              
+                              const endDate = new Date(startDate)
+                              endDate.setMonth(endDate.getMonth() + monthsToAdd)
+                              setInvoiceInfo({ ...invoiceInfo, planDuration: value, endDate })
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select plan duration" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ONE_MONTH">1 Month</SelectItem>
+                            <SelectItem value="THREE_MONTHS">3 Months</SelectItem>
+                            <SelectItem value="SIX_MONTHS">6 Months</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          End date will be auto-calculated based on start date
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Next Payment Date</Label>
+                        <DatePicker
+                          date={invoiceInfo.nextPaymentDate}
+                          onSelect={(date) => setInvoiceInfo({ ...invoiceInfo, nextPaymentDate: date })}
+                          placeholder="Select next payment date"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Payment reminders will be sent 7 days before this date
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Last Payment Date</Label>
+                        <DatePicker
+                          date={invoiceInfo.lastPaymentDate}
+                          onSelect={(date) => setInvoiceInfo({ ...invoiceInfo, lastPaymentDate: date })}
+                          placeholder="Select last payment date"
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                Only super admins can manage invoice information
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="other" className="space-y-4">

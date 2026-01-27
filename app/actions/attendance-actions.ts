@@ -319,12 +319,18 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
         attendanceMode
       )
 
+      // Check if attendance template is configured - use clock-in specific template
+      const clockInTemplateSid = process.env.TWILIO_WHATSAPP_CLOCK_IN_TEMPLATE_SID || process.env.TWILIO_WHATSAPP_ATTENDANCE_TEMPLATE_SID
+      const useAttendanceTemplate = process.env.TWILIO_USE_ATTENDANCE_TEMPLATE === 'true'
+      // Only force freeform if template is not configured
+      const forceFreeform = !useAttendanceTemplate || !clockInTemplateSid
+
       // Send notifications to specific super admins (raviteja and abhista) - don't wait for all to complete
       const notificationPromises = superAdmins
         .filter(admin => admin.phoneNumber)
         .map(admin => {
           console.log(`[WhatsApp] Sending clock-in notification to ${admin.name} (${admin.phoneNumber})`)
-          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables, true).then(result => {
+          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables, forceFreeform, clockInTemplateSid).then(result => {
             if (result.success) {
               console.log(`[WhatsApp] ✅ Clock-in notification sent to ${admin.name}. Message ID: ${result.messageId || 'N/A'}`)
             } else {
@@ -559,12 +565,18 @@ export async function clockOut() {
         totalHours
       )
 
+      // Check if attendance template is configured - use clock-out specific template
+      const clockOutTemplateSid = process.env.TWILIO_WHATSAPP_CLOCK_OUT_TEMPLATE_SID || process.env.TWILIO_WHATSAPP_ATTENDANCE_TEMPLATE_SID
+      const useAttendanceTemplate = process.env.TWILIO_USE_ATTENDANCE_TEMPLATE === 'true'
+      // Only force freeform if template is not configured
+      const forceFreeform = !useAttendanceTemplate || !clockOutTemplateSid
+
       // Send notifications to specific super admins (raviteja and abhista) - don't wait for all to complete
       const notificationPromises = superAdmins
         .filter(admin => admin.phoneNumber)
         .map(admin => {
           console.log(`[WhatsApp] Sending clock-out notification to ${admin.name} (${admin.phoneNumber})`)
-          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables, true).then(result => {
+          return sendWhatsAppNotification(admin.phoneNumber!, message, templateVariables, forceFreeform, clockOutTemplateSid).then(result => {
             if (result.success) {
               console.log(`[WhatsApp] ✅ Clock-out notification sent to ${admin.name}. Message ID: ${result.messageId || 'N/A'}`)
             } else {

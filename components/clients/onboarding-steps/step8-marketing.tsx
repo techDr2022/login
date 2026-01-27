@@ -12,11 +12,12 @@ interface Step8MarketingProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step8Marketing({ clientId, data, onComplete, loading }: Step8MarketingProps) {
+export function Step8Marketing({ clientId, data, onComplete, onSave, loading }: Step8MarketingProps) {
   const [requirements, setRequirements] = useState({
     gmbOptimisation: data.marketing?.gmbOptimisation || false,
     websiteSeo: data.marketing?.websiteSeo || false,
@@ -37,7 +38,17 @@ export function Step8Marketing({ clientId, data, onComplete, loading }: Step8Mar
 
     try {
       await upsertClientMarketingRequirement(clientId, requirements)
-      onComplete({ marketing: requirements })
+      const stepData = { marketing: requirements }
+      
+      // Save and then move to next step
+      if (onSave) {
+        try {
+          await onSave(stepData)
+        } catch (err) {
+          return // Error handling is done in parent
+        }
+      }
+      onComplete(stepData)
     } catch (err: any) {
       console.error('Failed to save marketing requirements:', err)
     }
@@ -184,7 +195,7 @@ export function Step8Marketing({ clientId, data, onComplete, loading }: Step8Mar
 
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={loading}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </form>

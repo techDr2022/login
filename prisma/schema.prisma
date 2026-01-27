@@ -29,6 +29,14 @@ model Client {
   workingDays                   Json?
   workingTimings                String?
   startDate                     DateTime?
+  endDate                       DateTime?
+  monthlyAmount                 Float?
+  planDuration                  InvoicePlanDuration?
+  nextPaymentDate               DateTime?
+  lastPaymentDate               DateTime?
+  isGST                         Boolean                        @default(false)
+  gstNumber                     String?
+  gstRate                       Float?                         @default(18.0) // Default GST rate 18%
   scopeFinalised                Boolean                        @default(false)
   onboardingCompletedAt         DateTime?
   preferredLanguage             PreferredLanguage?             @default(ENGLISH)
@@ -46,10 +54,34 @@ model Client {
   client_targeting              client_targeting?
   client_tasks                  client_tasks[]
   client_usps                   client_usps[]
+  monthlyProductions            MonthlyProduction[]
+  brandName                     String?
+  primaryWhatsAppGroupLink      String?
 
   @@index([accountManagerId])
   @@index([status])
   @@index([type])
+  @@index([nextPaymentDate])
+}
+
+model MonthlyProduction {
+  id                    String   @id @default(cuid())
+  clientId              String
+  monthKey              String
+  targetCount           Int      @default(10)
+  designedCount         Int      @default(0)
+  approvedCount         Int      @default(0)
+  scheduledCount        Int      @default(0)
+  canvaFolderUrl        String?
+  lastSharedAt          DateTime?
+  approvalPendingSince  DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  Client                Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, monthKey])
+  @@index([clientId])
+  @@index([monthKey])
 }
 
 model Task {
@@ -524,6 +556,12 @@ enum UserRole {
   SUPER_ADMIN
   MANAGER
   EMPLOYEE
+}
+
+enum InvoicePlanDuration {
+  ONE_MONTH
+  THREE_MONTHS
+  SIX_MONTHS
 }
 
 model SubscriptionPlan {

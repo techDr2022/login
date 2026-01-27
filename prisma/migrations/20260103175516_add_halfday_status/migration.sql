@@ -1,5 +1,14 @@
 -- AlterEnum
 -- Add 'HalfDay' to AttendanceStatus enum
--- Note: This will fail if the value already exists, but that's expected behavior
-ALTER TYPE "AttendanceStatus" ADD VALUE 'HalfDay';
+-- Check if value already exists before adding
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'HalfDay' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'AttendanceStatus')
+    ) THEN
+        ALTER TYPE "AttendanceStatus" ADD VALUE 'HalfDay';
+    END IF;
+END $$;
 

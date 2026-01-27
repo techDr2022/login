@@ -271,8 +271,15 @@ TWILIO_AUTH_TOKEN="your-twilio-auth-token"
 TWILIO_WHATSAPP_FROM="+1234567890"  # Your Twilio WhatsApp number (without whatsapp: prefix)
 
 # Optional: For production, use WhatsApp Message Templates (recommended)
-TWILIO_WHATSAPP_TEMPLATE_SID="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Content Template SID
+TWILIO_WHATSAPP_TEMPLATE_SID="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Content Template SID for task notifications
 TWILIO_USE_TEMPLATE="true"  # Set to "true" to use templates instead of freeform messages
+
+# Optional: Attendance-specific templates (for clock in/out notifications)
+# You can use separate templates for clock-in and clock-out, or use a single template for both
+TWILIO_WHATSAPP_CLOCK_IN_TEMPLATE_SID="HX87d33e029aac02e5569a92ef8513d227"  # Content Template SID for clock-in notifications (techdr_team_clock_in)
+TWILIO_WHATSAPP_CLOCK_OUT_TEMPLATE_SID="HX7066fb18c7b3f547396898f2965c0608"  # Content Template SID for clock-out notifications (techdr_team_clock_out)
+TWILIO_WHATSAPP_ATTENDANCE_TEMPLATE_SID="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Fallback: Content Template SID for attendance notifications (if clock-in/out specific templates not set)
+TWILIO_USE_ATTENDANCE_TEMPLATE="true"  # Set to "true" to use templates for attendance notifications
 ```
 
 **Setting up Twilio WhatsApp:**
@@ -362,3 +369,31 @@ WHATSAPP_PROVIDER="none"
 - Check webhook accepts POST requests
 - Ensure webhook returns proper response format
 
+### Attendance Notifications (Clock In/Out):
+
+The system sends WhatsApp notifications to super admins when employees clock in or clock out. These notifications can use separate templates from task notifications.
+
+**Environment Variables for Attendance:**
+```env
+# Use separate templates for clock-in and clock-out (recommended)
+TWILIO_WHATSAPP_CLOCK_IN_TEMPLATE_SID="HX87d33e029aac02e5569a92ef8513d227"  # techdr_team_clock_in
+TWILIO_WHATSAPP_CLOCK_OUT_TEMPLATE_SID="HX7066fb18c7b3f547396898f2965c0608"  # techdr_team_clock_out
+TWILIO_USE_ATTENDANCE_TEMPLATE="true"
+
+# OR use a single template for both (fallback)
+TWILIO_WHATSAPP_ATTENDANCE_TEMPLATE_SID="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+TWILIO_USE_ATTENDANCE_TEMPLATE="true"
+
+# If attendance template is not set, falls back to general template
+TWILIO_WHATSAPP_TEMPLATE_SID="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+TWILIO_USE_TEMPLATE="true"
+```
+
+**Template Variables for Attendance:**
+- {{1}} = Employee Name
+- {{2}} = Action (Clocked In / Clocked Out)
+- {{3}} = Time (formatted: "15 Jan 2025, 10:15 AM")
+- {{4}} = Work Mode (Office / Work From Home / Leave)
+- {{5}} = Total Hours (for clock-out: "8.50 hours" or "N/A" for clock-in)
+
+**See `ATTENDANCE_WHATSAPP_TEMPLATE_GUIDE.md` for detailed template setup instructions.**

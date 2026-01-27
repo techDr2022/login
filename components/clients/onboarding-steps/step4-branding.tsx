@@ -14,11 +14,12 @@ interface Step4BrandingProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step4Branding({ clientId, data, onComplete, loading }: Step4BrandingProps) {
+export function Step4Branding({ clientId, data, onComplete, onSave, loading }: Step4BrandingProps) {
   const [brandColors, setBrandColors] = useState({
     primary: data.branding?.brandColors?.primary || '',
     secondary: data.branding?.brandColors?.secondary || '',
@@ -109,7 +110,17 @@ export function Step4Branding({ clientId, data, onComplete, loading }: Step4Bran
         designerName: designerName || undefined,
         templateBaseCreated,
       })
-      onComplete({ branding: { brandColors, designerName, templateBaseCreated }, assets: logo ? [logo] : [] })
+      const stepData = { branding: { brandColors, designerName, templateBaseCreated }, assets: logo ? [logo] : [] }
+      
+      // Save and then move to next step
+      if (onSave) {
+        try {
+          await onSave(stepData)
+        } catch (err) {
+          return // Error handling is done in parent
+        }
+      }
+      onComplete(stepData)
     } catch (err: any) {
       console.error('Failed to save branding:', err)
     }
@@ -271,7 +282,7 @@ export function Step4Branding({ clientId, data, onComplete, loading }: Step4Bran
 
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={loading}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </form>

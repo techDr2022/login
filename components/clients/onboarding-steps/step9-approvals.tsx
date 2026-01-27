@@ -11,11 +11,12 @@ interface Step9ApprovalsProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step9Approvals({ clientId, data, onComplete, loading }: Step9ApprovalsProps) {
+export function Step9Approvals({ clientId, data, onComplete, onSave, loading }: Step9ApprovalsProps) {
   const [settings, setSettings] = useState({
     pointOfContactName: data.approvals?.pointOfContactName || '',
     approvalTimeHours: data.approvals?.approvalTimeHours?.toString() || '',
@@ -34,7 +35,17 @@ export function Step9Approvals({ clientId, data, onComplete, loading }: Step9App
         approvalMode: settings.approvalMode as any,
         performanceTrackingMode: settings.performanceTrackingMode as any,
       })
-      onComplete({ approvals: settings })
+      const stepData = { approvals: settings }
+      
+      // Save and then move to next step
+      if (onSave) {
+        try {
+          await onSave(stepData)
+        } catch (err) {
+          return // Error handling is done in parent
+        }
+      }
+      onComplete(stepData)
     } catch (err: any) {
       console.error('Failed to save approval settings:', err)
     }
@@ -99,7 +110,7 @@ export function Step9Approvals({ clientId, data, onComplete, loading }: Step9App
 
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={loading}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </form>

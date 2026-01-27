@@ -10,11 +10,12 @@ interface Step10KPIsProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step10KPIs({ clientId, data, onComplete, loading }: Step10KPIsProps) {
+export function Step10KPIs({ clientId, data, onComplete, onSave, loading }: Step10KPIsProps) {
   const [kpi, setKpi] = useState({
     gmbCalls: data.kpis?.[0]?.gmbCalls || 0,
     directionRequests: data.kpis?.[0]?.directionRequests || 0,
@@ -38,7 +39,17 @@ export function Step10KPIs({ clientId, data, onComplete, loading }: Step10KPIsPr
         leadsGenerated: kpi.leadsGenerated,
         reportStatus: 'PENDING',
       })
-      onComplete({ kpis: [{ ...kpi, month }] })
+      const stepData = { kpis: [{ ...kpi, month }] }
+      
+      // Save and then move to next step
+      if (onSave) {
+        try {
+          await onSave(stepData)
+        } catch (err) {
+          return // Error handling is done in parent
+        }
+      }
+      onComplete(stepData)
     } catch (err: any) {
       console.error('Failed to save KPI:', err)
     }
@@ -91,7 +102,7 @@ export function Step10KPIs({ clientId, data, onComplete, loading }: Step10KPIsPr
 
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={loading}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </form>

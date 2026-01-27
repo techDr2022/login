@@ -92,12 +92,29 @@ export function ClientOnboardingWizard({ clientId }: ClientOnboardingWizardProps
     }
   }
 
-  const handleStepComplete = async (stepData: any) => {
+  const handleStepSave = async (stepData: any) => {
     setLoading(true)
     setError('')
 
     try {
       setData({ ...data, ...stepData })
+    } catch (err: any) {
+      setError(err.message || 'Failed to save step')
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleStepComplete = async (stepData: any) => {
+    setLoading(true)
+    setError('')
+
+    try {
+      // Save the step data first
+      await handleStepSave(stepData)
+
+      // Then move to next step
       if (currentStep < STEPS.length) {
         setCurrentStep(currentStep + 1)
       }
@@ -237,6 +254,7 @@ export function ClientOnboardingWizard({ clientId }: ClientOnboardingWizardProps
                   clientId={clientId}
                   data={data}
                   onComplete={handleStepComplete}
+                  onSave={handleStepSave}
                   onFinalize={currentStep === 11 ? handleFinalize : undefined}
                   loading={loading}
                 />

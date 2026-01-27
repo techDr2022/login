@@ -18,6 +18,8 @@ import {
   Menu,
   X,
   ChevronLeft,
+  Palette,
+  Receipt,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
@@ -32,11 +34,13 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/designer', label: 'Designer Workspace', icon: Palette },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/clients', label: 'Clients', icon: Users },
   { href: '/employees', label: 'Employees', icon: UserCog, roles: [UserRole.SUPER_ADMIN] },
   { href: '/attendance', label: 'Attendance', icon: Clock },
   { href: '/chat', label: 'Team Chat', icon: MessageCircle },
+  { href: '/invoices', label: 'Invoices', icon: Receipt, roles: [UserRole.SUPER_ADMIN] },
   { href: '/reports', label: 'Reports', icon: BarChart3, roles: [UserRole.SUPER_ADMIN] },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]

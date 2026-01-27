@@ -21,6 +21,9 @@ interface WhatsAppMessage {
   message: string
   templateVariables?: string[] // Optional: For template-based messages
   forceFreeform?: boolean // Optional: Force freeform message instead of template
+  templateSid?: string // Optional: Custom template SID (overrides default)
+  mediaUrl?: string // Optional: URL to media file (for PDFs, images, etc.)
+  mediaType?: 'application/pdf' | 'image/jpeg' | 'image/png' // Optional: Media MIME type
 }
 
 interface WhatsAppResponse {
@@ -60,8 +63,9 @@ async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse
   const accountSid = process.env.TWILIO_ACCOUNT_SID
   const authToken = process.env.TWILIO_AUTH_TOKEN
   const fromNumber = process.env.TWILIO_WHATSAPP_FROM
-  const templateSid = process.env.TWILIO_WHATSAPP_TEMPLATE_SID // Optional: Content Template SID
-  const useTemplate = process.env.TWILIO_USE_TEMPLATE === 'true' // Optional: Force template usage
+  // Use custom template SID if provided, otherwise use default
+  const templateSid = message.templateSid || process.env.TWILIO_WHATSAPP_TEMPLATE_SID // Optional: Content Template SID
+  const useTemplate = process.env.TWILIO_USE_TEMPLATE === 'true' || process.env.TWILIO_USE_ATTENDANCE_TEMPLATE === 'true' // Optional: Force template usage
 
   console.log('[WhatsApp] Twilio configuration check:', {
     accountSid: accountSid ? 'SET' : 'MISSING',
@@ -136,6 +140,12 @@ async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse
         console.warn('[WhatsApp] ⚠️ For production, set TWILIO_WHATSAPP_TEMPLATE_SID and TWILIO_USE_TEMPLATE=true')
       }
       messagePayload.body = message.message
+    }
+
+    // Add media if provided (for PDF invoices)
+    if (message.mediaUrl && message.mediaType) {
+      messagePayload.mediaUrl = [message.mediaUrl]
+      console.log('[WhatsApp] Attaching media:', { url: message.mediaUrl, type: message.mediaType })
     }
 
     const result = await client.messages.create(messagePayload)
@@ -243,13 +253,17 @@ async function sendViaWebhook(message: WhatsAppMessage): Promise<WhatsAppRespons
  * @param message - Message text to send (for freeform messages)
  * @param templateVariables - Optional array of template variables (for template-based messages)
  * @param forceFreeform - Optional: Force freeform message instead of using templates
+ * @param templateSid - Optional: Custom template SID (overrides default TWILIO_WHATSAPP_TEMPLATE_SID)
  * @returns Promise with success status and optional message ID or error
  */
 export async function sendWhatsAppNotification(
   to: string,
   message: string,
   templateVariables?: string[],
-  forceFreeform?: boolean
+  forceFreeform?: boolean,
+  templateSid?: string,
+  mediaUrl?: string,
+  mediaType?: 'application/pdf' | 'image/jpeg' | 'image/png'
 ): Promise<WhatsAppResponse> {
   // Check if WhatsApp notifications are enabled
   const provider = process.env.WHATSAPP_PROVIDER || 'none'
@@ -278,6 +292,9 @@ export async function sendWhatsAppNotification(
     message,
     templateVariables,
     forceFreeform,
+    templateSid,
+    mediaUrl,
+    mediaType,
   }
 
   switch (provider) {
@@ -450,9 +467,11 @@ export function getAttendanceNotificationTemplateVariables(
     ? (mode === 'OFFICE' ? 'Office' : mode === 'WFH' ? 'Work From Home' : mode === 'LEAVE' ? 'Leave' : mode)
     : 'Not specified'
 
+  // For the new template format, include "*Total Hours:*" prefix for clock-out
+  // For clock-in, leave empty (template will handle it)
   const totalHoursText = action === 'clock-out' && totalHours !== undefined && totalHours !== null
-    ? `${totalHours.toFixed(2)} hours`
-    : 'N/A'
+    ? `*Total Hours:* ${totalHours.toFixed(2)} hours`
+    : ''
 
   // Return variables in order: employeeName, action, time, mode, totalHours
   return [
@@ -579,5 +598,189 @@ export function getWFHInactivityWarningTemplateVariables(
     inactiveDuration,
     formattedLastActivity,
     activityScoreText,
+  ]
+}
+
+/**
+ * Format payment reminder message for WhatsApp
+ * Sent to super admin when a client payment is due in 1 week
+ */
+export function formatPaymentReminderMessage(
+  clientName: string,
+  doctorOrHospitalName: string,
+  amount: number,
+  dueDate: Date,
+  daysUntil: number
+): string {
+  const formattedDueDate = new Date(dueDate).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+
+  let message = `💰 *Payment Reminder*\n\n`
+  message += `*Client:* ${clientName}\n`
+  if (doctorOrHospitalName) {
+    message += `*Doctor/Hospital:* ${doctorOrHospitalName}\n`
+  }
+  message += `*Amount:* ₹${amount.toLocaleString('en-IN')}\n`
+  message += `*Due Date:* ${formattedDueDate}\n`
+  message += `*Days Remaining:* ${daysUntil} day${daysUntil !== 1 ? 's' : ''}\n\n`
+  message += `Please follow up with the client for payment.`
+
+  return message
+}
+
+/**
+ * Get template variables for payment reminder template
+ * Returns variables in the order: [clientName, doctorOrHospitalName, amount, dueDate, daysUntil]
+ */
+export function getPaymentReminderTemplateVariables(
+  clientName: string,
+  doctorOrHospitalName: string,
+  amount: number,
+  dueDate: Date,
+  daysUntil: number
+): string[] {
+  const formattedDueDate = new Date(dueDate).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+
+  return [
+    clientName,
+    doctorOrHospitalName || 'N/A',
+    `₹${amount.toLocaleString('en-IN')}`,
+    formattedDueDate,
+    `${daysUntil} day${daysUntil !== 1 ? 's' : ''}`,
+  ]
+}
+
+/**
+ * Format invoice message for WhatsApp
+ * Sent to clients when invoice is generated
+ */
+export function formatInvoiceMessage(
+  clientName: string,
+  doctorOrHospitalName: string,
+  invoiceNumber: string,
+  amount: number,
+  dueDate: Date,
+  planDuration: string | null,
+  startDate: Date | null,
+  endDate: Date | null,
+  services?: string[]
+): string {
+  const formattedDueDate = new Date(dueDate).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+  const planText = planDuration 
+    ? (planDuration === 'ONE_MONTH' ? '1 Month' :
+       planDuration === 'THREE_MONTHS' ? '3 Months' :
+       planDuration === 'SIX_MONTHS' ? '6 Months' : planDuration)
+    : 'Monthly'
+
+  let message = `📄 *Invoice - ${clientName}*\n\n`
+  message += `*Invoice Number:* ${invoiceNumber}\n`
+  message += `*Client:* ${doctorOrHospitalName}\n`
+  message += `*Plan Duration:* ${planText}\n\n`
+  
+  if (startDate) {
+    const formattedStartDate = new Date(startDate).toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+    message += `*Service Period Start:* ${formattedStartDate}\n`
+  }
+  
+  if (endDate) {
+    const formattedEndDate = new Date(endDate).toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+    message += `*Service Period End:* ${formattedEndDate}\n`
+  }
+  
+  message += `\n*Amount Due:* ₹${amount.toLocaleString('en-IN')}\n`
+  message += `*Due Date:* ${formattedDueDate}\n\n`
+  
+  if (services && services.length > 0) {
+    message += `*Services Included:*\n`
+    services.forEach((service, index) => {
+      message += `${index + 1}. ${service}\n`
+    })
+    message += `\n`
+  }
+  
+  message += `Please make the payment by the due date.\n\n`
+  message += `Thank you for your business! 🙏`
+
+  return message
+}
+
+/**
+ * Get template variables for invoice template
+ */
+export function getInvoiceTemplateVariables(
+  clientName: string,
+  doctorOrHospitalName: string,
+  invoiceNumber: string,
+  amount: number,
+  dueDate: Date,
+  planDuration: string | null,
+  startDate: Date | null,
+  endDate: Date | null
+): string[] {
+  const formattedDueDate = new Date(dueDate).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+  const planText = planDuration 
+    ? (planDuration === 'ONE_MONTH' ? '1 Month' :
+       planDuration === 'THREE_MONTHS' ? '3 Months' :
+       planDuration === 'SIX_MONTHS' ? '6 Months' : planDuration)
+    : 'Monthly'
+
+  const formattedStartDate = startDate 
+    ? new Date(startDate).toLocaleDateString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : 'N/A'
+
+  const formattedEndDate = endDate 
+    ? new Date(endDate).toLocaleDateString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : 'N/A'
+
+  return [
+    invoiceNumber,
+    clientName,
+    doctorOrHospitalName,
+    planText,
+    formattedStartDate,
+    formattedEndDate,
+    `₹${amount.toLocaleString('en-IN')}`,
+    formattedDueDate,
   ]
 }

@@ -30,6 +30,7 @@ async function generateInitialTasksForClient(
             `GMB optimisation for ${clientName}`,
             `Content Calendar for ${clientName}`,
             `Website content for ${clientName}`,
+            `Video content for ${clientName}`,
             `Web development for ${clientName}`,
             `Poster design for ${clientName}`,
           ],
@@ -44,7 +45,7 @@ async function generateInitialTasksForClient(
     }
 
     // Find users by name (case-insensitive)
-    const [gowthami, shaheena, raghu, chaithanya] = await Promise.all([
+    const [gowthami, shaheena, raghu, chaithanya, rohith] = await Promise.all([
       prisma.user.findFirst({
         where: {
           name: { contains: 'Gowthami', mode: 'insensitive' },
@@ -66,6 +67,12 @@ async function generateInitialTasksForClient(
       prisma.user.findFirst({
         where: {
           name: { contains: 'Chaithanya', mode: 'insensitive' },
+          isActive: true,
+        },
+      }),
+      prisma.user.findFirst({
+        where: {
+          name: { contains: 'Rohith', mode: 'insensitive' },
           isActive: true,
         },
       }),
@@ -119,7 +126,22 @@ async function generateInitialTasksForClient(
       })
     }
 
-    // Web development to Raghu
+    // Video content for Shaheena
+    if (shaheena) {
+      tasksToCreate.push({
+        id: randomUUID(),
+        title: `Video content for ${clientName}`,
+        description: `Video content task for ${doctorOrHospitalName}`,
+        priority: 'Medium' as const,
+        status: 'Pending' as const,
+        assignedById,
+        assignedToId: shaheena.id,
+        clientId,
+        startDate,
+      })
+    }
+
+    // Web development to Raghu (will be auto-assigned when Website content is completed)
     if (raghu) {
       tasksToCreate.push({
         id: randomUUID(),
@@ -128,13 +150,13 @@ async function generateInitialTasksForClient(
         priority: 'Medium' as const,
         status: 'Pending' as const,
         assignedById,
-        assignedToId: raghu.id,
+        assignedToId: null, // Will be assigned when Website content is completed
         clientId,
         startDate,
       })
     }
 
-    // Poster design to Chaithanya
+    // Poster design to Chaithanya (will be auto-assigned when Content Calendar is completed)
     if (chaithanya) {
       tasksToCreate.push({
         id: randomUUID(),
@@ -143,7 +165,7 @@ async function generateInitialTasksForClient(
         priority: 'Medium' as const,
         status: 'Pending' as const,
         assignedById,
-        assignedToId: chaithanya.id,
+        assignedToId: null, // Will be assigned when Content Calendar is completed
         clientId,
         startDate,
       })

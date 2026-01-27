@@ -13,11 +13,12 @@ interface Step3ServicesProps {
   clientId: string | null
   data: any
   onComplete: (data: any) => void
+  onSave?: (data: any) => Promise<void>
   onFinalize?: never
   loading: boolean
 }
 
-export function Step3Services({ clientId, data, onComplete, loading }: Step3ServicesProps) {
+export function Step3Services({ clientId, data, onComplete, onSave, loading }: Step3ServicesProps) {
   const [services, setServices] = useState<any[]>(data.services || [])
   const [usps, setUsps] = useState<any[]>(data.usps || [])
   const [serviceName, setServiceName] = useState('')
@@ -68,7 +69,15 @@ export function Step3Services({ clientId, data, onComplete, loading }: Step3Serv
     }
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    // Save and then move to next step
+    if (onSave) {
+      try {
+        await onSave({ services, usps })
+      } catch (err) {
+        return // Error handling is done in parent
+      }
+    }
     onComplete({ services, usps })
   }
 
@@ -158,7 +167,7 @@ export function Step3Services({ clientId, data, onComplete, loading }: Step3Serv
 
       <div className="flex justify-end gap-2">
         <Button onClick={handleNext} disabled={loading || services.length === 0}>
-          Next Step
+          {loading ? 'Saving...' : 'Save and Next'}
         </Button>
       </div>
     </div>

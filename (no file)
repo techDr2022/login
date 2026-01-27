@@ -1,0 +1,19 @@
+*** Update File: components/invoices/invoices-dashboard.tsx
+@@
+ export function InvoicesDashboard() {
+   const [invoices, setInvoices] = useState<ClientInvoice[]>([])
+   const [loading, setLoading] = useState(true)
+   const [editingInvoice, setEditingInvoice] = useState<ClientInvoice | null>(null)
+   const [isDialogOpen, setIsDialogOpen] = useState(false)
++  const [planFilter, setPlanFilter] = useState<'ALL' | 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS'>('ALL')
+@@
+   const handleSendInvoice = async (invoice: ClientInvoice) => {
+@@
+     }
+   }
+
++  const filteredInvoices =
++    planFilter === 'ALL'
++      ? invoices
++      : invoices.filter((inv) => inv.planDuration === planFilter)
++

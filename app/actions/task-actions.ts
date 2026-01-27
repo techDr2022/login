@@ -11,6 +11,105 @@ import { UserRole, TaskStatus } from '@prisma/client'
 import { sendWhatsAppNotification, formatTaskAssignmentMessage, getTaskAssignmentTemplateVariables } from '@/lib/whatsapp'
 import { revalidatePath } from 'next/cache'
 
+// Helper function to handle task dependencies - creates/assigns next task when a task is completed
+async function handleTaskDependencies(completedTaskId: string, clientId: string | null, clientName: string, doctorOrHospitalName: string, assignedById: string) {
+  if (!clientId) return // Only handle tasks with clients
+
+  const completedTask = await prisma.task.findUnique({
+    where: { id: completedTaskId },
+    select: { title: true, clientId: true },
+  })
+
+  if (!completedTask) return
+
+  // Extract task name from task title (format: "Task Name for ClientName")
+  const titleMatch = completedTask.title.match(/^(.+?)\s+for\s+(.+)$/i)
+  if (!titleMatch) return
+
+  const taskName = titleMatch[1].trim()
+  // Use the passed clientName parameter instead of extracting from title for consistency
+
+  // Find users by name (case-insensitive)
+  const [gowthami, shaheena, raghu, chaithanya, rohith] = await Promise.all([
+    prisma.user.findFirst({
+      where: { name: { contains: 'Gowthami', mode: 'insensitive' }, isActive: true },
+    }),
+    prisma.user.findFirst({
+      where: { name: { contains: 'Shaheena', mode: 'insensitive' }, isActive: true },
+    }),
+    prisma.user.findFirst({
+      where: { name: { contains: 'Raghu', mode: 'insensitive' }, isActive: true },
+    }),
+    prisma.user.findFirst({
+      where: { name: { contains: 'Chaithanya', mode: 'insensitive' }, isActive: true },
+    }),
+    prisma.user.findFirst({
+      where: { name: { contains: 'Rohith', mode: 'insensitive' }, isActive: true },
+    }),
+  ])
+
+  let nextTaskTitle: string | null = null
+  let nextTaskAssignee: typeof gowthami | null = null
+
+  // Define task dependencies
+  if (taskName === 'Content Calendar') {
+    // Content Calendar completed → assign Poster design to Chaithanya
+    nextTaskTitle = `Poster design for ${clientName}`
+    nextTaskAssignee = chaithanya
+  } else if (taskName === 'Video content') {
+    // Video content completed → create Video editing for Rohith
+    nextTaskTitle = `Video editing for ${clientName}`
+    nextTaskAssignee = rohith
+  } else if (taskName === 'Website content') {
+    // Website content completed → assign Web development to Raghu
+    nextTaskTitle = `Web development for ${clientName}`
+    nextTaskAssignee = raghu
+  } else if (taskName === 'Poster design') {
+    // Poster design completed → create Scheduling the posters for Gowthami
+    nextTaskTitle = `Scheduling the posters for ${clientName}`
+    nextTaskAssignee = gowthami
+  }
+
+  if (!nextTaskTitle || !nextTaskAssignee) return
+
+  // Check if the next task already exists
+  const existingTask = await prisma.task.findFirst({
+    where: {
+      clientId,
+      title: nextTaskTitle,
+    },
+  })
+
+  if (existingTask) {
+    // If task exists but not assigned, assign it now
+    if (!existingTask.assignedToId) {
+      await prisma.task.update({
+        where: { id: existingTask.id },
+        data: { assignedToId: nextTaskAssignee.id },
+      })
+      await logActivity(assignedById, 'UPDATE', 'Task', existingTask.id)
+      console.log(`Auto-assigned existing task "${nextTaskTitle}" to ${nextTaskAssignee.name}`)
+    }
+  } else {
+    // Create new task
+    const newTask = await prisma.task.create({
+      data: {
+        id: randomUUID(),
+        title: nextTaskTitle,
+        description: `${nextTaskTitle.replace(` for ${clientName}`, '')} task for ${doctorOrHospitalName}`,
+        priority: 'Medium' as const,
+        status: 'Pending' as const,
+        assignedById,
+        assignedToId: nextTaskAssignee.id,
+        clientId,
+        startDate: new Date(),
+      },
+    })
+    await logActivity(assignedById, 'CREATE', 'Task', newTask.id)
+    console.log(`Auto-created and assigned task "${nextTaskTitle}" to ${nextTaskAssignee.name}`)
+  }
+}
+
 export async function createTask(data: {
   title: string
   description?: string
@@ -458,9 +557,30 @@ export async function updateTaskStatus(id: string, data: {
   const updatedTask = await prisma.task.update({
     where: { id },
     data: validated,
+    include: {
+      Client: {
+        select: { name: true, doctorOrHospitalName: true },
+      },
+    },
   })
 
   await logActivity(session.user.id, 'UPDATE', 'Task', updatedTask.id)
+
+  // Handle task dependencies when a task is approved (completed)
+  if (data.status === 'Approved' && updatedTask.clientId && updatedTask.Client) {
+    try {
+      await handleTaskDependencies(
+        updatedTask.id,
+        updatedTask.clientId,
+        updatedTask.Client.name,
+        updatedTask.Client.doctorOrHospitalName || updatedTask.Client.name,
+        session.user.id
+      )
+    } catch (error) {
+      // Log error but don't fail the status update
+      console.error('Error handling task dependencies:', error)
+    }
+  }
 
   // Revalidate paths to refresh UI
   revalidatePath('/tasks')

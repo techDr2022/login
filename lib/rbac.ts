@@ -36,3 +36,14 @@ export function canClockInOut(userRole: UserRole): boolean {
   return userRole === UserRole.EMPLOYEE
 }
 
+export function canAccessDesignerWorkspace(userRole: UserRole): boolean {
+  return (
+    userRole === UserRole.SUPER_ADMIN ||
+    userRole === UserRole.MANAGER ||
+    userRole === UserRole.EMPLOYEE
+  )
+}
+
+export function canViewInvoices(userRole: UserRole): boolean {
+  return userRole === UserRole.SUPER_ADMIN
+}

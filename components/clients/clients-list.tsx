@@ -48,6 +48,7 @@ export function ClientsList() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [stats, setStats] = useState({
@@ -80,12 +81,22 @@ export function ClientsList() {
   const canEdit = session?.user.role && canEditClient(session.user.role as UserRole)
   const canCreate = session?.user.role && canCreateClient(session.user.role as UserRole)
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1) // Reset to first page when search changes
+    }, 300) // Wait 300ms after user stops typing
+
+    return () => clearTimeout(timer)
+  }, [search])
+
   useEffect(() => {
     fetchClients()
     if (canCreate) {
       fetchManagers()
     }
-  }, [page, search, canCreate, statusFilter])
+  }, [page, debouncedSearch, canCreate, statusFilter])
 
   const fetchManagers = async () => {
     try {
@@ -105,7 +116,7 @@ export function ClientsList() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '12',
-        ...(search && { search }),
+        ...(debouncedSearch && { search: debouncedSearch }),
       })
       const res = await fetch(`/api/clients?${params}`)
       const data = await res.json()
@@ -159,7 +170,6 @@ export function ClientsList() {
       
       setDialogOpen(false)
       resetForm()
-      router.refresh()
       fetchClients()
     } catch (err: any) {
       setError(err.message || 'Failed to save client')
@@ -174,7 +184,6 @@ export function ClientsList() {
     setIsDeleting(id)
     try {
       await deleteClient(id)
-      router.refresh()
       fetchClients()
     } catch (err: any) {
       setError(err.message || 'Failed to delete client')
@@ -199,7 +208,6 @@ export function ClientsList() {
     setIsUpdatingStatus(clientId)
     try {
       await updateClientStatus(clientId, newStatus)
-      router.refresh()
       fetchClients()
     } catch (err: any) {
       setError(err.message || 'Failed to update client status')
@@ -215,7 +223,6 @@ export function ClientsList() {
     try {
       await bulkUpdateClientStatus(Array.from(selectedClients), newStatus)
       setSelectedClients(new Set())
-      router.refresh()
       fetchClients()
     } catch (err: any) {
       setError(err.message || 'Failed to update client statuses')
@@ -376,10 +383,7 @@ export function ClientsList() {
             <Input
               placeholder="Search clients by name, hospital, or location..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setPage(1)
-              }}
+              onChange={(e) => setSearch(e.target.value)}
               className="pl-10 rounded-xl"
             />
           </div>
