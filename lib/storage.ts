@@ -124,10 +124,23 @@ class LocalStorageAdapter implements StorageAdapter {
   async upload(file: Buffer, filename: string, mimeType?: string): Promise<string> {
     await this.ensureDirectoryExists()
     
-    const key = `${Date.now()}-${randomBytes(8).toString('hex')}-${filename}`
+    // Sanitize filename to remove problematic characters
+    const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const key = `${Date.now()}-${randomBytes(8).toString('hex')}-${sanitizedFilename}`
     const filePath = join(this.basePath, key)
     
-    await writeFile(filePath, file)
+    try {
+      await writeFile(filePath, file)
+      console.log('File saved successfully:', { key, filePath, size: file.length })
+      
+      // Verify file was written
+      if (!existsSync(filePath)) {
+        throw new Error('File was not written to disk')
+      }
+    } catch (error) {
+      console.error('Failed to write file:', { key, filePath, error })
+      throw error
+    }
     
     return key
   }

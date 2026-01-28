@@ -1,4 +1,6 @@
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 120 // 2 minutes to match vercel.json config
 
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -31,6 +33,10 @@ export async function GET(request: NextRequest) {
           controller.enqueue(encoder.encode(message))
         } catch (error) {
           console.error('Error sending SSE event:', error)
+          // If controller is closed, mark as closed
+          if (error instanceof Error && error.message.includes('closed')) {
+            isClosed = true
+          }
         }
       }
 
@@ -65,16 +71,19 @@ export async function GET(request: NextRequest) {
         sendEvent({ type: 'error', message: 'Failed to initialize task status map' })
       }
 
-      // Send heartbeat every 30 seconds to keep connection alive
+      // Send heartbeat every 30 seconds to keep connection alive and detect disconnects faster
       const heartbeatInterval = setInterval(() => {
         if (!isClosed) {
           sendEvent({ type: 'heartbeat', timestamp: new Date().toISOString() })
         }
       }, 30000)
 
-      // Poll for new tasks every 2 seconds
-      let lastCheck = new Date()
+      // Poll for new tasks every 1.5 seconds for better real-time responsiveness
+      let lastCheck = new Date(Date.now() - 2000) // Start 2 seconds back to catch recent changes
       let lastTaskCount = 0
+      let consecutiveErrors = 0
+      const MAX_CONSECUTIVE_ERRORS = 5
+      
       const pollInterval = setInterval(async () => {
         if (isClosed) {
           clearInterval(pollInterval)
@@ -82,9 +91,14 @@ export async function GET(request: NextRequest) {
         }
 
         try {
+          consecutiveErrors = 0 // Reset on success
+          const now = new Date()
+          // Use a slightly earlier timestamp to ensure we don't miss any tasks
+          const checkFrom = new Date(lastCheck.getTime() - 1000) // Check 1 second before last check
+          
           // Build query based on user role
           const where: any = {
-            createdAt: { gt: lastCheck },
+            createdAt: { gt: checkFrom },
           }
           
           // For non-admin users, only show tasks assigned to them or assigned by them
@@ -185,12 +199,12 @@ export async function GET(request: NextRequest) {
             lastTaskCount = unreadTasksCount
           }
 
-          // Check for status changes
+          // Check for status changes - use same checkFrom timestamp
           const recentTaskUpdates = await prisma.activity_logs.findMany({
             where: {
               entityType: 'Task',
               action: 'UPDATE',
-              timestamp: { gt: lastCheck },
+              timestamp: { gt: checkFrom },
             },
             include: {
               User: {
@@ -320,19 +334,34 @@ export async function GET(request: NextRequest) {
             }
           }
 
-          lastCheck = new Date()
+          lastCheck = now
         } catch (error) {
-          console.error('[SSE] Error in task SSE poll:', error)
+          consecutiveErrors++
+          console.error(`[SSE] Error in task SSE poll (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, error)
+          
+          // If too many consecutive errors, close the connection
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            console.error('[SSE] Too many consecutive errors, closing connection')
+            cleanup()
+            return
+          }
+          
           // Send error event to client (but don't close connection)
           if (!isClosed) {
-            sendEvent({ 
-              type: 'error', 
-              message: 'Error polling for tasks',
-              error: error instanceof Error ? error.message : 'Unknown error'
-            })
+            try {
+              sendEvent({ 
+                type: 'error', 
+                message: 'Error polling for tasks',
+                error: error instanceof Error ? error.message : 'Unknown error'
+              })
+            } catch (sendError) {
+              // If we can't send error, connection is likely dead
+              console.error('[SSE] Cannot send error event, closing connection')
+              cleanup()
+            }
           }
         }
-      }, 2000)
+      }, 1500) // Poll every 1.5 seconds for better real-time responsiveness
 
       // Cleanup function
       let timeout: NodeJS.Timeout | null = null
@@ -358,7 +387,7 @@ export async function GET(request: NextRequest) {
         request.signal.addEventListener('abort', cleanup)
       }
 
-      // Also set a timeout to close after 5 minutes of inactivity
+      // Also set a timeout to close after 5 minutes of inactivity (increased for better stability)
       timeout = setTimeout(cleanup, 5 * 60 * 1000)
     },
   })

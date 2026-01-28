@@ -82,7 +82,53 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
         setClient(null)
         return
       }
-      setClient(data)
+      
+      // Normalize field names to handle both camelCase and snake_case from API
+      const branding = data.branding || data.client_branding
+      const targeting = data.targeting || data.client_targeting
+      
+      const normalizedData = {
+        ...data,
+        // Normalize related data arrays
+        doctors: data.doctors || data.client_doctors || [],
+        services: data.clientServices || data.client_services || [],
+        usps: data.usps || data.client_usps || [],
+        accesses: data.accesses || data.client_accesses || [],
+        assets: data.assets || data.client_assets || [],
+        competitors: data.competitors || data.client_competitors || [],
+        // Normalize related objects with JSON parsing
+        branding: branding ? {
+          ...branding,
+          brandColors: branding.brandColors 
+            ? (typeof branding.brandColors === 'string' 
+                ? (branding.brandColors.trim() ? JSON.parse(branding.brandColors) : null)
+                : branding.brandColors)
+            : null
+        } : null,
+        targeting: targeting ? {
+          ...targeting,
+          nearbyAreas: targeting.nearbyAreas
+            ? (Array.isArray(targeting.nearbyAreas) 
+                ? targeting.nearbyAreas 
+                : (typeof targeting.nearbyAreas === 'string' && targeting.nearbyAreas.trim()
+                    ? JSON.parse(targeting.nearbyAreas)
+                    : []))
+            : [],
+          mainKeywords: targeting.mainKeywords
+            ? (Array.isArray(targeting.mainKeywords)
+                ? targeting.mainKeywords
+                : (typeof targeting.mainKeywords === 'string' && targeting.mainKeywords.trim()
+                    ? JSON.parse(targeting.mainKeywords)
+                    : []))
+            : []
+        } : null,
+        marketingRequirements: data.marketingRequirements || data.client_marketing_requirements || null,
+        approvalSettings: data.approvalSettings || data.client_approval_settings || null,
+        kpis: data.kpis || data.client_kpi_monthly || [],
+        tasks: data.Task || data.tasks || [],
+      }
+      
+      setClient(normalizedData)
     } catch (err: any) {
       console.error('Failed to fetch client:', err)
       setError(err.message || 'Failed to load client. Please try again.')
@@ -210,11 +256,11 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
     return <Badge variant={variants[status] || 'secondary'}>{status}</Badge>
   }
 
-  // Calculate statistics - handle both camelCase and snake_case field names
-  const tasks = client.Task || client.tasks || []
-  const doctors = client.doctors || client.client_doctors || []
-  const services = client.clientServices || client.client_services || []
-  const kpis = client.kpis || client.client_kpi_monthly || []
+  // Calculate statistics - use normalized fields
+  const tasks = client.tasks || []
+  const doctors = client.doctors || []
+  const services = client.services || []
+  const kpis = client.kpis || []
   
   const stats = {
     totalTasks: tasks.length || 0,
@@ -229,20 +275,28 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
   // Parse working days if available
   const workingDays = client.workingDays ? (typeof client.workingDays === 'string' ? JSON.parse(client.workingDays) : client.workingDays) : null
 
-  // Find logo asset
-  const assets = client.assets || client.client_assets || []
-  const logoAsset = assets.find((asset: any) => asset.type === 'LOGO')
+  // Find profile picture - prioritize doctor photos, then logo, then any photo
+  const assets = client.assets || []
   
-  // Get logo URL - if URL starts with http, use directly (S3), otherwise use /api/files/ (local)
-  const getLogoUrl = (asset: any) => {
+  // Get asset URL - URLs should already be normalized by the API
+  const getAssetUrl = (asset: any) => {
     if (!asset?.url) return null
-    const url = asset.url
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url
-    }
-    return `/api/files/${url}`
+    return asset.url
   }
-  const logoUrl = logoAsset ? getLogoUrl(logoAsset) : null
+  
+  // Find the best profile picture in priority order:
+  // 1. PHOTO type (doctor photos)
+  // 2. LOGO type
+  // 3. Any image asset
+  const photoAsset = assets.find((asset: any) => asset.type === 'PHOTO')
+  const logoAsset = assets.find((asset: any) => asset.type === 'LOGO')
+  const anyImageAsset = assets.find((asset: any) => 
+    asset.mimeType?.startsWith('image/') || 
+    /\.(jpg|jpeg|png|gif|webp)$/i.test(asset.url || '')
+  )
+  
+  const profileAsset = photoAsset || logoAsset || anyImageAsset
+  const profilePicUrl = profileAsset ? getAssetUrl(profileAsset) : null
 
   // Get client initials for fallback
   const getClientInitials = (name: string) => {
@@ -265,14 +319,14 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
           </Button>
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              {logoUrl && (
-                <Avatar className="h-12 w-12 rounded-lg border">
-                  <AvatarImage src={logoUrl} alt={`${client.name || client.doctorOrHospitalName} logo`} />
-                  <AvatarFallback className="rounded-lg">
-                    {getClientInitials(client.name || client.doctorOrHospitalName || 'U')}
-                  </AvatarFallback>
-                </Avatar>
-              )}
+              <Avatar className="h-14 w-14 rounded-lg border">
+                {profilePicUrl ? (
+                  <AvatarImage src={profilePicUrl} alt={`${client.name || client.doctorOrHospitalName}`} />
+                ) : null}
+                <AvatarFallback className="rounded-lg text-lg">
+                  {getClientInitials(client.name || client.doctorOrHospitalName || 'U')}
+                </AvatarFallback>
+              </Avatar>
               <h1 className="text-3xl font-bold">{client.name || client.doctorOrHospitalName || 'Unnamed Client'}</h1>
               {getStatusBadge(client.status || 'ONBOARDING')}
               {client.type && <Badge variant="outline" className="text-xs">{client.type}</Badge>}
@@ -616,6 +670,69 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
               </CardContent>
             </Card>
           </div>
+
+          {/* Photos Preview in Overview */}
+          {client.assets && client.assets.length > 0 && (
+            <Card className="rounded-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Download className="w-5 h-5" />
+                  Photos & Assets ({client.assets.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {client.assets.map((asset: any) => {
+                    const imageUrl = typeof asset.url === 'string' ? asset.url : ''
+                    const isImage = asset.mimeType?.startsWith('image/') || 
+                      ['LOGO', 'PHOTO'].includes(asset.type) ||
+                      /\.(jpg|jpeg|png|gif|webp)$/i.test(asset.url || '')
+                    
+                    return (
+                      <div key={asset.id} className="border rounded-lg overflow-hidden group">
+                        {/* Thumbnail */}
+                        {isImage && imageUrl ? (
+                          <div className="relative aspect-square bg-muted">
+                            <img
+                              src={imageUrl}
+                              alt={asset.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none'
+                              }}
+                            />
+                            {/* Download overlay on hover */}
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Button asChild variant="secondary" size="sm">
+                                <a 
+                                  href={imageUrl} 
+                                  download={asset.title || 'asset'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <Download className="w-4 h-4 mr-1" />
+                                  Download
+                                </a>
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="aspect-square bg-muted flex items-center justify-center">
+                            <span className="text-xs text-muted-foreground">{asset.type}</span>
+                          </div>
+                        )}
+                        
+                        {/* Title */}
+                        <div className="p-2">
+                          <p className="text-xs font-medium truncate" title={asset.title}>{asset.title}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="doctors" className="space-y-4">
@@ -762,12 +879,51 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {client.assets.map((asset: any) => (
-                    <div key={asset.id} className="border rounded-lg p-2">
-                      <p className="text-sm font-medium">{asset.title}</p>
-                      <p className="text-xs text-muted-foreground">{asset.type}</p>
-                    </div>
-                  ))}
+                  {client.assets.map((asset: any) => {
+                    // asset.url should already be a usable URL from the API
+                    const imageUrl = typeof asset.url === 'string' ? asset.url : ''
+                    const isImage = asset.mimeType?.startsWith('image/') || 
+                      ['LOGO', 'PHOTO'].includes(asset.type) ||
+                      /\.(jpg|jpeg|png|gif|webp)$/i.test(asset.url || '')
+                    
+                    return (
+                      <div key={asset.id} className="border rounded-lg p-2 space-y-2">
+                        {/* Thumbnail */}
+                        {isImage && imageUrl && (
+                          <div className="relative aspect-video bg-muted rounded overflow-hidden">
+                            <img
+                              src={imageUrl}
+                              alt={asset.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none'
+                              }}
+                            />
+                          </div>
+                        )}
+                        
+                        {/* Info and Download */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate" title={asset.title}>{asset.title}</p>
+                            <p className="text-xs text-muted-foreground">{asset.type}</p>
+                          </div>
+                          {imageUrl && (
+                            <Button asChild variant="outline" size="icon" className="shrink-0 h-8 w-8" title="Download">
+                              <a 
+                                href={imageUrl} 
+                                download={asset.title || 'asset'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <Download className="w-4 h-4" />
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>

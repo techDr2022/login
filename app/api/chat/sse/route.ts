@@ -1,4 +1,6 @@
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 120 // 2 minutes to match vercel.json config
 
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -36,8 +38,62 @@ export async function GET(request: NextRequest) {
       // Send initial connection message
       sendEvent({ type: 'connected', userId })
 
-      // Poll for new messages every 2 seconds
-      let lastCheck = new Date()
+      // Cache accessible thread IDs to avoid repeated queries
+      let cachedThreadIds: string[] | null = null
+      let threadCacheExpiry = 0
+      const THREAD_CACHE_TTL = 30000 // Cache for 30 seconds
+
+      const getAccessibleThreadIds = async (): Promise<string[]> => {
+        const now = Date.now()
+        if (cachedThreadIds && now < threadCacheExpiry) {
+          return cachedThreadIds
+        }
+
+        // Get threads user has access to - create team thread if doesn't exist
+        let teamThread = await prisma.chat_threads.findFirst({
+          where: { type: ChatThreadType.TEAM },
+          select: { id: true },
+        })
+
+        if (!teamThread) {
+          teamThread = await prisma.chat_threads.create({
+            data: { id: randomUUID(), type: ChatThreadType.TEAM },
+            select: { id: true },
+          })
+        }
+
+        const directThreads = await prisma.chat_threads.findMany({
+          where: {
+            type: ChatThreadType.DIRECT,
+            OR: [{ user1Id: userId }, { user2Id: userId }],
+          },
+          include: {
+            User_chat_threads_user1IdToUser: { select: { role: true } },
+            User_chat_threads_user2IdToUser: { select: { role: true } },
+          },
+        })
+
+        const accessibleThreadIds: string[] = []
+        if (teamThread) accessibleThreadIds.push(teamThread.id)
+
+        for (const thread of directThreads) {
+          const hasSuperAdmin =
+            userRole === UserRole.SUPER_ADMIN ||
+            thread.User_chat_threads_user1IdToUser?.role === UserRole.SUPER_ADMIN ||
+            thread.User_chat_threads_user2IdToUser?.role === UserRole.SUPER_ADMIN
+
+          if (hasSuperAdmin) {
+            accessibleThreadIds.push(thread.id)
+          }
+        }
+
+        cachedThreadIds = accessibleThreadIds
+        threadCacheExpiry = now + THREAD_CACHE_TTL
+        return accessibleThreadIds
+      }
+
+      // Poll for new messages every 1.5 seconds for better real-time responsiveness
+      let lastCheck = new Date(Date.now() - 2000) // Start 2 seconds back to catch recent changes
       let lastUnreadCount = 0
       const pollInterval = setInterval(async () => {
         if (isClosed) {
@@ -46,50 +102,18 @@ export async function GET(request: NextRequest) {
         }
 
         try {
-          // Get threads user has access to - create team thread if doesn't exist
-          let teamThread = await prisma.chat_threads.findFirst({
-            where: { type: ChatThreadType.TEAM },
-            select: { id: true },
-          })
-
-          if (!teamThread) {
-            teamThread = await prisma.chat_threads.create({
-              data: { id: randomUUID(), type: ChatThreadType.TEAM },
-              select: { id: true },
-            })
-          }
-
-          const directThreads = await prisma.chat_threads.findMany({
-            where: {
-              type: ChatThreadType.DIRECT,
-              OR: [{ user1Id: userId }, { user2Id: userId }],
-            },
-            include: {
-              User_chat_threads_user1IdToUser: { select: { role: true } },
-              User_chat_threads_user2IdToUser: { select: { role: true } },
-            },
-          })
-
-          const accessibleThreadIds: string[] = []
-          if (teamThread) accessibleThreadIds.push(teamThread.id)
-
-          for (const thread of directThreads) {
-            const hasSuperAdmin =
-              userRole === UserRole.SUPER_ADMIN ||
-              thread.User_chat_threads_user1IdToUser?.role === UserRole.SUPER_ADMIN ||
-              thread.User_chat_threads_user2IdToUser?.role === UserRole.SUPER_ADMIN
-
-            if (hasSuperAdmin) {
-              accessibleThreadIds.push(thread.id)
-            }
-          }
+          const now = new Date()
+          // Use a slightly earlier timestamp to ensure we don't miss any messages
+          const checkFrom = new Date(lastCheck.getTime() - 1000) // Check 1 second before last check
+          
+          const accessibleThreadIds = await getAccessibleThreadIds()
 
           // Check for new messages
           const newMessages = await prisma.chat_messages.findMany({
             where: {
               threadId: { in: accessibleThreadIds },
               senderId: { not: userId },
-              createdAt: { gt: lastCheck },
+              createdAt: { gt: checkFrom },
             },
             include: {
               User: { select: { id: true, name: true, email: true, role: true } },
@@ -127,11 +151,11 @@ export async function GET(request: NextRequest) {
             lastUnreadCount = totalUnread
           }
 
-          lastCheck = new Date()
+          lastCheck = now
         } catch (error) {
           console.error('Error in SSE poll:', error)
         }
-      }, 2000)
+      }, 1500) // Poll every 1.5 seconds for better real-time responsiveness
 
       // Cleanup function
       let timeout: NodeJS.Timeout | null = null
@@ -153,7 +177,7 @@ export async function GET(request: NextRequest) {
         request.signal.addEventListener('abort', cleanup)
       }
 
-      // Also set a timeout to close after 5 minutes of inactivity
+      // Also set a timeout to close after 5 minutes of inactivity (increased for better stability)
       timeout = setTimeout(cleanup, 5 * 60 * 1000)
     },
   })

@@ -15,9 +15,11 @@ export function useTaskNotifications({ onNewTask, onTaskCountUpdate }: TaskNotif
   const [notifyTaskUpdates, setNotifyTaskUpdates] = useState(true)
   const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const heartbeatCheckIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
-  const maxReconnectAttempts = 5
-  const baseReconnectDelay = 3000
+  const maxReconnectAttempts = 10 // Increased for better reliability
+  const baseReconnectDelay = 2000 // Reduced initial delay for faster reconnection
+  const lastHeartbeatRef = useRef<number>(Date.now())
 
   // Fetch user notification preferences
   useEffect(() => {
@@ -74,6 +76,10 @@ export function useTaskNotifications({ onNewTask, onTaskCountUpdate }: TaskNotif
       clearTimeout(reconnectTimeoutRef.current)
       reconnectTimeoutRef.current = null
     }
+    if (heartbeatCheckIntervalRef.current) {
+      clearInterval(heartbeatCheckIntervalRef.current)
+      heartbeatCheckIntervalRef.current = null
+    }
 
     // Set up SSE connection for real-time task updates
     const connectSSE = () => {
@@ -86,6 +92,7 @@ export function useTaskNotifications({ onNewTask, onTaskCountUpdate }: TaskNotif
         eventSource.onopen = () => {
           console.log('[Notifications] SSE connection established')
           reconnectAttemptsRef.current = 0 // Reset on successful connection
+          lastHeartbeatRef.current = Date.now() // Reset heartbeat timer
         }
 
         eventSource.onmessage = (event) => {
@@ -101,6 +108,7 @@ export function useTaskNotifications({ onNewTask, onTaskCountUpdate }: TaskNotif
             
             // Handle heartbeat to confirm connection is alive
             if (data.type === 'heartbeat') {
+              lastHeartbeatRef.current = Date.now()
               // Connection is alive, no action needed
               return
             }
@@ -215,19 +223,42 @@ export function useTaskNotifications({ onNewTask, onTaskCountUpdate }: TaskNotif
           }
         }
 
+        // Monitor heartbeat to detect stale connections
+        if (heartbeatCheckIntervalRef.current) {
+          clearInterval(heartbeatCheckIntervalRef.current)
+        }
+        heartbeatCheckIntervalRef.current = setInterval(() => {
+          const timeSinceLastHeartbeat = Date.now() - lastHeartbeatRef.current
+          // If no heartbeat for 90 seconds (3x the 30s interval), reconnect
+          if (timeSinceLastHeartbeat > 90000 && eventSourceRef.current) {
+            console.warn('[Notifications] No heartbeat received, reconnecting...')
+            eventSourceRef.current.close()
+            eventSourceRef.current = null
+            reconnectAttemptsRef.current = 0 // Reset attempts for heartbeat timeout
+            connectSSE()
+          }
+        }, 30000) // Check every 30 seconds
+
         eventSource.onerror = (error) => {
           console.error('[Notifications] SSE connection error:', error)
           const state = eventSource.readyState
           
           if (state === EventSource.CLOSED) {
+            if (heartbeatCheckIntervalRef.current) {
+              clearInterval(heartbeatCheckIntervalRef.current)
+              heartbeatCheckIntervalRef.current = null
+            }
             console.log('[Notifications] SSE connection closed, attempting to reconnect...')
             eventSource.close()
             eventSourceRef.current = null
             
-            // Exponential backoff for reconnection
+            // Exponential backoff for reconnection with max delay cap
             if (reconnectAttemptsRef.current < maxReconnectAttempts) {
               reconnectAttemptsRef.current++
-              const delay = baseReconnectDelay * Math.pow(2, reconnectAttemptsRef.current - 1)
+              const delay = Math.min(
+                baseReconnectDelay * Math.pow(2, reconnectAttemptsRef.current - 1),
+                10000 // Max 10 seconds delay
+              )
               console.log(`[Notifications] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`)
               
               reconnectTimeoutRef.current = setTimeout(() => {
@@ -266,6 +297,10 @@ export function useTaskNotifications({ onNewTask, onTaskCountUpdate }: TaskNotif
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null
+      }
+      if (heartbeatCheckIntervalRef.current) {
+        clearInterval(heartbeatCheckIntervalRef.current)
+        heartbeatCheckIntervalRef.current = null
       }
     }
   }, [onNewTask, onTaskCountUpdate, notifyTaskUpdates])

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Upload, X, Plus, Trash2, Image as ImageIcon, Globe, Facebook, Instagram, MessageCircle, Link as LinkIcon, DollarSign } from 'lucide-react'
+import { Upload, X, Plus, Trash2, Image as ImageIcon, Globe, Facebook, Instagram, MessageCircle, Link as LinkIcon, DollarSign, Download } from 'lucide-react'
 import { DatePicker } from '@/components/ui/date-picker'
 import { updateClientInvoice } from '@/app/actions/invoice-actions'
 import {
@@ -250,11 +250,29 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
       const data = await res.json()
 
       if (res.ok) {
-        setAssets([...assets, data])
+        // The API returns:
+        // - url: directly usable public URL (S3 signed URL or /api/files/{key})
+        // - key: storage key saved in the database
+        // For the UI we only need a display URL and the asset id for delete.
+        const newAsset = {
+          id: data.id,
+          clientId: client.id,
+          title: data.title || file.name,
+          type: data.type || 'PHOTO',
+          category: data.category || null,
+          url: data.url as string,
+          mimeType: file.type,
+          size: file.size,
+        }
+        
+        console.log('Uploaded asset:', { newAsset, apiResponse: data, file: { name: file.name, type: file.type, size: file.size } })
+        setAssets([...assets, newAsset])
       } else {
+        console.error('Upload failed:', data)
         alert(data.error || 'Failed to upload file')
       }
     } catch (err: any) {
+      console.error('Upload error:', err)
       alert(`Failed to upload file: ${err.message}`)
     } finally {
       setUploading(false)
@@ -726,33 +744,59 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
               </div>
 
               <div className="grid grid-cols-3 gap-4">
-                {assets.map((asset) => (
-                  <Card key={asset.id}>
-                    <CardContent className="p-4">
-                      {asset.url && (
-                        <img
-                          src={asset.url}
-                          alt={asset.title}
-                          className="w-full h-32 object-cover rounded mb-2"
-                        />
-                      )}
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium">{asset.title}</p>
-                          <p className="text-xs text-muted-foreground">{asset.type}</p>
+                {assets.map((asset) => {
+                  // After server-side normalization, asset.url is already a usable URL:
+                  // - S3: https://signed-url...
+                  // - Local: /api/files/{key}
+                  const publicUrl = typeof asset.url === 'string' ? asset.url : ''
+
+                  return (
+                    <Card key={asset.id}>
+                      <CardContent className="p-4 space-y-2">
+                        {publicUrl && (
+                          <img
+                            src={publicUrl}
+                            alt={asset.title}
+                            className="w-full h-32 object-cover rounded mb-2"
+                            onError={(e) => {
+                              console.error('Failed to load image:', publicUrl, asset)
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        )}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium">{asset.title}</p>
+                            <p className="text-xs text-muted-foreground">{asset.type}</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {publicUrl && (
+                              <Button asChild type="button" variant="outline" size="icon" title="Download">
+                                <a 
+                                  href={publicUrl} 
+                                  download={asset.title || 'client-asset'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </a>
+                              </Button>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteAsset(asset.id)}
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </div>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteAsset(asset.id)}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
                 {assets.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-8 col-span-3">
                     No photos uploaded yet. Click "Upload Photo" to add photos.
