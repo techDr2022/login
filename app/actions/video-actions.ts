@@ -47,6 +47,11 @@ export async function getClientVideos(monthKey?: string): Promise<ClientVideoRow
       name: true,
       doctorOrHospitalName: true,
       User: { select: { id: true, name: true } },
+      client_marketing_requirements: {
+        select: {
+          reelsPerMonth: true,
+        },
+      },
       clientVideoMonths: {
         where: { monthKey: key },
         take: 1,
@@ -64,6 +69,10 @@ export async function getClientVideos(monthKey?: string): Promise<ClientVideoRow
 
   return clients.map((client) => {
     const month = client.clientVideoMonths[0]
+    const perClientTarget =
+      client.client_marketing_requirements?.reelsPerMonth && client.client_marketing_requirements.reelsPerMonth > 0
+        ? client.client_marketing_requirements.reelsPerMonth
+        : VIDEOS_PER_MONTH_TARGET
     return {
       id: client.id,
       clientId: client.id,
@@ -73,7 +82,7 @@ export async function getClientVideos(monthKey?: string): Promise<ClientVideoRow
       rawCount: month?.rawCount ?? 0,
       editedCount: month?.editedCount ?? 0,
       postedCount: month?.postedCount ?? 0,
-      targetCount: VIDEOS_PER_MONTH_TARGET,
+      targetCount: perClientTarget,
       lastShootDate: month?.lastShootDate ?? null,
       notes: month?.notes ?? null,
       accountManager: client.User

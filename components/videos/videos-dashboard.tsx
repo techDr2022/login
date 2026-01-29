@@ -62,7 +62,7 @@ export function VideosDashboard() {
     lastShootDate: null as Date | null,
     notes: '',
   })
-  const targetPerMonth = getVideosTarget()
+  const defaultTargetPerMonth = getVideosTarget()
   const monthOptions = getMonthOptions()
 
   useEffect(() => {
@@ -124,8 +124,8 @@ export function VideosDashboard() {
   const totalRaw = rows.reduce((s, r) => s + r.rawCount, 0)
   const totalEdited = rows.reduce((s, r) => s + r.editedCount, 0)
   const totalPosted = rows.reduce((s, r) => s + r.postedCount, 0)
-  const clientsBehind = rows.filter((r) => r.postedCount < targetPerMonth).length
-  const clientsOnTrack = rows.filter((r) => r.postedCount >= targetPerMonth).length
+  const clientsBehind = rows.filter((r) => r.postedCount < r.targetCount).length
+  const clientsOnTrack = rows.filter((r) => r.postedCount >= r.targetCount).length
 
   if (loading) {
     return (
@@ -179,7 +179,9 @@ export function VideosDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{totalPosted}</div>
-            <p className="text-xs text-muted-foreground mt-1">Target {targetPerMonth} per client</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Client-specific targets (default {defaultTargetPerMonth} per client)
+            </p>
           </CardContent>
         </Card>
         <Card className="rounded-xl border shadow-sm">
@@ -214,8 +216,8 @@ export function VideosDashboard() {
             <div>
               <CardTitle className="text-lg">Client videos</CardTitle>
               <CardDescription>
-                Raw (shot at location), edited, and posted counts. Target: {targetPerMonth} posts per
-                client per month.
+                Raw (shot at location), edited, and posted counts. Targets are set per client
+                (default {defaultTargetPerMonth} posts per month).
               </CardDescription>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
@@ -248,7 +250,7 @@ export function VideosDashboard() {
               </div>
               <Badge variant="outline" className="flex items-center gap-2">
                 <Target className="h-3 w-3" />
-                {targetPerMonth} posts/client/month
+                Default: {defaultTargetPerMonth} posts/client/month
               </Badge>
             </div>
           </div>
@@ -282,8 +284,8 @@ export function VideosDashboard() {
                 </TableHeader>
                 <TableBody>
                   {filteredRows.map((row) => {
-                    const isBehind = row.postedCount < targetPerMonth
-                    const isOnTrack = row.postedCount >= targetPerMonth
+                    const isBehind = row.postedCount < row.targetCount
+                    const isOnTrack = row.postedCount >= row.targetCount
                     return (
                       <TableRow
                         key={row.clientId}
@@ -319,7 +321,7 @@ export function VideosDashboard() {
                             </Badge>
                           ) : (
                             <Badge variant="secondary" className="text-amber-700 bg-amber-100">
-                              Behind ({targetPerMonth - row.postedCount} left)
+                              Behind ({Math.max(row.targetCount - row.postedCount, 0)} left)
                             </Badge>
                           )}
                         </TableCell>
@@ -382,7 +384,9 @@ export function VideosDashboard() {
                     setFormData({ ...formData, postedCount: parseInt(e.target.value, 10) || 0 })
                   }
                 />
-                <p className="text-xs text-muted-foreground">Target {targetPerMonth}</p>
+                <p className="text-xs text-muted-foreground">
+                  Target {editingRow?.targetCount ?? defaultTargetPerMonth}
+                </p>
               </div>
             </div>
             <div className="space-y-2">
