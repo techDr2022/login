@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/wfh-inactivity-check",
-      "schedule": "0 9-18 * * MON-FRI"
+      "schedule": "0 9-18 * * 1-5"
     },
     {
       "path": "/api/cron/payment-reminder",
