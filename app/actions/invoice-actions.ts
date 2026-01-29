@@ -22,6 +22,7 @@ export interface ClientInvoice {
   isGST: boolean
   gstNumber: string | null
   gstRate: number | null
+  discountPercent: number | null
   accountManager: {
     id: string
     name: string
@@ -38,12 +39,9 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
     throw new Error('Only super admins can view invoices')
   }
 
-  const clients = await prisma.client.findMany({
-    where: {
-      status: {
-        in: ['ACTIVE', 'ONBOARDING'],
-      },
-    },
+  // Fetch all clients so the invoices tab can show and manage invoice data for every client.
+  // Note: We cast this query to `any` because the local Prisma TS types can lag behind schema/migrations in some setups.
+  const clients = (await prisma.client.findMany({
     select: {
       id: true,
       name: true,
@@ -58,13 +56,14 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
       isGST: true,
       gstNumber: true,
       gstRate: true,
+      discountPercent: true,
       User: {
         select: {
           id: true,
           name: true,
         },
       },
-    },
+    } as any,
     orderBy: [
       {
         nextPaymentDate: {
@@ -76,7 +75,7 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
         name: 'asc',
       },
     ],
-  })
+  } as any)) as any[]
 
   return clients.map((client) => ({
     id: client.id,
@@ -92,6 +91,7 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
     isGST: client.isGST,
     gstNumber: client.gstNumber,
     gstRate: client.gstRate,
+    discountPercent: (client as { discountPercent?: number | null }).discountPercent ?? null,
     accountManager: client.User
       ? {
           id: client.User.id,
@@ -113,6 +113,7 @@ export async function updateClientInvoice(
     isGST?: boolean
     gstNumber?: string | null
     gstRate?: number | null
+    discountPercent?: number | null
   }
 ) {
   const session = await getServerSession(authOptions)

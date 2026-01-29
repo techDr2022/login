@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Calendar, DollarSign, AlertCircle, CheckCircle2, Clock, Edit, CheckCircle, Send } from 'lucide-react'
+import { Calendar, DollarSign, AlertCircle, CheckCircle2, Clock, Edit, CheckCircle, Send, Search } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { format } from 'date-fns'
 import { getClientInvoices, updateClientInvoice, markPaymentAsReceived, sendInvoiceToClient, ClientInvoice } from '@/app/actions/invoice-actions'
@@ -29,6 +29,8 @@ export function InvoicesDashboard() {
   const [editingInvoice, setEditingInvoice] = useState<ClientInvoice | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [planFilter, setPlanFilter] = useState<'ALL' | 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS'>('ALL')
+  const [clientSearch, setClientSearch] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     startDate: null as Date | null,
     endDate: null as Date | null,
@@ -39,6 +41,7 @@ export function InvoicesDashboard() {
     isGST: false,
     gstNumber: '' as string,
     gstRate: '' as string | number,
+    discountPercent: '' as string | number,
   })
 
   useEffect(() => {
@@ -48,10 +51,14 @@ export function InvoicesDashboard() {
   const loadInvoices = async () => {
     try {
       setLoading(true)
+      setLoadError(null)
       const data = await getClientInvoices()
       setInvoices(data)
-    } catch (error) {
-      console.error('Error loading invoices:', error)
+    } catch (error: unknown) {
+      console.error('Error loading client invoices:', error)
+      const message = error instanceof Error ? error.message : 'Failed to load client data.'
+      setLoadError(message)
+      setInvoices([])
     } finally {
       setLoading(false)
     }
@@ -69,6 +76,7 @@ export function InvoicesDashboard() {
       isGST: invoice.isGST || false,
       gstNumber: invoice.gstNumber || '',
       gstRate: invoice.gstRate || '',
+      discountPercent: invoice.discountPercent ?? '',
     })
     setIsDialogOpen(true)
   }
@@ -87,6 +95,7 @@ export function InvoicesDashboard() {
         isGST: formData.isGST,
         gstNumber: formData.gstNumber || null,
         gstRate: formData.gstRate ? Number(formData.gstRate) : null,
+        discountPercent: formData.discountPercent !== '' && formData.discountPercent !== undefined ? Number(formData.discountPercent) : null,
       })
       setIsDialogOpen(false)
       setEditingInvoice(null)
@@ -153,10 +162,16 @@ export function InvoicesDashboard() {
     (inv) => inv.nextPaymentDate && getDaysUntilPayment(inv.nextPaymentDate) !== null && getDaysUntilPayment(inv.nextPaymentDate)! < 0
   )
 
-  // Filter invoices by plan duration
+  // Filter invoices by plan duration and client search
+  const searchLower = clientSearch.trim().toLowerCase()
   const filteredInvoices = invoices.filter((inv) => {
-    if (planFilter === 'ALL') return true
-    return inv.planDuration === planFilter
+    if (planFilter !== 'ALL' && inv.planDuration !== planFilter) return false
+    if (searchLower) {
+      const nameMatch = inv.name.toLowerCase().includes(searchLower)
+      const doctorMatch = (inv.doctorOrHospitalName ?? '').toLowerCase().includes(searchLower)
+      if (!nameMatch && !doctorMatch) return false
+    }
+    return true
   }).sort((a, b) => {
     // Sort by next payment date (nearest first)
     if (!a.nextPaymentDate && !b.nextPaymentDate) return 0
@@ -180,6 +195,11 @@ export function InvoicesDashboard() {
 
   return (
     <div className="space-y-6">
+      {loadError && (
+        <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-destructive text-sm">
+          {loadError}
+        </div>
+      )}
       {/* Header */}
       <div>
         <p className="text-sm text-muted-foreground">Client Invoices</p>
@@ -240,7 +260,23 @@ export function InvoicesDashboard() {
                 Sorted by nearest payment due date. Manage client payment dates and amounts.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="clientSearch" className="text-xs text-muted-foreground sr-only">
+                  Search clients
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="clientSearch"
+                    type="search"
+                    placeholder="Search clients..."
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    className="h-8 w-48 pl-8"
+                  />
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <Label htmlFor="planFilter" className="text-xs text-muted-foreground">
                   Plan Filter
@@ -497,6 +533,37 @@ export function InvoicesDashboard() {
                   placeholder="Enter monthly amount"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="discountPercent">Discount (%)</Label>
+                <Input
+                  id="discountPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={formData.discountPercent}
+                  onChange={(e) => setFormData({ ...formData, discountPercent: e.target.value })}
+                  placeholder="e.g., 10"
+                />
+                {(() => {
+                  const monthly = typeof formData.monthlyAmount === 'number' ? formData.monthlyAmount : parseFloat(String(formData.monthlyAmount))
+                  const discount = typeof formData.discountPercent === 'number' ? formData.discountPercent : parseFloat(String(formData.discountPercent))
+                  const validMonthly = !isNaN(monthly) && monthly > 0
+                  const validDiscount = !isNaN(discount) && discount >= 0 && discount <= 100
+                  const amountAfterDiscount = validMonthly && validDiscount
+                    ? monthly * (1 - discount / 100)
+                    : validMonthly
+                      ? monthly
+                      : null
+                  return amountAfterDiscount !== null ? (
+                    <p className="text-sm font-medium text-green-600">
+                      Amount after discount: ₹{amountAfterDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  ) : null
+                })()}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="planDuration">Plan Duration</Label>
                 <Select

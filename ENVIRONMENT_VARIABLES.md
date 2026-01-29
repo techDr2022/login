@@ -5,9 +5,15 @@ This document explains the environment variables used in the Client Onboarding S
 ## Required Variables
 
 ### Database
-- **`DATABASE_URL`**: PostgreSQL connection string
+- **`DATABASE_URL`**: PostgreSQL connection string (used by the app)
   - Format: `postgresql://user:password@host:port/database?schema=public`
   - Example: `postgresql://postgres:password@localhost:5432/internal_app?schema=public`
+
+- **`DIRECT_URL`**: Direct (non-pooled) PostgreSQL connection, used by Prisma for migrations
+  - **Required when using Neon** (or other poolers) to avoid P1002 advisory lock timeout
+  - In Neon dashboard: use the **Direct connection** string (host *without* `-pooler`)
+  - Same credentials as `DATABASE_URL`; only the host (and optionally port) differ
+  - Example (Neon direct): `postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require`
 
 ### NextAuth
 - **`NEXTAUTH_URL`**: The base URL of your application

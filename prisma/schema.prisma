@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Client {
@@ -37,6 +38,7 @@ model Client {
   isGST                         Boolean                        @default(false)
   gstNumber                     String?
   gstRate                       Float?                         @default(18.0) // Default GST rate 18%
+  discountPercent               Float?                         // Discount % applied to monthly amount
   scopeFinalised                Boolean                        @default(false)
   onboardingCompletedAt         DateTime?
   preferredLanguage             PreferredLanguage?             @default(ENGLISH)
@@ -55,6 +57,7 @@ model Client {
   client_tasks                  client_tasks[]
   client_usps                   client_usps[]
   monthlyProductions            MonthlyProduction[]
+  clientVideoMonths             ClientVideoMonth[]
   brandName                     String?
   primaryWhatsAppGroupLink      String?
 
@@ -78,6 +81,24 @@ model MonthlyProduction {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   Client                Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, monthKey])
+  @@index([clientId])
+  @@index([monthKey])
+}
+
+model ClientVideoMonth {
+  id            String    @id @default(cuid())
+  clientId      String
+  monthKey      String    // e.g. "2026-01"
+  rawCount      Int       @default(0)   // reels shot at location, copied to office
+  editedCount   Int       @default(0)   // edited and ready
+  postedCount   Int       @default(0)   // posted this month (target 4)
+  lastShootDate DateTime? // last shoot day at this client
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  Client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, monthKey])
   @@index([clientId])

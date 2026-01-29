@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   Palette,
   Receipt,
+  Video,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { href: '/attendance', label: 'Attendance', icon: Clock },
   { href: '/chat', label: 'Team Chat', icon: MessageCircle },
   { href: '/invoices', label: 'Invoices', icon: Receipt, roles: [UserRole.SUPER_ADMIN] },
+  { href: '/videos', label: 'Videos', icon: Video, roles: [UserRole.SUPER_ADMIN] },
   { href: '/reports', label: 'Reports', icon: BarChart3, roles: [UserRole.SUPER_ADMIN] },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
