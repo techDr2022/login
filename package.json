@@ -6,7 +6,7 @@
     "dev": "tsx server.ts",
     "build": "prisma generate && next build",
     "start": "NODE_ENV=production tsx server.ts",
-    "lint": "next lint",
+    "lint": "eslint .",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",

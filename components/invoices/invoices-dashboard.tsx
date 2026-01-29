@@ -313,9 +313,9 @@ export function InvoicesDashboard() {
                 <p className="text-lg font-medium">No invoice data found</p>
                 <p className="text-sm text-muted-foreground max-w-md">
                   To add invoice information for clients, go to the{' '}
-                  <a href="/clients" className="text-primary hover:underline font-medium">
+                  <Link href="/clients" className="text-primary hover:underline font-medium">
                     Clients page
-                  </a>
+                  </Link>
                   , click on a client, and use the "Invoice" tab in the edit dialog to add:
                 </p>
                 <ul className="text-sm text-muted-foreground text-left max-w-md mx-auto space-y-1 mt-4">
