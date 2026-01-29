@@ -193,7 +193,7 @@ export function VideosDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{clientsOnTrack}</div>
-            <p className="text-xs text-muted-foreground mt-1">Posted ≥ {targetPerMonth}</p>
+            <p className="text-xs text-muted-foreground mt-1">Posted ≥ {defaultTargetPerMonth}</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl border shadow-sm">
