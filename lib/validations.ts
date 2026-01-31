@@ -52,6 +52,17 @@ export const markReadSchema = z.object({
   threadId: z.string().min(1, 'Thread ID is required'),
 })
 
+// Realtime chat (room-based)
+export const sendRoomMessageSchema = z.object({
+  roomId: z.string().min(1, 'Room ID is required'),
+  text: z.string().min(1, 'Message text is required'),
+  clientMsgId: z.string().min(1, 'Client message ID is required for idempotency'),
+})
+
+export const markRoomReadSchema = z.object({
+  roomId: z.string().min(1, 'Room ID is required'),
+})
+
 export const createEmployeeSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email address'),

@@ -23,7 +23,7 @@ interface User {
 interface NewMessageDialogProps {
   open: boolean
   onClose: () => void
-  onThreadCreated: (threadId: string) => void
+  onThreadCreated: (roomId: string) => void
 }
 
 export function NewMessageDialog({
@@ -88,7 +88,7 @@ export function NewMessageDialog({
 
     setIsLoading(true)
     try {
-      const res = await fetch('/api/chat/threads', {
+      const res = await fetch('/api/chat/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,16 +99,16 @@ export function NewMessageDialog({
 
       if (res.ok) {
         const data = await res.json()
-        onThreadCreated(data.thread.id)
+        onThreadCreated(data.room.id)
         setSelectedUserId('')
         onClose()
       } else {
         const error = await res.json()
-        alert(error.error || 'Failed to create thread')
+        alert(error.error || 'Failed to start conversation')
       }
     } catch (error) {
-      console.error('Error creating thread:', error)
-      alert('Failed to create thread')
+      console.error('Error creating room:', error)
+      alert('Failed to start conversation')
     } finally {
       setIsLoading(false)
     }

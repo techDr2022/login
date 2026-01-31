@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode, AttendanceStatus } from '@prisma/client'
 import { parseDateLocal, formatDateLocal } from '@/lib/utils'
+import ExcelJS from 'exceljs'
 
 // Public holiday configuration (dates in YYYY-MM-DD format).
 const PUBLIC_HOLIDAYS: string[] = [
@@ -28,14 +29,8 @@ function isPublicHoliday(date: Date): boolean {
   return PUBLIC_HOLIDAYS.includes(isoDate)
 }
 
-function escapeCSVValue(value: string | null | undefined): string {
-  if (value === null || value === undefined) return ''
-  const stringValue = String(value)
-  // If value contains comma, quote, or newline, wrap in quotes and escape quotes
-  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-    return `"${stringValue.replace(/"/g, '""')}"`
-  }
-  return stringValue
+function isSunday(date: Date): boolean {
+  return date.getDay() === 0
 }
 
 function formatTime(date: Date | null | undefined): string {
@@ -169,8 +164,36 @@ export async function GET(request: NextRequest) {
           const dateOnly = new Date(currentDate)
           dateOnly.setHours(0, 0, 0, 0)
 
-          // Skip creating Absent records on public holidays
-          if (!isPublicHoliday(dateOnly)) {
+          // Sunday: show as Holiday (orange), not Absent
+          if (isSunday(dateOnly)) {
+            allRecords.push({
+              id: `holiday-${employee.id}-${isoDate}`,
+              userId: employee.id,
+              loginTime: null,
+              logoutTime: null,
+              lunchStart: null,
+              lunchEnd: null,
+              totalHours: null,
+              date: dateOnly,
+              status: AttendanceStatus.Absent,
+              mode: AttendanceMode.OFFICE,
+              earlySignInMinutes: null,
+              lateSignInMinutes: null,
+              earlyLogoutMinutes: null,
+              lateLogoutMinutes: null,
+              lastActivityTime: null,
+              wfhActivityPings: 0,
+              remark: null,
+              editedBy: null,
+              editedAt: null,
+              ipAddress: null,
+              deviceInfo: null,
+              location: null,
+              User: employee,
+              isSundayHoliday: true,
+            } as any)
+          } else if (!isPublicHoliday(dateOnly)) {
+            // Skip creating Absent records on public holidays (non-Sunday)
             allRecords.push({
               id: `absent-${employee.id}-${isoDate}`,
               userId: employee.id,
@@ -210,11 +233,11 @@ export async function GET(request: NextRequest) {
       return a.date.getTime() - b.date.getTime()
     })
 
-    // Generate CSV content
-    const csvRows: string[] = []
-    
-    // CSV Header
-    csvRows.push([
+    // Generate Excel workbook with styling (Absent = red, Sunday Holiday = orange)
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Payroll Export', { views: [{ state: 'frozen', ySplit: 1 }] })
+
+    const headers = [
       'Employee Name',
       'Email',
       'Job Title',
@@ -232,20 +255,36 @@ export async function GET(request: NextRequest) {
       'Remark',
       'Is Public Holiday',
       'Location',
-    ].map(escapeCSVValue).join(','))
+    ]
 
-    // CSV Data Rows
+    // Add header row with bold styling
+    const headerRow = worksheet.addRow(headers)
+    headerRow.font = { bold: true }
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    }
+
+    // Status column index (0-based)
+    const statusColIndex = 5
+
+    // Add data rows
     for (const attendance of allRecords) {
       const dayName = attendance.date.toLocaleDateString('en-US', { weekday: 'long' })
       const isHoliday = isPublicHoliday(attendance.date)
-      
-      csvRows.push([
+      const isSundayHoliday = (attendance as any).isSundayHoliday === true
+      const status = attendance.status
+      const isAbsent = status === AttendanceStatus.Absent && !isSundayHoliday
+      const displayStatus = isSundayHoliday ? 'Holiday' : status
+
+      const row = worksheet.addRow([
         attendance.User.name,
         attendance.User.email || '',
         attendance.User.jobTitle || '',
         formatDate(attendance.date),
         dayName,
-        attendance.status,
+        displayStatus,
         attendance.mode,
         formatTime(attendance.loginTime),
         formatTime(attendance.logoutTime),
@@ -255,12 +294,31 @@ export async function GET(request: NextRequest) {
         attendance.earlyLogoutMinutes?.toString() || '0',
         attendance.wfhActivityPings?.toString() || '0',
         attendance.remark || '',
-        isHoliday ? 'Yes' : 'No',
+        isHoliday || isSundayHoliday ? 'Yes' : 'No',
         attendance.location || '',
-      ].map(escapeCSVValue).join(','))
+      ])
+
+      const statusCell = row.getCell(statusColIndex + 1) // exceljs uses 1-based
+      if (isSundayHoliday) {
+        // Sunday holiday: orange
+        statusCell.font = { color: { argb: 'FFFF8C00' }, bold: true } // Orange, bold
+      } else if (isAbsent) {
+        // Absent: red
+        statusCell.font = { color: { argb: 'FFFF0000' }, bold: true } // Red, bold
+      }
     }
 
-    const csvContent = csvRows.join('\n')
+    // Auto-fit columns
+    worksheet.columns.forEach((col, i) => {
+      let maxLength = headers[i]?.length || 10
+      col.eachCell?.({ includeEmpty: true }, (cell) => {
+        const cellLength = cell.value ? String(cell.value).length : 0
+        maxLength = Math.max(maxLength, cellLength)
+      })
+      col.width = Math.min(maxLength + 2, 50)
+    })
+
+    const buffer = await workbook.xlsx.writeBuffer()
 
     // Generate filename with date range and employee name if filtered
     const startDateStr = formatDateLocal(start)
@@ -273,12 +331,12 @@ export async function GET(request: NextRequest) {
       filename += `-${employeeName}`
     }
     
-    filename += '.csv'
+    filename += '.xlsx'
 
-    // Return CSV file
-    return new NextResponse(csvContent, {
+    // Return Excel file
+    return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })

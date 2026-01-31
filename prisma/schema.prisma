@@ -38,7 +38,8 @@ model Client {
   isGST                         Boolean                        @default(false)
   gstNumber                     String?
   gstRate                       Float?                         @default(18.0) // Default GST rate 18%
-  discountPercent               Float?                         // Discount % applied to monthly amount
+  discountPercent               Float?                         // Discount % applied to monthly amount (fallback when no line items)
+  invoiceLineItems              Json?                          // [{ description, qty, rate, discountPercent? }] for item-wise invoice
   scopeFinalised                Boolean                        @default(false)
   onboardingCompletedAt         DateTime?
   preferredLanguage             PreferredLanguage?             @default(ENGLISH)
@@ -158,6 +159,11 @@ model User {
   client_assets                           client_assets[]
   client_tasks                            client_tasks[]
   subscription                            Subscription?
+  chat_members                            ChatMember[]
+  chat_messages_sent                      ChatMessage[]  @relation("ChatMessageSender")
+  message_receipts                        MessageReceipt[]
+  user_presence                           UserPresence?
+  chat_notifications                      ChatNotification[]
 
   @@index([isActive])
   @@index([role])
@@ -644,4 +650,107 @@ enum SubscriptionStatus {
   TRIALING
   INCOMPLETE
   INCOMPLETE_EXPIRED
+}
+
+model OfficeExpense {
+  id        String   @id @default(cuid())
+  name      String   // e.g., "Rent", "Maid", "Power Bill"
+  amount    Float    // monthly amount in ₹
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// ---- Realtime Team Chat (production-ready) ----
+enum ChatRoomType {
+  TEAM
+  DIRECT
+}
+
+enum MessageReceiptStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+model ChatRoom {
+  id        String       @id @default(cuid())
+  type      ChatRoomType
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  members   ChatMember[]
+  messages  ChatMessage[]
+  notifications ChatNotification[]
+
+  @@index([type])
+}
+
+model ChatMember {
+  id         String    @id @default(cuid())
+  roomId     String
+  userId     String
+  lastReadAt DateTime?
+  joinedAt   DateTime  @default(now())
+  room       ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id          String    @id @default(cuid())
+  roomId      String
+  senderId    String
+  text        String
+  clientMsgId String?   // for idempotency: upsert by (roomId, clientMsgId)
+  createdAt   DateTime  @default(now())
+  room        ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender      User      @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receipts    MessageReceipt[]
+
+  @@unique([roomId, clientMsgId])
+  @@index([roomId, createdAt])
+  @@index([senderId])
+}
+
+model MessageReceipt {
+  id        String              @id @default(cuid())
+  messageId String
+  userId    String
+  status    MessageReceiptStatus @default(SENT)
+  createdAt DateTime            @default(now())
+  message   ChatMessage         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model UserPresence {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  lastSeenAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lastSeenAt])
+}
+
+model ChatNotification {
+  id        String    @id @default(cuid())
+  userId    String
+  roomId    String?
+  messageId String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room      ChatRoom? @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([roomId])
+  @@index([readAt])
 }

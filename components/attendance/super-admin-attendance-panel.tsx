@@ -304,12 +304,12 @@ export function SuperAdminAttendancePanel() {
         throw new Error(errorData.error || 'Failed to export payroll')
       }
 
-      // Get the CSV content
-      const csvContent = await response.text()
+      // Get the Excel file content (binary)
+      const excelBuffer = await response.arrayBuffer()
       
       // Get filename from Content-Disposition header or generate one
       const contentDisposition = response.headers.get('Content-Disposition')
-      let filename = 'payroll-export.csv'
+      let filename = 'payroll-export.xlsx'
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="(.+)"/)
         if (filenameMatch) {
@@ -317,8 +317,10 @@ export function SuperAdminAttendancePanel() {
         }
       }
 
-      // Create blob and download
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      // Create blob and download (Excel format)
+      const blob = new Blob([excelBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
       const link = document.createElement('a')
       const url_blob = URL.createObjectURL(blob)
       link.setAttribute('href', url_blob)
@@ -720,7 +722,7 @@ export function SuperAdminAttendancePanel() {
               Payroll Export
             </DialogTitle>
             <DialogDescription>
-              Export attendance data for payroll processing (CSV format)
+              Export attendance data for payroll processing (Excel format). Absent status is highlighted in red.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -784,6 +786,7 @@ export function SuperAdminAttendancePanel() {
                 <li>Late minutes and early sign-in/out minutes</li>
                 <li>WFH activity pings and remarks</li>
                 <li>Public holiday indicators</li>
+                <li><strong>Absent</strong> status highlighted in red</li>
               </ul>
             </div>
           </div>
@@ -807,7 +810,7 @@ export function SuperAdminAttendancePanel() {
               ) : (
                 <>
                   <Download className="w-4 h-4 mr-2" />
-                  Export CSV
+                  Export Excel
                 </>
               )}
             </Button>

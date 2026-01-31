@@ -7,6 +7,21 @@ import { UserRole, InvoicePlanDuration } from '@prisma/client'
 import { sendWhatsAppNotification, formatInvoiceMessage, getInvoiceTemplateVariables } from '@/lib/whatsapp'
 import { generateInvoicePDF } from '@/lib/invoice-pdf'
 import { getStorageAdapter } from '@/lib/storage'
+import { isInvoicesUnlockedForUser } from '@/lib/invoices-unlock'
+
+async function requireInvoicesUnlock(): Promise<void> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id || session.user.role !== UserRole.SUPER_ADMIN) return
+  const unlocked = await isInvoicesUnlockedForUser(session.user.id)
+  if (!unlocked) throw new Error('Unlock the Invoices tab first (password or OTP).')
+}
+
+export interface InvoiceLineItemInput {
+  description: string
+  qty: number
+  rate: number
+  discountPercent?: number
+}
 
 export interface ClientInvoice {
   id: string
@@ -23,6 +38,8 @@ export interface ClientInvoice {
   gstNumber: string | null
   gstRate: number | null
   discountPercent: number | null
+  services: string[]
+  invoiceLineItems: InvoiceLineItemInput[] | null
   accountManager: {
     id: string
     name: string
@@ -38,6 +55,8 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
   if (session.user.role !== UserRole.SUPER_ADMIN) {
     throw new Error('Only super admins can view invoices')
   }
+
+  await requireInvoicesUnlock()
 
   // Fetch all clients so the invoices tab can show and manage invoice data for every client.
   // Note: We cast this query to `any` because the local Prisma TS types can lag behind schema/migrations in some setups.
@@ -57,6 +76,8 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
       gstNumber: true,
       gstRate: true,
       discountPercent: true,
+      services: true,
+      invoiceLineItems: true,
       User: {
         select: {
           id: true,
@@ -92,6 +113,8 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
     gstNumber: client.gstNumber,
     gstRate: client.gstRate,
     discountPercent: (client as { discountPercent?: number | null }).discountPercent ?? null,
+    services: (client as { services?: string[] }).services ?? [],
+    invoiceLineItems: (client as { invoiceLineItems?: InvoiceLineItemInput[] | null }).invoiceLineItems ?? null,
     accountManager: client.User
       ? {
           id: client.User.id,
@@ -114,6 +137,7 @@ export async function updateClientInvoice(
     gstNumber?: string | null
     gstRate?: number | null
     discountPercent?: number | null
+    invoiceLineItems?: InvoiceLineItemInput[] | null
   }
 ) {
   const session = await getServerSession(authOptions)
@@ -125,9 +149,21 @@ export async function updateClientInvoice(
     throw new Error('Only super admins can update invoices')
   }
 
+  await requireInvoicesUnlock()
+
   // Auto-calculate end date based on plan duration and start date
-  let finalData = { ...data }
-  
+  let finalData = { ...data } as Record<string, unknown>
+
+  // When line items are provided, auto-calculate monthlyAmount from their total (for dashboard display)
+  if (data.invoiceLineItems && data.invoiceLineItems.length > 0) {
+    const total = data.invoiceLineItems.reduce((sum, item) => {
+      const itemAmount = item.rate * (item.qty || 1)
+      const discount = (item.discountPercent ?? 0) / 100
+      return sum + itemAmount * (1 - discount)
+    }, 0)
+    finalData.monthlyAmount = Math.round(total * 100) / 100
+  }
+
   if (data.planDuration && data.startDate && !data.endDate) {
     const startDate = new Date(data.startDate)
     let monthsToAdd = 0
@@ -164,6 +200,8 @@ export async function markPaymentAsReceived(clientId: string) {
   if (session.user.role !== UserRole.SUPER_ADMIN) {
     throw new Error('Only super admins can mark payments as received')
   }
+
+  await requireInvoicesUnlock()
 
   // Get current client data
   const client = await prisma.client.findUnique({
@@ -223,6 +261,8 @@ export async function sendInvoiceToClient(clientId: string) {
     throw new Error('Only super admins can send invoices')
   }
 
+  await requireInvoicesUnlock()
+
   // Get client data with invoice information
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -234,6 +274,7 @@ export async function sendInvoiceToClient(clientId: string) {
       phonePrimary: true,
       email: true,
       addressLine: true,
+      area: true,
       city: true,
       pincode: true,
       monthlyAmount: true,
@@ -245,6 +286,8 @@ export async function sendInvoiceToClient(clientId: string) {
       isGST: true,
       gstNumber: true,
       gstRate: true,
+      discountPercent: true,
+      invoiceLineItems: true,
       User: {
         select: {
           name: true,
@@ -257,7 +300,10 @@ export async function sendInvoiceToClient(clientId: string) {
     throw new Error('Client not found')
   }
 
-  if (!client.monthlyAmount || !client.nextPaymentDate) {
+  const clientWithLineItems = client as typeof client & { invoiceLineItems?: InvoiceLineItemInput[] | null }
+  const hasLineItems = clientWithLineItems.invoiceLineItems && Array.isArray(clientWithLineItems.invoiceLineItems) && clientWithLineItems.invoiceLineItems.length > 0
+  const hasAmount = (client.monthlyAmount != null && client.monthlyAmount > 0) || hasLineItems
+  if (!hasAmount || !client.nextPaymentDate) {
     throw new Error('Invoice information is incomplete. Please add monthly amount and next payment date.')
   }
 
@@ -267,6 +313,8 @@ export async function sendInvoiceToClient(clientId: string) {
 
   // Generate invoice number (format: INV-YYYYMMDD-XXXX)
   const today = new Date()
+  const dueDate = new Date(today)
+  dueDate.setDate(dueDate.getDate() + 7)
   const invoiceNumber = `INV-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}-${clientId.substring(0, 4).toUpperCase()}`
 
   // Get company details from environment variables
@@ -274,7 +322,17 @@ export async function sendInvoiceToClient(clientId: string) {
   const companyAddress = process.env.COMPANY_ADDRESS || ''
   const companyGSTNumber = process.env.COMPANY_GST_NUMBER || ''
   const companyGSTRate = parseFloat(process.env.COMPANY_GST_RATE || '18')
-  const logoUrl = process.env.COMPANY_LOGO_URL || '/logo.png' // Default logo path
+  const companyEmail = process.env.COMPANY_EMAIL
+  const companyPhone = process.env.COMPANY_PHONE
+  const companyPAN = process.env.COMPANY_PAN
+  const bankName = process.env.BANK_NAME
+  const bankAccountName = process.env.BANK_ACCOUNT_NAME
+  const bankAccountNumber = process.env.BANK_ACCOUNT_NUMBER
+  const bankIFSC = process.env.BANK_IFSC
+  const bankAccountType = process.env.BANK_ACCOUNT_TYPE || 'Current'
+  const upiId = process.env.UPI_ID
+  const upiQrImageUrl = process.env.UPI_QR_IMAGE_URL
+  const logoUrl = process.env.COMPANY_LOGO_URL || '/logo.png'
 
   // Generate PDF invoice
   const pdfBytes = await generateInvoicePDF({
@@ -282,27 +340,39 @@ export async function sendInvoiceToClient(clientId: string) {
     clientName: client.name,
     doctorOrHospitalName: client.doctorOrHospitalName,
     address: client.addressLine || undefined,
+    area: client.area || undefined,
     city: client.city || undefined,
     pincode: client.pincode || undefined,
     email: client.email || undefined,
     phone: client.phonePrimary || client.phoneWhatsApp || undefined,
-    monthlyAmount: client.monthlyAmount,
+    monthlyAmount: client.monthlyAmount ?? 0,
     planDuration: client.planDuration,
     startDate: client.startDate,
     endDate: client.endDate,
-    dueDate: client.nextPaymentDate,
+    dueDate,
     services: client.services.length > 0 ? client.services : undefined,
-    accountManagerName: client.User?.name || undefined,
     // GST fields
-    isGST: client.isGST || false,
-    clientGSTNumber: client.gstNumber || undefined,
-    clientGSTRate: client.gstRate || undefined,
-    companyGSTNumber: companyGSTNumber || undefined,
-    companyGSTRate: companyGSTRate || undefined,
+      isGST: client.isGST || false,
+      clientGSTNumber: client.gstNumber || undefined,
+      clientGSTRate: client.gstRate || undefined,
+      companyGSTNumber: companyGSTNumber || undefined,
+      companyGSTRate: companyGSTRate || undefined,
+      discountPercent: client.discountPercent ?? undefined,
+      invoiceLineItems: (clientWithLineItems.invoiceLineItems as InvoiceLineItemInput[] | null) ?? undefined,
     // Logo and company info
     logoUrl: logoUrl || undefined,
     companyName: companyName || undefined,
     companyAddress: companyAddress || undefined,
+    companyEmail: companyEmail || undefined,
+    companyPhone: companyPhone || undefined,
+    companyPAN: companyPAN || undefined,
+    bankName: bankName || undefined,
+    bankAccountName: bankAccountName || undefined,
+    bankAccountNumber: bankAccountNumber || undefined,
+    bankIFSC: bankIFSC || undefined,
+    bankAccountType: bankAccountType || undefined,
+    upiId: upiId || undefined,
+    upiQrImageUrl: upiQrImageUrl || undefined,
   })
 
   // Upload PDF to storage
@@ -329,13 +399,22 @@ export async function sendInvoiceToClient(clientId: string) {
   }
 
   // Send invoice via WhatsApp if available
+  const displayAmount =
+    client.monthlyAmount ??
+    (hasLineItems && clientWithLineItems.invoiceLineItems
+      ? clientWithLineItems.invoiceLineItems.reduce((sum, item) => {
+          const gross = item.rate * (item.qty || 1)
+          return sum + gross * (1 - ((item.discountPercent ?? 0) / 100))
+        }, 0)
+      : 0)
+
   if (client.phoneWhatsApp) {
     const message = formatInvoiceMessage(
       client.name,
       client.doctorOrHospitalName,
       invoiceNumber,
-      client.monthlyAmount,
-      client.nextPaymentDate,
+      displayAmount,
+      dueDate,
       client.planDuration,
       client.startDate,
       client.endDate,
@@ -346,8 +425,8 @@ export async function sendInvoiceToClient(clientId: string) {
       client.name,
       client.doctorOrHospitalName,
       invoiceNumber,
-      client.monthlyAmount,
-      client.nextPaymentDate,
+      displayAmount,
+      dueDate,
       client.planDuration,
       client.startDate,
       client.endDate

@@ -17,21 +17,36 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Calendar, DollarSign, AlertCircle, CheckCircle2, Clock, Edit, CheckCircle, Send, Search } from 'lucide-react'
+import { Calendar, DollarSign, AlertCircle, CheckCircle2, Clock, Edit, CheckCircle, Send, Search, Receipt, Wallet, Plus, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, ListPlus } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { format } from 'date-fns'
-import { getClientInvoices, updateClientInvoice, markPaymentAsReceived, sendInvoiceToClient, ClientInvoice } from '@/app/actions/invoice-actions'
+import { getClientInvoices, updateClientInvoice, markPaymentAsReceived, sendInvoiceToClient, ClientInvoice, InvoiceLineItemInput } from '@/app/actions/invoice-actions'
+import {
+  getOfficeExpenses,
+  createOfficeExpense,
+  updateOfficeExpense,
+  deleteOfficeExpense,
+  OfficeExpenseItem,
+} from '@/app/actions/office-expense-actions'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export function InvoicesDashboard() {
   const [invoices, setInvoices] = useState<ClientInvoice[]>([])
+  const [officeExpenses, setOfficeExpenses] = useState<OfficeExpenseItem[]>([])
   const [loading, setLoading] = useState(true)
   const [editingInvoice, setEditingInvoice] = useState<ClientInvoice | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [planFilter, setPlanFilter] = useState<'ALL' | 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS'>('ALL')
+  const [serviceFilter, setServiceFilter] = useState<'ALL' | 'DIGITAL_MARKETING' | 'WEB_DEVELOPMENT'>('ALL')
   const [clientSearch, setClientSearch] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<OfficeExpenseItem | null>(null)
+  const [newExpenseName, setNewExpenseName] = useState('')
+  const [newExpenseAmount, setNewExpenseAmount] = useState('')
   const [formData, setFormData] = useState({
     startDate: null as Date | null,
     endDate: null as Date | null,
@@ -43,6 +58,7 @@ export function InvoicesDashboard() {
     gstNumber: '' as string,
     gstRate: '' as string | number,
     discountPercent: '' as string | number,
+    invoiceLineItems: [] as InvoiceLineItemInput[],
   })
 
   useEffect(() => {
@@ -53,13 +69,18 @@ export function InvoicesDashboard() {
     try {
       setLoading(true)
       setLoadError(null)
-      const data = await getClientInvoices()
-      setInvoices(data)
+      const [invoiceData, expenseData] = await Promise.all([
+        getClientInvoices(),
+        getOfficeExpenses(),
+      ])
+      setInvoices(invoiceData)
+      setOfficeExpenses(expenseData)
     } catch (error: unknown) {
       console.error('Error loading client invoices:', error)
       const message = error instanceof Error ? error.message : 'Failed to load client data.'
       setLoadError(message)
       setInvoices([])
+      setOfficeExpenses([])
     } finally {
       setLoading(false)
     }
@@ -78,6 +99,7 @@ export function InvoicesDashboard() {
       gstNumber: invoice.gstNumber || '',
       gstRate: invoice.gstRate || '',
       discountPercent: invoice.discountPercent ?? '',
+      invoiceLineItems: invoice.invoiceLineItems ?? [],
     })
     setIsDialogOpen(true)
   }
@@ -89,7 +111,7 @@ export function InvoicesDashboard() {
       await updateClientInvoice(editingInvoice.id, {
         startDate: formData.startDate,
         endDate: formData.endDate,
-        monthlyAmount: formData.monthlyAmount ? Number(formData.monthlyAmount) : null,
+        monthlyAmount: formData.invoiceLineItems.length > 0 ? undefined : (formData.monthlyAmount ? Number(formData.monthlyAmount) : null),
         planDuration: formData.planDuration ? (formData.planDuration as 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS') : null,
         nextPaymentDate: formData.nextPaymentDate,
         lastPaymentDate: formData.lastPaymentDate,
@@ -97,6 +119,7 @@ export function InvoicesDashboard() {
         gstNumber: formData.gstNumber || null,
         gstRate: formData.gstRate ? Number(formData.gstRate) : null,
         discountPercent: formData.discountPercent !== '' && formData.discountPercent !== undefined ? Number(formData.discountPercent) : null,
+        invoiceLineItems: formData.invoiceLineItems.length > 0 ? formData.invoiceLineItems : null,
       })
       setIsDialogOpen(false)
       setEditingInvoice(null)
@@ -163,10 +186,18 @@ export function InvoicesDashboard() {
     (inv) => inv.nextPaymentDate && getDaysUntilPayment(inv.nextPaymentDate) !== null && getDaysUntilPayment(inv.nextPaymentDate)! < 0
   )
 
-  // Filter invoices by plan duration and client search
+  // Filter invoices by plan duration, service type, and client search
   const searchLower = clientSearch.trim().toLowerCase()
   const filteredInvoices = invoices.filter((inv) => {
     if (planFilter !== 'ALL' && inv.planDuration !== planFilter) return false
+    if (serviceFilter !== 'ALL') {
+      const services = (inv.services ?? []).map((s) => s.toLowerCase().trim())
+      const serviceMatch =
+        serviceFilter === 'DIGITAL_MARKETING'
+          ? services.some((s) => s.includes('digital marketing'))
+          : services.some((s) => s.includes('web development'))
+      if (!serviceMatch) return false
+    }
     if (searchLower) {
       const nameMatch = inv.name.toLowerCase().includes(searchLower)
       const doctorMatch = (inv.doctorOrHospitalName ?? '').toLowerCase().includes(searchLower)
@@ -181,7 +212,58 @@ export function InvoicesDashboard() {
     return new Date(a.nextPaymentDate).getTime() - new Date(b.nextPaymentDate).getTime()
   })
 
+  // Pagination
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedInvoices = filteredInvoices.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [planFilter, serviceFilter, clientSearch])
+
   const totalMonthlyRevenue = invoices.reduce((sum, inv) => sum + (inv.monthlyAmount || 0), 0)
+  const totalMonthlyExpenses = officeExpenses
+    .filter((e) => e.isActive)
+    .reduce((sum, e) => sum + e.amount, 0)
+  const netProfit = totalMonthlyRevenue - totalMonthlyExpenses
+
+  const handleAddExpense = async () => {
+    if (!newExpenseName.trim() || !newExpenseAmount || parseFloat(newExpenseAmount) <= 0) {
+      alert('Please enter a valid expense name and amount.')
+      return
+    }
+    try {
+      await createOfficeExpense({ name: newExpenseName.trim(), amount: parseFloat(newExpenseAmount) })
+      setNewExpenseName('')
+      setNewExpenseAmount('')
+      setExpenseDialogOpen(false)
+      await loadInvoices()
+    } catch (error: any) {
+      alert(error.message || 'Failed to add expense.')
+    }
+  }
+
+  const handleUpdateExpense = async (id: string, data: { name?: string; amount?: number; isActive?: boolean }) => {
+    try {
+      await updateOfficeExpense(id, data)
+      setEditingExpense(null)
+      await loadInvoices()
+    } catch (error: any) {
+      alert(error.message || 'Failed to update expense.')
+    }
+  }
+
+  const handleDeleteExpense = async (id: string) => {
+    if (!confirm('Delete this expense?')) return
+    try {
+      await deleteOfficeExpense(id)
+      await loadInvoices()
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete expense.')
+    }
+  }
 
   if (loading) {
     return (
@@ -208,7 +290,7 @@ export function InvoicesDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <Card className="rounded-xl border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
@@ -217,6 +299,28 @@ export function InvoicesDashboard() {
           <CardContent>
             <div className="text-2xl font-bold">₹{totalMonthlyRevenue.toLocaleString('en-IN')}</div>
             <p className="text-xs text-muted-foreground mt-1">Monthly total</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Office Expenses</CardTitle>
+            <Receipt className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">₹{totalMonthlyExpenses.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">Monthly total</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Net Profit</CardTitle>
+            <Wallet className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              ₹{netProfit.toLocaleString('en-IN')}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Revenue − Expenses</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl border shadow-sm">
@@ -248,6 +352,129 @@ export function InvoicesDashboard() {
             <div className="text-2xl font-bold text-blue-600">{invoices.length}</div>
             <p className="text-xs text-muted-foreground mt-1">Total clients</p>
           </CardContent>
+        </Card>
+      </div>
+
+      {/* Office Expenses - compact, left-aligned so it doesn't stretch */}
+      <div className="max-w-md">
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="pb-2 pt-3 px-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <CardTitle className="text-sm">Office Expenses</CardTitle>
+                <CardDescription className="text-xs">
+                  Rent, maid, power. Net = Revenue − Expenses.
+                </CardDescription>
+              </div>
+            <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setNewExpenseName(''); setNewExpenseAmount(''); }}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  Add Expense
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Office Expense</DialogTitle>
+                  <DialogDescription>Add a recurring monthly expense (e.g., Rent, Maid, Power Bill)</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="expenseName">Expense Name</Label>
+                    <Input
+                      id="expenseName"
+                      placeholder="e.g., Rent, Maid, Power Bill"
+                      value={newExpenseName}
+                      onChange={(e) => setNewExpenseName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="expenseAmount">Amount (₹)</Label>
+                    <Input
+                      id="expenseAmount"
+                      type="number"
+                      placeholder="e.g., 21000"
+                      value={newExpenseAmount}
+                      onChange={(e) => setNewExpenseAmount(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setExpenseDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleAddExpense}>Add</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0 px-3 pb-3">
+          {officeExpenses.length === 0 ? (
+            <div className="py-1.5 space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                No expenses yet. Click &quot;Add Expense&quot; or add samples below.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={async () => {
+                  try {
+                    await createOfficeExpense({ name: 'Rent', amount: 21000 })
+                    await createOfficeExpense({ name: 'Maid', amount: 12000 })
+                    await createOfficeExpense({ name: 'Power Bill', amount: 1000 })
+                    await loadInvoices()
+                  } catch (e: any) {
+                    alert(e.message || 'Failed to add sample expenses')
+                  }
+                }}
+              >
+                Add samples (Rent, Maid, Power)
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {officeExpenses.map((exp) => (
+                <div
+                  key={exp.id}
+                  className={`flex items-center justify-between rounded border px-2.5 py-1.5 text-sm ${!exp.isActive ? 'opacity-60 bg-muted/50' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {editingExpense?.id === exp.id ? (
+                      <>
+                        <Input
+                          className="w-28 h-7 text-sm"
+                          value={editingExpense.name}
+                          onChange={(e) => setEditingExpense({ ...editingExpense, name: e.target.value })}
+                        />
+                        <Input
+                          type="number"
+                          className="w-20 h-7 text-sm"
+                          value={editingExpense.amount}
+                          onChange={(e) => setEditingExpense({ ...editingExpense, amount: parseFloat(e.target.value) || 0 })}
+                        />
+                        <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => handleUpdateExpense(exp.id, { name: editingExpense.name, amount: editingExpense.amount })}>
+                          Save
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingExpense(null)}>Cancel</Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-sm">{exp.name}</span>
+                        <span className="text-muted-foreground text-xs">₹{exp.amount.toLocaleString('en-IN')}/mo</span>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingExpense(exp)}>
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => handleDeleteExpense(exp.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
         </Card>
       </div>
 
@@ -299,10 +526,41 @@ export function InvoicesDashboard() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="serviceFilter" className="text-xs text-muted-foreground">
+                  Service Filter
+                </Label>
+                <Select
+                  value={serviceFilter}
+                  onValueChange={(value) =>
+                    setServiceFilter(value as 'ALL' | 'DIGITAL_MARKETING' | 'WEB_DEVELOPMENT')
+                  }
+                >
+                  <SelectTrigger id="serviceFilter" className="h-8 w-44">
+                    <SelectValue placeholder="All services" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All services</SelectItem>
+                    <SelectItem value="DIGITAL_MARKETING">Digital Marketing</SelectItem>
+                    <SelectItem value="WEB_DEVELOPMENT">Web Development</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Badge variant="outline" className="flex items-center gap-2">
                 <Clock className="h-3 w-3" />
                 Sorted by Due Date
               </Badge>
+              <Button variant="outline" size="sm" asChild>
+                <a
+                  href="/api/invoices/export"
+                  download="client-invoices-export.xlsx"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Export Excel
+                </a>
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -350,7 +608,7 @@ export function InvoicesDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInvoices.map((invoice, index) => {
+                  {paginatedInvoices.map((invoice, index) => {
                     const paymentStatus = getPaymentStatus(invoice.nextPaymentDate)
                     const daysUntil = getDaysUntilPayment(invoice.nextPaymentDate)
                     const isOverdue = daysUntil !== null && daysUntil < 0
@@ -439,7 +697,17 @@ export function InvoicesDashboard() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {/* Download / Generate PDF Invoice */}
+                            {/* Preview / Download PDF Invoice */}
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              title="Preview invoice"
+                            >
+                              <Link href={`/admin/invoices/${invoice.id}`}>
+                                Preview
+                              </Link>
+                            </Button>
                             <Button
                               asChild
                               variant="outline"
@@ -467,8 +735,8 @@ export function InvoicesDashboard() {
                               </Button>
                             )}
 
-                            {/* Mark as Paid */}
-                            {invoice.nextPaymentDate && daysUntil !== null && daysUntil <= 0 && (
+                            {/* Mark as Paid - show when due/overdue or due within 7 days (clients often pay at month-end when invoice is sent) */}
+                            {invoice.nextPaymentDate && daysUntil !== null && daysUntil <= 7 && (
                               <Button 
                                 variant="default" 
                                 size="sm" 
@@ -492,6 +760,68 @@ export function InvoicesDashboard() {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          
+          {/* Pagination */}
+          {filteredInvoices.length > itemsPerPage && (
+            <div className="flex items-center justify-between px-2 py-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredInvoices.length)} of {filteredInvoices.length} clients
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                    // Show first page, last page, current page, and pages around current
+                    const showPage =
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    
+                    if (!showPage) {
+                      // Show ellipsis
+                      if (page === currentPage - 2 || page === currentPage + 2) {
+                        return (
+                          <span key={page} className="px-2 text-muted-foreground">
+                            ...
+                          </span>
+                        )
+                      }
+                      return null
+                    }
+
+                    return (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {page}
+                      </Button>
+                    )
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
@@ -614,6 +944,129 @@ export function InvoicesDashboard() {
                   onSelect={(date) => setFormData({ ...formData, lastPaymentDate: date })}
                 />
               </div>
+            </div>
+
+            {/* Line Items (Item-wise discount) */}
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <Label className="text-sm font-medium">Invoice Line Items</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Add services with item-wise discount. When used, total is calculated from line items.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setFormData({
+                      ...formData,
+                      invoiceLineItems: [
+                        ...formData.invoiceLineItems,
+                        { description: '', qty: 1, rate: 0, discountPercent: 0 },
+                      ],
+                    })
+                  }
+                >
+                  <ListPlus className="h-4 w-4 mr-1.5" />
+                  Add Item
+                </Button>
+              </div>
+              {formData.invoiceLineItems.length > 0 && (
+                <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+                  {formData.invoiceLineItems.map((item, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                      <div className="col-span-5">
+                        <Label className="text-xs">Description</Label>
+                        <Input
+                          placeholder="e.g., Social Media Management"
+                          value={item.description}
+                          onChange={(e) => {
+                            const next = [...formData.invoiceLineItems]
+                            next[idx] = { ...next[idx], description: e.target.value }
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Label className="text-xs">Qty</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.qty}
+                          onChange={(e) => {
+                            const next = [...formData.invoiceLineItems]
+                            next[idx] = { ...next[idx], qty: Math.max(1, parseInt(e.target.value) || 1) }
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">Rate (₹)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={item.rate}
+                          onChange={(e) => {
+                            const next = [...formData.invoiceLineItems]
+                            next[idx] = { ...next[idx], rate: parseFloat(e.target.value) || 0 }
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">Discount (%)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step="0.01"
+                          placeholder="0"
+                          value={item.discountPercent != null ? item.discountPercent : ''}
+                          onChange={(e) => {
+                            const next = [...formData.invoiceLineItems]
+                            next[idx] = { ...next[idx], discountPercent: parseFloat(e.target.value) || 0 }
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-2 flex items-center gap-1">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          = ₹{((item.rate || 0) * (item.qty || 1) * (1 - ((item.discountPercent ?? 0) / 100))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          onClick={() => {
+                            const next = formData.invoiceLineItems.filter((_, i) => i !== idx)
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="text-sm font-medium pt-1">
+                    Total: ₹
+                    {formData.invoiceLineItems
+                      .reduce(
+                        (sum, item) =>
+                          sum + (item.rate || 0) * (item.qty || 1) * (1 - ((item.discountPercent ?? 0) / 100)),
+                        0
+                      )
+                      .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* GST Section */}
