@@ -14,12 +14,17 @@ import { logActivity } from '../lib/activity-log'
 
 const prisma = new PrismaClient()
 
+type InitialTaskOptions = { hasPosters?: boolean; hasVideos?: boolean }
+
 async function generateInitialTasksForClient(
   clientId: string,
   clientName: string,
   doctorOrHospitalName: string,
-  assignedById: string
+  assignedById: string,
+  options?: InitialTaskOptions
 ) {
+  const hasPosters = options?.hasPosters === true
+  const hasVideos = options?.hasVideos === true
   try {
     // Check if initial tasks already exist for this client to prevent duplicates
     const existingTasks = await prisma.task.findMany({
@@ -126,8 +131,8 @@ async function generateInitialTasksForClient(
       })
     }
 
-    // Video content for Shaheena
-    if (shaheena) {
+    // Video content for Shaheena — only when client has videos
+    if (shaheena && hasVideos) {
       tasksToCreate.push({
         id: randomUUID(),
         title: `Video content for ${clientName}`,
@@ -156,8 +161,8 @@ async function generateInitialTasksForClient(
       })
     }
 
-    // Poster design to Chaithanya (will be auto-assigned when Content Calendar is completed)
-    if (chaithanya) {
+    // Poster design to Chaithanya — only when client has posters
+    if (chaithanya && hasPosters) {
       tasksToCreate.push({
         id: randomUUID(),
         title: `Poster design for ${clientName}`,
@@ -209,6 +214,7 @@ async function main() {
           name: true,
           doctorOrHospitalName: true,
           accountManagerId: true,
+          client_marketing_requirements: { select: { posters: true, videos: true } },
         },
       })
 
@@ -232,12 +238,14 @@ async function main() {
         process.exit(1)
       }
 
-      console.log(`\n📋 Generating tasks for client: "${client.name}"`)
+      const marketing = client.client_marketing_requirements
+      console.log(`\n📋 Generating tasks for client: "${client.name}" (posters: ${marketing?.posters ?? false}, videos: ${marketing?.videos ?? false})`)
       await generateInitialTasksForClient(
         client.id,
         client.name,
         client.doctorOrHospitalName || client.name,
-        accountManager.id
+        accountManager.id,
+        { hasPosters: marketing?.posters ?? false, hasVideos: marketing?.videos ?? false }
       )
       console.log(`\n✅ Done!\n`)
     } else {
@@ -253,6 +261,7 @@ async function main() {
           name: true,
           doctorOrHospitalName: true,
           accountManagerId: true,
+          client_marketing_requirements: { select: { posters: true, videos: true } },
         },
         orderBy: { createdAt: 'desc' },
       })
@@ -281,11 +290,13 @@ async function main() {
             continue
           }
 
+          const marketing = client.client_marketing_requirements
           const result = await generateInitialTasksForClient(
             client.id,
             client.name,
             client.doctorOrHospitalName || client.name,
-            accountManager.id
+            accountManager.id,
+            { hasPosters: marketing?.posters ?? false, hasVideos: marketing?.videos ?? false }
           )
 
           if (result) {

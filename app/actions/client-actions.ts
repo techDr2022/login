@@ -10,8 +10,24 @@ import { UserRole } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 
+// Options for which content types the client has (only schedule poster/video tasks when true)
+export type InitialTaskOptions = {
+  hasPosters?: boolean
+  hasVideos?: boolean
+}
+
 // Helper function to generate initial tasks for a client
-export async function generateInitialTasksForClient(clientId: string, clientName: string, doctorOrHospitalName: string, assignedById: string) {
+// Only creates "Poster design" task when hasPosters is true; only creates "Video content" task when hasVideos is true
+export async function generateInitialTasksForClient(
+  clientId: string,
+  clientName: string,
+  doctorOrHospitalName: string,
+  assignedById: string,
+  options?: InitialTaskOptions
+) {
+  const hasPosters = options?.hasPosters === true
+  const hasVideos = options?.hasVideos === true
+
   try {
     // Check if initial tasks already exist for this client to prevent duplicates
     const existingTasks = await prisma.task.findMany({
@@ -118,8 +134,8 @@ export async function generateInitialTasksForClient(clientId: string, clientName
       })
     }
 
-    // Video content for Shaheena
-    if (shaheena) {
+    // Video content for Shaheena — only when client has videos
+    if (shaheena && hasVideos) {
       tasksToCreate.push({
         id: randomUUID(),
         title: `Video content for ${clientName}`,
@@ -148,8 +164,8 @@ export async function generateInitialTasksForClient(clientId: string, clientName
       })
     }
 
-    // Poster design to Chaithanya (will be auto-assigned when Content Calendar is completed)
-    if (chaithanya) {
+    // Poster design to Chaithanya — only when client has posters
+    if (chaithanya && hasPosters) {
       tasksToCreate.push({
         id: randomUUID(),
         title: `Poster design for ${clientName}`,
@@ -220,13 +236,15 @@ export async function createClient(data: {
   await logActivity(session.user.id, 'CREATE', 'Client', client.id)
 
   // Automatically create tasks when client has an account manager
+  // Poster/Video tasks are not created here (no marketing requirements yet); they are created on onboarding finalize
   if (validated.accountManagerId) {
     try {
       await generateInitialTasksForClient(
         client.id,
         client.name,
         client.doctorOrHospitalName,
-        session.user.id
+        session.user.id,
+        { hasPosters: false, hasVideos: false }
       )
     } catch (error) {
       // Log error but don't fail client creation if task creation fails
@@ -357,7 +375,7 @@ export async function generateTasksForExistingClient(clientId: string) {
     throw new Error('Forbidden')
   }
 
-  // Get the client
+  // Get the client with marketing requirements (for poster/video task scheduling)
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     select: {
@@ -365,6 +383,9 @@ export async function generateTasksForExistingClient(clientId: string) {
       name: true,
       doctorOrHospitalName: true,
       accountManagerId: true,
+      client_marketing_requirements: {
+        select: { posters: true, videos: true },
+      },
     },
   })
 
@@ -377,12 +398,18 @@ export async function generateTasksForExistingClient(clientId: string) {
     throw new Error('Client must have an account manager to generate tasks')
   }
 
-  // Generate initial tasks
+  const marketing = client.client_marketing_requirements
+
+  // Generate initial tasks (only poster/video tasks when client has those in scope)
   await generateInitialTasksForClient(
     client.id,
     client.name,
     client.doctorOrHospitalName || client.name,
-    session.user.id
+    session.user.id,
+    {
+      hasPosters: marketing?.posters ?? false,
+      hasVideos: marketing?.videos ?? false,
+    }
   )
 
   // Revalidate paths to refresh UI
@@ -403,7 +430,7 @@ export async function generateTasksForAllEligibleClients() {
     throw new Error('Forbidden')
   }
 
-  // Find all clients with account managers
+  // Find all clients with account managers and their marketing requirements
   const clients = await prisma.client.findMany({
     where: {
       accountManagerId: { not: null },
@@ -412,6 +439,9 @@ export async function generateTasksForAllEligibleClients() {
       id: true,
       name: true,
       doctorOrHospitalName: true,
+      client_marketing_requirements: {
+        select: { posters: true, videos: true },
+      },
     },
   })
 
@@ -438,13 +468,19 @@ export async function generateTasksForAllEligibleClients() {
         },
       })
 
+      const marketing = client.client_marketing_requirements
+
       // Only generate if tasks don't exist
       if (existingTasks.length === 0) {
         await generateInitialTasksForClient(
           client.id,
           client.name,
           client.doctorOrHospitalName || client.name,
-          session.user.id
+          session.user.id,
+          {
+            hasPosters: marketing?.posters ?? false,
+            hasVideos: marketing?.videos ?? false,
+          }
         )
         successCount++
       }

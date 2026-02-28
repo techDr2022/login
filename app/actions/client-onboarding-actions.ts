@@ -87,6 +87,11 @@ export async function finalizeClientOnboarding(clientId: string, startDate: Date
       onboardingCompletedAt: new Date(),
       ...(accountManagerId && { accountManagerId }),
     },
+    include: {
+      client_marketing_requirements: {
+        select: { posters: true, videos: true },
+      },
+    },
   })
 
   await logActivity(session.user.id, 'UPDATE', 'Client', clientId)
@@ -95,13 +100,19 @@ export async function finalizeClientOnboarding(clientId: string, startDate: Date
   await generateMonthlyTasksForClient(clientId, startDate)
 
   // Generate initial tasks if account manager is provided
+  // Only schedule Poster design / Video content tasks when client has those in marketing requirements
   if (accountManagerId) {
     try {
+      const marketing = client.client_marketing_requirements
       await generateInitialTasksForClient(
         clientId,
         client.name,
         client.doctorOrHospitalName || client.name,
-        session.user.id
+        session.user.id,
+        {
+          hasPosters: marketing?.posters ?? false,
+          hasVideos: marketing?.videos ?? false,
+        }
       )
     } catch (error) {
       // Log error but don't fail onboarding if task creation fails
