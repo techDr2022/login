@@ -1,0 +1,1258 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Calendar, DollarSign, Clock, Edit, CheckCircle, Send, Search, Receipt, Wallet, Plus, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, ListPlus, Users } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { format } from 'date-fns'
+import { getClientInvoices, updateClientInvoice, markPaymentAsReceived, sendInvoiceToClient, ClientInvoice, InvoiceLineItemInput } from '@/app/actions/invoice-actions'
+import {
+  getOfficeExpenses,
+  createOfficeExpense,
+  updateOfficeExpense,
+  deleteOfficeExpense,
+  OfficeExpenseItem,
+} from '@/app/actions/office-expense-actions'
+import {
+  getActiveEmployees,
+  getCurrentMonthSalaries,
+  upsertCurrentMonthEmployeeSalary,
+  ActiveEmployee,
+  EmployeeSalaryItem,
+} from '@/app/actions/employee-salary-actions'
+import { DatePicker } from '@/components/ui/date-picker'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+export function InvoicesDashboard() {
+  const [invoices, setInvoices] = useState<ClientInvoice[]>([])
+  const [officeExpenses, setOfficeExpenses] = useState<OfficeExpenseItem[]>([])
+  const [employees, setEmployees] = useState<ActiveEmployee[]>([])
+  const [employeeSalaries, setEmployeeSalaries] = useState<EmployeeSalaryItem[]>([])
+  const [salaryInputs, setSalaryInputs] = useState<Record<string, string>>({})
+  const [savingSalaryUserId, setSavingSalaryUserId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [editingInvoice, setEditingInvoice] = useState<ClientInvoice | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [planFilter, setPlanFilter] = useState<'ALL' | 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS'>('ALL')
+  const [serviceFilter, setServiceFilter] = useState<'ALL' | 'DIGITAL_MARKETING' | 'WEB_DEVELOPMENT'>('ALL')
+  const [clientSearch, setClientSearch] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<OfficeExpenseItem | null>(null)
+  const [newExpenseName, setNewExpenseName] = useState('')
+  const [newExpenseAmount, setNewExpenseAmount] = useState('')
+  const [formData, setFormData] = useState({
+    startDate: null as Date | null,
+    endDate: null as Date | null,
+    monthlyAmount: '' as string | number,
+    planDuration: '' as string,
+    nextPaymentDate: null as Date | null,
+    lastPaymentDate: null as Date | null,
+    isGST: false,
+    gstNumber: '' as string,
+    gstRate: '' as string | number,
+    discountPercent: '' as string | number,
+    invoiceLineItems: [] as InvoiceLineItemInput[],
+  })
+
+  useEffect(() => {
+    loadInvoices()
+  }, [])
+
+  const loadInvoices = async () => {
+    try {
+      setLoading(true)
+      setLoadError(null)
+      const [invoiceData, expenseData, employeeData, salaryData] = await Promise.all([
+        getClientInvoices(),
+        getOfficeExpenses(),
+        getActiveEmployees(),
+        getCurrentMonthSalaries(),
+      ])
+      setInvoices(invoiceData)
+      setOfficeExpenses(expenseData)
+      setEmployees(employeeData)
+      setEmployeeSalaries(salaryData)
+    } catch (error: unknown) {
+      console.error('Error loading client invoices:', error)
+      const message = error instanceof Error ? error.message : 'Failed to load client data.'
+      setLoadError(message)
+      setInvoices([])
+      setOfficeExpenses([])
+      setEmployees([])
+      setEmployeeSalaries([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const nextInputs: Record<string, string> = {}
+    for (const employee of employees) {
+      const salary = employeeSalaries.find((s) => s.userId === employee.id && s.isActive)
+      nextInputs[employee.id] = salary ? String(salary.amount) : ''
+    }
+    setSalaryInputs(nextInputs)
+  }, [employees, employeeSalaries])
+
+  const handleEdit = (invoice: ClientInvoice) => {
+    setEditingInvoice(invoice)
+    setFormData({
+      startDate: invoice.startDate ? new Date(invoice.startDate) : null,
+      endDate: invoice.endDate ? new Date(invoice.endDate) : null,
+      monthlyAmount: invoice.monthlyAmount || '',
+      planDuration: invoice.planDuration || '',
+      nextPaymentDate: invoice.nextPaymentDate ? new Date(invoice.nextPaymentDate) : null,
+      lastPaymentDate: invoice.lastPaymentDate ? new Date(invoice.lastPaymentDate) : null,
+      isGST: invoice.isGST || false,
+      gstNumber: invoice.gstNumber || '',
+      gstRate: invoice.gstRate || '',
+      discountPercent: invoice.discountPercent ?? '',
+      invoiceLineItems: invoice.invoiceLineItems ?? [],
+    })
+    setIsDialogOpen(true)
+  }
+
+  const handleSave = async () => {
+    if (!editingInvoice) return
+
+    try {
+      await updateClientInvoice(editingInvoice.id, {
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        monthlyAmount: formData.invoiceLineItems.length > 0 ? undefined : (formData.monthlyAmount ? Number(formData.monthlyAmount) : null),
+        planDuration: formData.planDuration ? (formData.planDuration as 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS') : null,
+        nextPaymentDate: formData.nextPaymentDate,
+        lastPaymentDate: formData.lastPaymentDate,
+        isGST: formData.isGST,
+        gstNumber: formData.gstNumber || null,
+        gstRate: formData.gstRate ? Number(formData.gstRate) : null,
+        discountPercent: formData.discountPercent !== '' && formData.discountPercent !== undefined ? Number(formData.discountPercent) : null,
+        invoiceLineItems: formData.invoiceLineItems.length > 0 ? formData.invoiceLineItems : null,
+      })
+      setIsDialogOpen(false)
+      setEditingInvoice(null)
+      await loadInvoices()
+    } catch (error) {
+      console.error('Error updating invoice:', error)
+      alert('Failed to update invoice. Please try again.')
+    }
+  }
+
+  const handleMarkAsPaid = async (invoice: ClientInvoice) => {
+    if (!confirm(`Mark payment as received for ${invoice.name}? This will update the last payment date to today and calculate the next payment date based on the plan duration.`)) {
+      return
+    }
+
+    try {
+      await markPaymentAsReceived(invoice.id)
+      await loadInvoices()
+    } catch (error: any) {
+      console.error('Error marking payment as received:', error)
+      alert(error.message || 'Failed to mark payment as received. Please try again.')
+    }
+  }
+
+  const handleSendInvoice = async (invoice: ClientInvoice) => {
+    if (!confirm(`Send invoice to ${invoice.name} via WhatsApp?`)) {
+      return
+    }
+
+    try {
+      const result = await sendInvoiceToClient(invoice.id)
+      alert(`Invoice sent successfully to ${invoice.name}!\nInvoice Number: ${result.invoiceNumber}`)
+      await loadInvoices()
+    } catch (error: any) {
+      console.error('Error sending invoice:', error)
+      alert(error.message || 'Failed to send invoice. Please try again.')
+    }
+  }
+
+  const getDaysUntilPayment = (nextPaymentDate: Date | null): number | null => {
+    if (!nextPaymentDate) return null
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const paymentDate = new Date(nextPaymentDate)
+    paymentDate.setHours(0, 0, 0, 0)
+    const diffTime = paymentDate.getTime() - today.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  const getPaymentStatus = (nextPaymentDate: Date | null): 'upcoming' | 'due' | 'overdue' | 'none' => {
+    if (!nextPaymentDate) return 'none'
+    const days = getDaysUntilPayment(nextPaymentDate)
+    if (days === null) return 'none'
+    if (days < 0) return 'overdue'
+    if (days <= 7) return 'due'
+    return 'upcoming'
+  }
+
+  const getPlanMonths = (planDuration: ClientInvoice['planDuration']): number => {
+    switch (planDuration) {
+      case 'ONE_MONTH':
+        return 1
+      case 'THREE_MONTHS':
+        return 3
+      case 'SIX_MONTHS':
+        return 6
+      default:
+        return 1
+    }
+  }
+
+  const isDateWithinMonth = (date: Date | null | undefined, monthStart: Date, monthEnd: Date): boolean => {
+    if (!date) return false
+    const d = new Date(date)
+    return d >= monthStart && d <= monthEnd
+  }
+
+  const hasWindowOverlapWithMonth = (invoice: ClientInvoice, monthStart: Date, monthEnd: Date): boolean => {
+    const hasRange = Boolean(invoice.startDate || invoice.endDate)
+    if (hasRange) {
+      const start = invoice.startDate ? new Date(invoice.startDate) : new Date(-8640000000000000)
+      const end = invoice.endDate ? new Date(invoice.endDate) : new Date(8640000000000000)
+      return start <= monthEnd && end >= monthStart
+    }
+
+    return (
+      isDateWithinMonth(invoice.lastPaymentDate, monthStart, monthEnd) ||
+      isDateWithinMonth(invoice.nextPaymentDate, monthStart, monthEnd)
+    )
+  }
+
+  // Filter invoices by plan duration, service type, and client search
+  const searchLower = clientSearch.trim().toLowerCase()
+  const filteredInvoices = invoices.filter((inv) => {
+    if (planFilter !== 'ALL' && inv.planDuration !== planFilter) return false
+    if (serviceFilter !== 'ALL') {
+      const services = (inv.services ?? []).map((s) => s.toLowerCase().trim())
+      const serviceMatch =
+        serviceFilter === 'DIGITAL_MARKETING'
+          ? services.some((s) => s.includes('digital marketing'))
+          : services.some((s) => s.includes('web development'))
+      if (!serviceMatch) return false
+    }
+    if (searchLower) {
+      const nameMatch = inv.name.toLowerCase().includes(searchLower)
+      const doctorMatch = (inv.doctorOrHospitalName ?? '').toLowerCase().includes(searchLower)
+      if (!nameMatch && !doctorMatch) return false
+    }
+    return true
+  }).sort((a, b) => {
+    // Sort by next payment date (nearest first)
+    if (!a.nextPaymentDate && !b.nextPaymentDate) return 0
+    if (!a.nextPaymentDate) return 1
+    if (!b.nextPaymentDate) return -1
+    return new Date(a.nextPaymentDate).getTime() - new Date(b.nextPaymentDate).getTime()
+  })
+
+  // Pagination
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedInvoices = filteredInvoices.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [planFilter, serviceFilter, clientSearch])
+
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+
+  const totalRevenue = invoices.reduce((sum, inv) => {
+    const monthlyAmount = inv.monthlyAmount || 0
+    return sum + monthlyAmount * getPlanMonths(inv.planDuration)
+  }, 0)
+
+  const thisMonthRevenue = invoices.reduce((sum, inv) => {
+    if (!inv.monthlyAmount) return sum
+    if (!hasWindowOverlapWithMonth(inv, monthStart, monthEnd)) return sum
+    return sum + inv.monthlyAmount
+  }, 0)
+
+  const officeDeductions = officeExpenses
+    .filter((e) => e.isActive)
+    .reduce((sum, e) => sum + e.amount, 0)
+  const employeeSalaryTotal = employeeSalaries
+    .filter((salary) => salary.isActive)
+    .reduce((sum, salary) => sum + salary.amount, 0)
+  const totalDeductions = officeDeductions + employeeSalaryTotal
+  const profitThisMonth = thisMonthRevenue - totalDeductions
+  const activeClientsCount = invoices.filter((inv) => inv.status === 'ACTIVE').length
+
+  const handleAddExpense = async () => {
+    if (!newExpenseName.trim() || !newExpenseAmount || parseFloat(newExpenseAmount) <= 0) {
+      alert('Please enter a valid expense name and amount.')
+      return
+    }
+    try {
+      await createOfficeExpense({ name: newExpenseName.trim(), amount: parseFloat(newExpenseAmount) })
+      setNewExpenseName('')
+      setNewExpenseAmount('')
+      setExpenseDialogOpen(false)
+      await loadInvoices()
+    } catch (error: any) {
+      alert(error.message || 'Failed to add expense.')
+    }
+  }
+
+  const handleUpdateExpense = async (id: string, data: { name?: string; amount?: number; isActive?: boolean }) => {
+    try {
+      await updateOfficeExpense(id, data)
+      setEditingExpense(null)
+      await loadInvoices()
+    } catch (error: any) {
+      alert(error.message || 'Failed to update expense.')
+    }
+  }
+
+  const handleDeleteExpense = async (id: string) => {
+    if (!confirm('Delete this expense?')) return
+    try {
+      await deleteOfficeExpense(id)
+      await loadInvoices()
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete expense.')
+    }
+  }
+
+  const handleSalaryInputChange = (userId: string, value: string) => {
+    setSalaryInputs((prev) => ({ ...prev, [userId]: value }))
+  }
+
+  const handleSaveSalary = async (userId: string) => {
+    const value = salaryInputs[userId] ?? ''
+    const amount = Number(value)
+    if (!Number.isFinite(amount) || amount < 0) {
+      alert('Please enter a valid non-negative salary amount.')
+      return
+    }
+
+    try {
+      setSavingSalaryUserId(userId)
+      await upsertCurrentMonthEmployeeSalary(userId, amount)
+      await loadInvoices()
+    } catch (error: any) {
+      alert(error.message || 'Failed to save salary.')
+    } finally {
+      setSavingSalaryUserId(null)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-sm text-muted-foreground">Loading invoices...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {loadError && (
+        <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-destructive text-sm">
+          {loadError}
+        </div>
+      )}
+      {/* Header */}
+      <div>
+        <p className="text-sm text-muted-foreground">Client Invoices</p>
+        <h1 className="text-2xl font-semibold">Invoice Management</h1>
+      </div>
+
+      {/* Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">Full planned invoice value</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">This Month Revenue</CardTitle>
+            <Calendar className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">₹{thisMonthRevenue.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">Active in current month window</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Employees Salary</CardTitle>
+            <Users className="h-4 w-4 text-indigo-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-indigo-600">₹{employeeSalaryTotal.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">{format(now, 'MMMM yyyy')}</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Deductions</CardTitle>
+            <Receipt className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">₹{totalDeductions.toLocaleString('en-IN')}</div>
+            <p className="text-xs text-muted-foreground mt-1">Salary + office expenses</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Profit (This Month)</CardTitle>
+            <Wallet className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${profitThisMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              ₹{profitThisMonth.toLocaleString('en-IN')}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Revenue - deductions</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground flex items-center justify-between">
+        <span>Active Clients</span>
+        <span className="font-semibold text-foreground">{activeClientsCount}</span>
+      </div>
+
+      {/* Deductions sections */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="pb-2 pt-3 px-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <CardTitle className="text-sm">Office Expenses</CardTitle>
+                <CardDescription className="text-xs">
+                  Rent, maid, power. Net = Revenue − Expenses.
+                </CardDescription>
+              </div>
+            <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setNewExpenseName(''); setNewExpenseAmount(''); }}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  Add Expense
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Office Expense</DialogTitle>
+                  <DialogDescription>Add a recurring monthly expense (e.g., Rent, Maid, Power Bill)</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="expenseName">Expense Name</Label>
+                    <Input
+                      id="expenseName"
+                      placeholder="e.g., Rent, Maid, Power Bill"
+                      value={newExpenseName}
+                      onChange={(e) => setNewExpenseName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="expenseAmount">Amount (₹)</Label>
+                    <Input
+                      id="expenseAmount"
+                      type="number"
+                      placeholder="e.g., 21000"
+                      value={newExpenseAmount}
+                      onChange={(e) => setNewExpenseAmount(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setExpenseDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleAddExpense}>Add</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0 px-3 pb-3">
+          {officeExpenses.length === 0 ? (
+            <div className="py-1.5 space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                No expenses yet. Click &quot;Add Expense&quot; or add samples below.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={async () => {
+                  try {
+                    await createOfficeExpense({ name: 'Rent', amount: 21000 })
+                    await createOfficeExpense({ name: 'Maid', amount: 12000 })
+                    await createOfficeExpense({ name: 'Power Bill', amount: 1000 })
+                    await loadInvoices()
+                  } catch (e: any) {
+                    alert(e.message || 'Failed to add sample expenses')
+                  }
+                }}
+              >
+                Add samples (Rent, Maid, Power)
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {officeExpenses.map((exp) => (
+                <div
+                  key={exp.id}
+                  className={`flex items-center justify-between rounded border px-2.5 py-1.5 text-sm ${!exp.isActive ? 'opacity-60 bg-muted/50' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {editingExpense?.id === exp.id ? (
+                      <>
+                        <Input
+                          className="w-28 h-7 text-sm"
+                          value={editingExpense.name}
+                          onChange={(e) => setEditingExpense({ ...editingExpense, name: e.target.value })}
+                        />
+                        <Input
+                          type="number"
+                          className="w-20 h-7 text-sm"
+                          value={editingExpense.amount}
+                          onChange={(e) => setEditingExpense({ ...editingExpense, amount: parseFloat(e.target.value) || 0 })}
+                        />
+                        <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => handleUpdateExpense(exp.id, { name: editingExpense.name, amount: editingExpense.amount })}>
+                          Save
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingExpense(null)}>Cancel</Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-sm">{exp.name}</span>
+                        <span className="text-muted-foreground text-xs">₹{exp.amount.toLocaleString('en-IN')}/mo</span>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingExpense(exp)}>
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => handleDeleteExpense(exp.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        </Card>
+
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader className="pb-2 pt-3 px-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <CardTitle className="text-sm">Employees Salary</CardTitle>
+                <CardDescription className="text-xs">
+                  Monthly salary entries for active employees.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0 px-3 pb-3">
+            {employees.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-2">No active employees found.</p>
+            ) : (
+              <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1">
+                {employees.map((employee) => (
+                  <div key={employee.id} className="flex items-center gap-2 rounded border px-2 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{employee.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{employee.email}</p>
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      className="h-8 w-32 text-sm"
+                      value={salaryInputs[employee.id] ?? ''}
+                      onChange={(e) => handleSalaryInputChange(employee.id, e.target.value)}
+                      placeholder="Salary"
+                    />
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={savingSalaryUserId === employee.id}
+                      onClick={() => handleSaveSalary(employee.id)}
+                    >
+                      {savingSalaryUserId === employee.id ? 'Saving...' : 'Save'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Invoices Table */}
+      <Card className="rounded-xl border shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-lg">Client Invoices</CardTitle>
+              <CardDescription>
+                Sorted by nearest payment due date. Manage client payment dates and amounts.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="clientSearch" className="text-xs text-muted-foreground sr-only">
+                  Search clients
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="clientSearch"
+                    type="search"
+                    placeholder="Search clients..."
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    className="h-8 w-48 pl-8"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="planFilter" className="text-xs text-muted-foreground">
+                  Plan Filter
+                </Label>
+                <Select
+                  value={planFilter}
+                  onValueChange={(value) =>
+                    setPlanFilter(value as 'ALL' | 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS')
+                  }
+                >
+                  <SelectTrigger id="planFilter" className="h-8 w-40">
+                    <SelectValue placeholder="All plans" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All plans</SelectItem>
+                    <SelectItem value="ONE_MONTH">1 Month</SelectItem>
+                    <SelectItem value="THREE_MONTHS">3 Months</SelectItem>
+                    <SelectItem value="SIX_MONTHS">6 Months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="serviceFilter" className="text-xs text-muted-foreground">
+                  Service Filter
+                </Label>
+                <Select
+                  value={serviceFilter}
+                  onValueChange={(value) =>
+                    setServiceFilter(value as 'ALL' | 'DIGITAL_MARKETING' | 'WEB_DEVELOPMENT')
+                  }
+                >
+                  <SelectTrigger id="serviceFilter" className="h-8 w-44">
+                    <SelectValue placeholder="All services" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All services</SelectItem>
+                    <SelectItem value="DIGITAL_MARKETING">Digital Marketing</SelectItem>
+                    <SelectItem value="WEB_DEVELOPMENT">Web Development</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Badge variant="outline" className="flex items-center gap-2">
+                <Clock className="h-3 w-3" />
+                Sorted by Due Date
+              </Badge>
+              <Button variant="outline" size="sm" asChild>
+                <a
+                  href="/api/invoices/export"
+                  download="client-invoices-export.xlsx"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Export Excel
+                </a>
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {filteredInvoices.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+              <Calendar className="h-16 w-16 text-muted-foreground/50" />
+              <div className="space-y-2">
+                <p className="text-lg font-medium">No invoice data found</p>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  To add invoice information for clients, go to the{' '}
+                  <Link href="/clients" className="text-primary hover:underline font-medium">
+                    Clients page
+                  </Link>
+                  , click on a client, and use the "Invoice" tab in the edit dialog to add:
+                </p>
+                <ul className="text-sm text-muted-foreground text-left max-w-md mx-auto space-y-1 mt-4">
+                  <li>• Project start and end dates</li>
+                  <li>• Monthly payment amount</li>
+                  <li>• Next payment due date</li>
+                  <li>• Last payment received date</li>
+                </ul>
+                <p className="text-xs text-muted-foreground mt-4">
+                  Payment reminders will be sent to super admins via WhatsApp 7 days before the due date.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client Name</TableHead>
+                    <TableHead>Project Start</TableHead>
+                    <TableHead>Project End</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead>Monthly Amount</TableHead>
+                    <TableHead className="flex items-center gap-2">
+                      <span>Next Payment</span>
+                      <Clock className="h-3 w-3 text-muted-foreground" />
+                    </TableHead>
+                    <TableHead>Last Payment</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedInvoices.map((invoice, index) => {
+                    const paymentStatus = getPaymentStatus(invoice.nextPaymentDate)
+                    const daysUntil = getDaysUntilPayment(invoice.nextPaymentDate)
+                    const isOverdue = daysUntil !== null && daysUntil < 0
+                    const isDueSoon = daysUntil !== null && daysUntil >= 0 && daysUntil <= 7
+
+                    return (
+                      <TableRow 
+                        key={invoice.id}
+                        className={
+                          isOverdue ? 'bg-red-50 dark:bg-red-950/20' :
+                          isDueSoon ? 'bg-yellow-50 dark:bg-yellow-950/20' :
+                          index < 3 ? 'bg-blue-50/50 dark:bg-blue-950/10' :
+                          ''
+                        }
+                      >
+                        <TableCell className="font-medium">
+                          <div>
+                            <div>{invoice.name}</div>
+                            <div className="text-xs text-muted-foreground">{invoice.doctorOrHospitalName}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {invoice.startDate ? format(new Date(invoice.startDate), 'MMM dd, yyyy') : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {invoice.endDate ? format(new Date(invoice.endDate), 'MMM dd, yyyy') : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {invoice.planDuration ? (
+                            <Badge variant="outline">
+                              {invoice.planDuration === 'ONE_MONTH' ? '1 Month' :
+                               invoice.planDuration === 'THREE_MONTHS' ? '3 Months' :
+                               invoice.planDuration === 'SIX_MONTHS' ? '6 Months' : invoice.planDuration}
+                            </Badge>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {invoice.monthlyAmount ? `₹${invoice.monthlyAmount.toLocaleString('en-IN')}` : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {invoice.nextPaymentDate ? (
+                            <div className="space-y-1">
+                              <div className="font-medium">{format(new Date(invoice.nextPaymentDate), 'MMM dd, yyyy')}</div>
+                              {daysUntil !== null && (
+                                <div className={`text-xs ${
+                                  daysUntil < 0 ? 'text-red-600 font-semibold' : 
+                                  daysUntil === 0 ? 'text-orange-600 font-semibold' : 
+                                  daysUntil <= 7 ? 'text-yellow-600 font-medium' : 
+                                  'text-muted-foreground'
+                                }`}>
+                                  {daysUntil < 0 ? `⚠️ ${Math.abs(daysUntil)} days overdue` : 
+                                   daysUntil === 0 ? '⚠️ Due today' : 
+                                   daysUntil <= 7 ? `⏰ ${daysUntil} days left` : 
+                                   `${daysUntil} days left`}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {invoice.lastPaymentDate ? (
+                            <div className="space-y-1">
+                              <div className="font-medium">{format(new Date(invoice.lastPaymentDate), 'MMM dd, yyyy')}</div>
+                              <div className="text-xs text-green-600 flex items-center gap-1">
+                                <CheckCircle className="h-3 w-3" />
+                                Paid
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {paymentStatus === 'overdue' && (
+                            <Badge variant="destructive">Overdue</Badge>
+                          )}
+                          {paymentStatus === 'due' && (
+                            <Badge variant="default" className="bg-yellow-600">Due Soon</Badge>
+                          )}
+                          {paymentStatus === 'upcoming' && (
+                            <Badge variant="secondary">Upcoming</Badge>
+                          )}
+                          {paymentStatus === 'none' && <Badge variant="outline">No Date</Badge>}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {/* Preview / Download PDF Invoice */}
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              title="Preview invoice"
+                            >
+                              <Link href={`/admin/invoices/${invoice.id}`}>
+                                Preview
+                              </Link>
+                            </Button>
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              title="Download invoice PDF"
+                            >
+                              <a
+                                href={`/api/invoices/${invoice.id}/pdf`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                PDF
+                              </a>
+                            </Button>
+
+                            {/* Send invoice via WhatsApp */}
+                            {invoice.monthlyAmount && invoice.nextPaymentDate && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => handleSendInvoice(invoice)}
+                                title="Send invoice to client via WhatsApp"
+                              >
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            )}
+
+                            {/* Mark as Paid - show when due/overdue or due within 7 days (clients often pay at month-end when invoice is sent) */}
+                            {invoice.nextPaymentDate && daysUntil !== null && daysUntil <= 7 && (
+                              <Button 
+                                variant="default" 
+                                size="sm" 
+                                onClick={() => handleMarkAsPaid(invoice)}
+                                className="bg-green-600 hover:bg-green-700"
+                                title="Mark payment as received"
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Paid
+                              </Button>
+                            )}
+
+                            {/* Edit Invoice */}
+                            <Button variant="ghost" size="sm" onClick={() => handleEdit(invoice)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          
+          {/* Pagination */}
+          {filteredInvoices.length > itemsPerPage && (
+            <div className="flex items-center justify-between px-2 py-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredInvoices.length)} of {filteredInvoices.length} clients
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                    // Show first page, last page, current page, and pages around current
+                    const showPage =
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    
+                    if (!showPage) {
+                      // Show ellipsis
+                      if (page === currentPage - 2 || page === currentPage + 2) {
+                        return (
+                          <span key={page} className="px-2 text-muted-foreground">
+                            ...
+                          </span>
+                        )
+                      }
+                      return null
+                    }
+
+                    return (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {page}
+                      </Button>
+                    )
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Invoice Details</DialogTitle>
+            <DialogDescription>
+              Update project dates and payment information for {editingInvoice?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="startDate">Project Start Date</Label>
+                <DatePicker
+                  date={formData.startDate}
+                  onSelect={(date) => setFormData({ ...formData, startDate: date })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="endDate">Project End Date</Label>
+                <DatePicker
+                  date={formData.endDate}
+                  onSelect={(date) => setFormData({ ...formData, endDate: date })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="monthlyAmount">Monthly Amount (₹)</Label>
+                <Input
+                  id="monthlyAmount"
+                  type="number"
+                  value={formData.monthlyAmount}
+                  onChange={(e) => setFormData({ ...formData, monthlyAmount: e.target.value })}
+                  placeholder="Enter monthly amount"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="discountPercent">Discount (%)</Label>
+                <Input
+                  id="discountPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={formData.discountPercent}
+                  onChange={(e) => setFormData({ ...formData, discountPercent: e.target.value })}
+                  placeholder="e.g., 10"
+                />
+                {(() => {
+                  const monthly = typeof formData.monthlyAmount === 'number' ? formData.monthlyAmount : parseFloat(String(formData.monthlyAmount))
+                  const discount = typeof formData.discountPercent === 'number' ? formData.discountPercent : parseFloat(String(formData.discountPercent))
+                  const validMonthly = !isNaN(monthly) && monthly > 0
+                  const validDiscount = !isNaN(discount) && discount >= 0 && discount <= 100
+                  const amountAfterDiscount = validMonthly && validDiscount
+                    ? monthly * (1 - discount / 100)
+                    : validMonthly
+                      ? monthly
+                      : null
+                  return amountAfterDiscount !== null ? (
+                    <p className="text-sm font-medium text-green-600">
+                      Amount after discount: ₹{amountAfterDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  ) : null
+                })()}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="planDuration">Plan Duration</Label>
+                <Select
+                  value={formData.planDuration}
+                  onValueChange={(value) => {
+                    setFormData({ ...formData, planDuration: value })
+                    // Auto-calculate end date if start date is set
+                    if (value && formData.startDate) {
+                      const startDate = new Date(formData.startDate)
+                      let monthsToAdd = 0
+                      if (value === 'ONE_MONTH') monthsToAdd = 1
+                      else if (value === 'THREE_MONTHS') monthsToAdd = 3
+                      else if (value === 'SIX_MONTHS') monthsToAdd = 6
+                      
+                      const endDate = new Date(startDate)
+                      endDate.setMonth(endDate.getMonth() + monthsToAdd)
+                      setFormData({ ...formData, planDuration: value, endDate })
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select plan duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ONE_MONTH">1 Month</SelectItem>
+                    <SelectItem value="THREE_MONTHS">3 Months</SelectItem>
+                    <SelectItem value="SIX_MONTHS">6 Months</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  End date will be auto-calculated based on start date
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="nextPaymentDate">Next Payment Date</Label>
+                <DatePicker
+                  date={formData.nextPaymentDate}
+                  onSelect={(date) => setFormData({ ...formData, nextPaymentDate: date })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastPaymentDate">Last Payment Date</Label>
+                <DatePicker
+                  date={formData.lastPaymentDate}
+                  onSelect={(date) => setFormData({ ...formData, lastPaymentDate: date })}
+                />
+              </div>
+            </div>
+
+            {/* Line Items (Item-wise discount) */}
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <Label className="text-sm font-medium">Invoice Line Items</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Add services with item-wise discount. When used, total is calculated from line items.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setFormData({
+                      ...formData,
+                      invoiceLineItems: [
+                        ...formData.invoiceLineItems,
+                        { description: '', qty: 1, rate: 0, discountPercent: 0 },
+                      ],
+                    })
+                  }
+                >
+                  <ListPlus className="h-4 w-4 mr-1.5" />
+                  Add Item
+                </Button>
+              </div>
+              {formData.invoiceLineItems.length > 0 && (
+                <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+                  {formData.invoiceLineItems.map((item, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                      <div className="col-span-5">
+                        <Label className="text-xs">Description</Label>
+                        <Input
+                          placeholder="e.g., Social Media Management"
+                          value={item.description}
+                          onChange={(e) => {
+                            const next = [...formData.invoiceLineItems]
+                            next[idx] = { ...next[idx], description: e.target.value }
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Label className="text-xs">Qty</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.qty}
+                          onChange={(e) => {
+                            const next = [...formData.invoiceLineItems]
+                            next[idx] = { ...next[idx], qty: Math.max(1, parseInt(e.target.value) || 1) }
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">Rate (₹)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={item.rate}
+                          onChange={(e) => {
+                            const next = [...formData.invoiceLineItems]
+                            next[idx] = { ...next[idx], rate: parseFloat(e.target.value) || 0 }
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">Discount (%)</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step="0.01"
+                          placeholder="0"
+                          value={item.discountPercent != null ? item.discountPercent : ''}
+                          onChange={(e) => {
+                            const next = [...formData.invoiceLineItems]
+                            next[idx] = { ...next[idx], discountPercent: parseFloat(e.target.value) || 0 }
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-2 flex items-center gap-1">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          = ₹{((item.rate || 0) * (item.qty || 1) * (1 - ((item.discountPercent ?? 0) / 100))).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          onClick={() => {
+                            const next = formData.invoiceLineItems.filter((_, i) => i !== idx)
+                            setFormData({ ...formData, invoiceLineItems: next })
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="text-sm font-medium pt-1">
+                    Total: ₹
+                    {formData.invoiceLineItems
+                      .reduce(
+                        (sum, item) =>
+                          sum + (item.rate || 0) * (item.qty || 1) * (1 - ((item.discountPercent ?? 0) / 100)),
+                        0
+                      )
+                      .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* GST Section */}
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center space-x-2 mb-4">
+                <Checkbox
+                  id="isGST"
+                  checked={formData.isGST}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isGST: checked === true })}
+                />
+                <Label htmlFor="isGST" className="text-sm font-medium cursor-pointer">
+                  Client is GST registered
+                </Label>
+              </div>
+              
+              {formData.isGST && (
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="gstNumber">GST Number</Label>
+                    <Input
+                      id="gstNumber"
+                      type="text"
+                      value={formData.gstNumber}
+                      onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value })}
+                      placeholder="e.g., 27AABCU9603R1ZM"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gstRate">GST Rate (%)</Label>
+                    <Input
+                      id="gstRate"
+                      type="number"
+                      value={formData.gstRate}
+                      onChange={(e) => setFormData({ ...formData, gstRate: e.target.value })}
+                      placeholder="e.g., 18"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

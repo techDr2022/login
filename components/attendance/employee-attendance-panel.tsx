@@ -1,0 +1,666 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
+import { 
+  Clock, 
+  Calendar,
+  CheckCircle2,
+  XCircle,
+  LogIn,
+  LogOut,
+  Home,
+  Laptop,
+  Activity,
+  AlertTriangle,
+  TrendingUp
+} from 'lucide-react'
+import { format } from 'date-fns'
+import { clockIn, clockOut } from '@/app/actions/attendance-actions'
+import { AttendanceMode } from '@prisma/client'
+import { formatDateLocal } from '@/lib/utils'
+import { useWFHActivity } from '@/lib/hooks/use-wfh-activity'
+import { useRouter } from 'next/navigation'
+
+interface AttendanceRecord {
+  id: string
+  date: string
+  loginTime?: string | null
+  logoutTime?: string | null
+  status: string
+  mode: string
+  totalHours?: number | null
+  lateSignInMinutes?: number | null
+  earlyLogoutMinutes?: number | null
+}
+
+export function EmployeeAttendancePanel() {
+  const { data: session } = useSession()
+  const router = useRouter()
+  const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null)
+  const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [clockingIn, setClockingIn] = useState(false)
+  const [clockingOut, setClockingOut] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<AttendanceMode>(AttendanceMode.OFFICE)
+  const [wfhMetrics, setWfhMetrics] = useState<any>(null)
+  const [inactivityWarning, setInactivityWarning] = useState<number | null>(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+
+  // Update selected mode when today's attendance is loaded
+  useEffect(() => {
+    if (todayAttendance?.mode) {
+      setSelectedMode(todayAttendance.mode as AttendanceMode)
+    }
+  }, [todayAttendance?.mode])
+
+  // Enable WFH activity tracking when in WFH mode and clocked in
+  const isWFHActive = todayAttendance?.mode === AttendanceMode.WFH && 
+                      todayAttendance?.loginTime && 
+                      !todayAttendance?.logoutTime
+
+  useWFHActivity({
+    enabled: !!isWFHActive,
+    onInactivityWarning: (minutes) => {
+      setInactivityWarning(minutes)
+    },
+  })
+
+  const fetchTodayAttendance = useCallback(async (forceRefresh = false) => {
+    try {
+      const todayDate = new Date()
+      todayDate.setHours(0, 0, 0, 0)
+      const today = formatDateLocal(todayDate)
+      // Add cache-busting parameter to force fresh data
+      const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : ''
+      const res = await fetch(`/api/attendance?userId=${session?.user?.id}&startDate=${today}&endDate=${today}${cacheBuster}`, {
+        cache: forceRefresh ? 'no-store' : 'default',
+      })
+      const data = await res.json()
+      
+      if (data.attendances && data.attendances.length > 0) {
+        const att = data.attendances[0]
+        const updatedAttendance: AttendanceRecord = {
+          id: att.id,
+          date: att.date,
+          loginTime: att.loginTime,
+          logoutTime: att.logoutTime,
+          status: att.status,
+          mode: att.mode,
+          totalHours: att.totalHours,
+          lateSignInMinutes: att.lateSignInMinutes,
+          earlyLogoutMinutes: att.earlyLogoutMinutes,
+        }
+        setTodayAttendance(updatedAttendance)
+        // Update selected mode to match current attendance
+        if (att.mode) {
+          setSelectedMode(att.mode as AttendanceMode)
+        }
+        return updatedAttendance
+      } else {
+        setTodayAttendance(null)
+        return null
+      }
+    } catch (err) {
+      console.error('Failed to fetch today attendance:', err)
+      return null
+    }
+  }, [session?.user?.id])
+
+  const fetchAttendanceHistory = useCallback(async () => {
+    try {
+      // Fetch last 30 days
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setDate(startDate.getDate() - 30)
+      
+      const startDateStr = formatDateLocal(startDate)
+      const endDateStr = formatDateLocal(endDate)
+      const res = await fetch(
+        `/api/attendance?userId=${session?.user?.id}&startDate=${startDateStr}&endDate=${endDateStr}&page=${page}&limit=10`
+      )
+      const data = await res.json()
+      
+      const records: AttendanceRecord[] = (data.attendances || []).map((att: any) => ({
+        id: att.id,
+        date: att.date,
+        loginTime: att.loginTime,
+        logoutTime: att.logoutTime,
+        status: att.status,
+        mode: att.mode,
+        totalHours: att.totalHours,
+        lateSignInMinutes: att.lateSignInMinutes,
+        earlyLogoutMinutes: att.earlyLogoutMinutes,
+      }))
+      
+      setAttendanceHistory(records)
+      setTotalPages(data.pagination?.totalPages || 1)
+    } catch (err) {
+      console.error('Failed to fetch attendance history:', err)
+    }
+  }, [session?.user?.id, page])
+
+  const fetchWFHMetrics = useCallback(async () => {
+    if (!isWFHActive) {
+      setWfhMetrics(null)
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/attendance/wfh-activity?userId=${session?.user?.id}`)
+      const data = await res.json()
+      setWfhMetrics(data.today)
+      if (data.today?.metrics?.inactivityWarning) {
+        setInactivityWarning(data.today.metrics.inactivityWarning.minutes)
+      } else {
+        setInactivityWarning(null)
+      }
+    } catch (err) {
+      console.error('Failed to fetch WFH metrics:', err)
+    }
+  }, [session?.user?.id, isWFHActive])
+
+  useEffect(() => {
+    const loadData = async () => {
+      await Promise.all([fetchTodayAttendance(), fetchAttendanceHistory()])
+      setLoading(false)
+    }
+    
+    if (session?.user?.id) {
+      loadData()
+    }
+  }, [session?.user?.id, fetchTodayAttendance, fetchAttendanceHistory])
+
+  // Fetch WFH metrics when in WFH mode
+  useEffect(() => {
+    if (isWFHActive) {
+      fetchWFHMetrics()
+      // Refresh metrics every 2 minutes
+      const interval = setInterval(fetchWFHMetrics, 2 * 60 * 1000)
+      return () => clearInterval(interval)
+    }
+  }, [isWFHActive, fetchWFHMetrics])
+
+  const handleClockIn = async () => {
+    try {
+      setClockingIn(true)
+      const result = await clockIn(selectedMode)
+      
+      // Immediately update state from the result if available
+      // This ensures UI updates immediately without waiting for server fetch
+      if (result && result.loginTime) {
+        // Parse date correctly - handle both ISO string and date string
+        const dateStr = result.date.includes('T') 
+          ? result.date.split('T')[0] 
+          : result.date
+        
+        const updatedAttendance: AttendanceRecord = {
+          id: result.id,
+          date: dateStr,
+          loginTime: result.loginTime,
+          logoutTime: result.logoutTime,
+          status: result.status as string,
+          mode: result.mode as string,
+          totalHours: result.totalHours,
+          lateSignInMinutes: result.lateSignInMinutes || null,
+          earlyLogoutMinutes: result.earlyLogoutMinutes || null,
+        }
+        
+        // Update state immediately - this should trigger re-render
+        // Use React's batch update to ensure state updates together
+        setTodayAttendance(updatedAttendance)
+        if (result.mode) {
+          setSelectedMode(result.mode as AttendanceMode)
+        }
+        
+        console.log('Clock in successful, updated attendance:', updatedAttendance)
+        console.log('canClockIn will be:', !updatedAttendance || !updatedAttendance.loginTime)
+        console.log('canClockOut will be:', !!(updatedAttendance?.loginTime && !updatedAttendance?.logoutTime))
+      }
+      
+      // Force refresh attendance data after clock in to ensure we have latest data
+      // Use a small delay to ensure database is fully updated
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Force refresh with cache-busting to get server state (double-check)
+      router.refresh()
+      const refreshed = await fetchTodayAttendance(true)
+      console.log('Refreshed attendance after clock in:', refreshed)
+      
+      // Refresh history as well
+      await fetchAttendanceHistory()
+    } catch (error: any) {
+      console.error('Clock in error:', error)
+      const errorMessage = error.message || 'Failed to clock in'
+      alert(errorMessage)
+      // Even on error, try to refresh to sync UI with server state
+      await new Promise(resolve => setTimeout(resolve, 300))
+      await fetchTodayAttendance(true)
+    } finally {
+      setClockingIn(false)
+    }
+  }
+
+  const handleClockOut = async () => {
+    try {
+      setClockingOut(true)
+      await clockOut()
+      
+      // Force refresh attendance data after clock out
+      router.refresh()
+      await new Promise(resolve => setTimeout(resolve, 300))
+      await fetchTodayAttendance(true)
+      await fetchAttendanceHistory()
+    } catch (error: any) {
+      alert(error.message || 'Failed to clock out')
+      // Refresh data even on error to sync UI state with database
+      await fetchTodayAttendance(true)
+    } finally {
+      setClockingOut(false)
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Present':
+        return <Badge className="bg-green-100 text-green-800 border-green-200">Present</Badge>
+      case 'Late':
+        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Late</Badge>
+      case 'HalfDay':
+        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Half Day</Badge>
+      case 'Absent':
+        return <Badge className="bg-red-100 text-red-800 border-red-200">Absent</Badge>
+      default:
+        return <Badge variant="outline">{status}</Badge>
+    }
+  }
+
+  const formatTime = (time: string | null | undefined) => {
+    if (!time) return '-'
+    return format(new Date(time), 'hh:mm a')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-sm text-muted-foreground">Loading attendance data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Compute these values based on current state
+  // Using useMemo to ensure they update when state changes
+  const canClockIn = !todayAttendance || !todayAttendance.loginTime || !!todayAttendance.logoutTime
+  const canClockOut = !!(todayAttendance?.loginTime && !todayAttendance?.logoutTime)
+
+  return (
+    <div className="space-y-6">
+      {/* Clock In/Out Section */}
+      <Card className="rounded-xl border shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Clock In/Out
+          </CardTitle>
+          <CardDescription>Manage your daily attendance</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {canClockIn && (
+              <div className="space-y-4">
+                <div>
+                  <Label>Attendance Mode</Label>
+                  <Select 
+                    value={selectedMode} 
+                    onValueChange={(value) => setSelectedMode(value as AttendanceMode)}
+                    disabled={clockingIn}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={AttendanceMode.OFFICE}>
+                        <div className="flex items-center gap-2">
+                          <Home className="h-4 w-4" />
+                          Office
+                        </div>
+                      </SelectItem>
+                      <SelectItem value={AttendanceMode.WFH}>
+                        <div className="flex items-center gap-2">
+                          <Laptop className="h-4 w-4" />
+                          Work From Home
+                        </div>
+                      </SelectItem>
+                      <SelectItem value={AttendanceMode.LEAVE}>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          Leave
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button 
+                  onClick={handleClockIn} 
+                  disabled={clockingIn || loading}
+                  className="w-full"
+                  size="lg"
+                >
+                  <LogIn className="mr-2 h-4 w-4" />
+                  {clockingIn ? 'Clocking In...' : 'Clock In'}
+                </Button>
+              </div>
+            )}
+
+            {canClockOut && (
+              <>
+                {/* Allow mode change when already clocked in */}
+                {todayAttendance?.mode && todayAttendance.mode !== selectedMode && (
+                  <div className="space-y-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm text-blue-900 font-medium mb-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Change Attendance Mode
+                    </div>
+                    <p className="text-xs text-blue-700 mb-3">
+                      You're currently clocked in as <strong>{todayAttendance.mode}</strong>. 
+                      You can change your mode without clocking out.
+                    </p>
+                    <div>
+                      <Label>Change to Mode</Label>
+                      <Select 
+                        value={selectedMode} 
+                        onValueChange={(value) => setSelectedMode(value as AttendanceMode)}
+                        disabled={clockingIn}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={AttendanceMode.OFFICE}>
+                            <div className="flex items-center gap-2">
+                              <Home className="h-4 w-4" />
+                              Office
+                            </div>
+                          </SelectItem>
+                          <SelectItem value={AttendanceMode.WFH}>
+                            <div className="flex items-center gap-2">
+                              <Laptop className="h-4 w-4" />
+                              Work From Home
+                            </div>
+                          </SelectItem>
+                          <SelectItem value={AttendanceMode.LEAVE}>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4" />
+                              Leave
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button 
+                      onClick={handleClockIn} 
+                      disabled={clockingIn || loading}
+                      className="w-full"
+                      size="sm"
+                      variant="outline"
+                    >
+                      {clockingIn ? 'Changing Mode...' : `Switch to ${selectedMode}`}
+                    </Button>
+                  </div>
+                )}
+                <Button 
+                  onClick={handleClockOut} 
+                  disabled={clockingOut || loading}
+                  variant="destructive"
+                  className="w-full"
+                  size="lg"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {clockingOut ? 'Clocking Out...' : 'Clock Out'}
+                </Button>
+              </>
+            )}
+
+            {todayAttendance?.logoutTime && (
+              <div className="p-4 bg-muted rounded-lg text-center">
+                <CheckCircle2 className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                <p className="text-sm font-medium">You have completed your attendance for today</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Check-in: {formatTime(todayAttendance.loginTime)} | 
+                  Check-out: {formatTime(todayAttendance.logoutTime)}
+                </p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* WFH Activity Warning */}
+      {isWFHActive && inactivityWarning && (
+        <Card className="rounded-xl border-yellow-200 bg-yellow-50 shadow-sm">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-yellow-900">
+                  Inactivity Detected
+                </p>
+                <p className="text-xs text-yellow-700 mt-1">
+                  No activity detected for {Math.round(inactivityWarning)} minutes. 
+                  Please ensure you&apos;re actively working to maintain your attendance record.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* WFH Activity Metrics */}
+      {isWFHActive && wfhMetrics && (
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              WFH Activity Monitor
+            </CardTitle>
+            <CardDescription>Your work activity is being tracked automatically</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Activity Score</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <p className={`font-medium ${
+                    (wfhMetrics.metrics?.activityScore || 0) >= 80 ? 'text-green-600' :
+                    (wfhMetrics.metrics?.activityScore || 0) >= 50 ? 'text-yellow-600' :
+                    'text-red-600'
+                  }`}>
+                    {wfhMetrics.metrics?.activityScore || 0}%
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Activity Pings</p>
+                <p className="mt-1 font-medium">
+                  {wfhMetrics.attendance?.wfhActivityPings || 0}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Tasks Completed</p>
+                <p className="mt-1 font-medium">
+                  {wfhMetrics.metrics?.tasksCompleted || 0}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Task Time</p>
+                <p className="mt-1 font-medium">
+                  {(wfhMetrics.metrics?.totalTaskTime || 0).toFixed(1)}h
+                </p>
+              </div>
+              {wfhMetrics.attendance?.lastActivityTime && (
+                <div className="col-span-2">
+                  <p className="text-sm text-muted-foreground">Last Activity</p>
+                  <p className="mt-1 font-medium text-xs">
+                    {formatTime(wfhMetrics.attendance.lastActivityTime)}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="mt-4 p-3 bg-muted rounded-lg">
+              <p className="text-xs text-muted-foreground">
+                💡 Your activity is automatically tracked through mouse movements, keyboard input, 
+                and task updates. Stay active to maintain a good activity score.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Today's Status */}
+      {todayAttendance && (
+        <Card className="rounded-xl border shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Today&apos;s Status
+            </CardTitle>
+            <CardDescription>Your attendance details for today</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <div className="mt-1">{getStatusBadge(todayAttendance.status)}</div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Mode</p>
+                <div className="mt-1">
+                  <Badge variant="outline">{todayAttendance.mode}</Badge>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Check-in</p>
+                <p className="mt-1 font-medium">{formatTime(todayAttendance.loginTime)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Check-out</p>
+                <p className="mt-1 font-medium">{formatTime(todayAttendance.logoutTime)}</p>
+              </div>
+              {todayAttendance.totalHours && (
+                <div className="col-span-2">
+                  <p className="text-sm text-muted-foreground">Total Hours</p>
+                  <p className="mt-1 font-medium">{todayAttendance.totalHours.toFixed(2)} hours</p>
+                </div>
+              )}
+              {todayAttendance.lateSignInMinutes && todayAttendance.lateSignInMinutes > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Late by</p>
+                  <p className="mt-1 font-medium text-yellow-600">
+                    {todayAttendance.lateSignInMinutes} minutes
+                  </p>
+                </div>
+              )}
+              {todayAttendance.earlyLogoutMinutes && todayAttendance.earlyLogoutMinutes > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Early by</p>
+                  <p className="mt-1 font-medium text-orange-600">
+                    {todayAttendance.earlyLogoutMinutes} minutes
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Attendance History */}
+      <Card className="rounded-xl border shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Attendance History
+          </CardTitle>
+          <CardDescription>Last 30 days of your attendance</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {attendanceHistory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <p className="text-sm text-muted-foreground">No attendance records found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Check-in</TableHead>
+                    <TableHead>Check-out</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Mode</TableHead>
+                    <TableHead>Hours</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {attendanceHistory.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium">
+                        {format(new Date(record.date), 'MMM dd, yyyy')}
+                      </TableCell>
+                      <TableCell>{formatTime(record.loginTime)}</TableCell>
+                      <TableCell>{formatTime(record.logoutTime)}</TableCell>
+                      <TableCell>{getStatusBadge(record.status)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{record.mode}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {record.totalHours ? `${record.totalHours.toFixed(2)}h` : '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <p className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
