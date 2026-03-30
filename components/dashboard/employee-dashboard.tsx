@@ -76,13 +76,12 @@ export function EmployeeDashboard() {
         const todayEnd = new Date()
         todayEnd.setHours(23, 59, 59, 999)
 
-        // Fetch all data in parallel for better performance with cache busting
-        const cacheBuster = Date.now()
+        // Fetch all data in parallel
         const [tasksRes, allTasksRes, todaysTasksRes, assignedByMeRes, attendanceRes, monthRes] = await Promise.all([
-          fetch(`/api/tasks?assignedToId=${userId}&limit=5&_t=${cacheBuster}`, { cache: 'no-store' }),
-          fetch(`/api/tasks?assignedToId=${userId}&limit=50&_t=${cacheBuster}`, { cache: 'no-store' }), // Fetch more to get all pending/in-progress
-          fetch(`/api/tasks?assignedToId=${userId}&limit=10&_t=${cacheBuster}`, { cache: 'no-store' }),
-          fetch(`/api/tasks?assignedById=${userId}&limit=5&_t=${cacheBuster}`, { cache: 'no-store' }),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=5`),
+          fetch(`/api/tasks?assignedToId=${userId}&limit=50`), // Fetch more to get all pending/in-progress
+          fetch(`/api/tasks?assignedToId=${userId}&limit=10`),
+          fetch(`/api/tasks?assignedById=${userId}&limit=5`),
           fetch(`/api/attendance?userId=${userId}&startDate=${today}&endDate=${today}`),
           fetch(`/api/attendance?userId=${userId}&startDate=${firstDayOfMonth}&endDate=${lastDayOfMonth}`),
         ])
@@ -146,10 +145,10 @@ export function EmployeeDashboard() {
 
     fetchData()
     
-    // Poll for task updates every 5 seconds for real-time updates
+    // Poll less frequently to reduce backend/API load
     const interval = setInterval(() => {
       fetchData()
-    }, 5000) // Poll every 5 seconds
+    }, 30000)
 
     return () => clearInterval(interval)
   }, [session?.user?.id])

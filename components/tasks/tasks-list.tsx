@@ -99,14 +99,7 @@ export function TasksList() {
     fetchTaskTemplates()
   }, [page, search, statusFilter, priorityFilter, assignedByMeFilter, assignedToMeFilter, employeeFilter])
 
-  // Poll for task updates every 5 seconds for real-time updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchTasks()
-    }, 5000) // Poll every 5 seconds
-
-    return () => clearInterval(interval)
-  }, [page, search, statusFilter, priorityFilter, assignedByMeFilter, assignedToMeFilter, employeeFilter])
+  // Real-time updates handled elsewhere; polling removed for performance.
 
   useEffect(() => {
     // Clear selection when tasks change (e.g., after deletion or filter change)

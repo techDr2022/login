@@ -58,12 +58,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
     if (taskId) {
       fetchTask()
       
-      // Poll for task updates every 5 seconds for real-time updates
-      const interval = setInterval(() => {
-        fetchTask()
-      }, 5000) // Poll every 5 seconds
-
-      return () => clearInterval(interval)
+      // Real-time updates are handled by SSE elsewhere; avoid polling here.
     } else {
       setError('Invalid task ID')
       setLoading(false)

@@ -165,12 +165,7 @@ export function TopBar() {
 
     fetchTasks()
     
-    // Poll for task updates every 5 seconds for real-time updates
-    const interval = setInterval(() => {
-      fetchTasks()
-    }, 5000) // Poll every 5 seconds
-
-    return () => clearInterval(interval)
+    // No polling here; `useTaskNotifications` (SSE) keeps badge/count fresh.
   }, [session?.user?.id])
 
   if (!session) return null
