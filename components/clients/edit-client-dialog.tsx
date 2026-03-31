@@ -37,6 +37,28 @@ interface EditClientDialogProps {
   onSuccess?: () => void
 }
 
+const DEFAULT_MARKETING = {
+  gmbOptimisation: false,
+  websiteSeo: false,
+  socialPostsPerWeek: 0,
+  socialPostsPerMonth: 0,
+  reelsPerMonth: 0,
+  googleAds: false,
+  metaAds: false,
+  reviewManagement: false,
+  postersPerMonth: 0,
+  videosPerMonth: 0,
+  websiteRequirement: 'NOT_NEEDED' as 'NEEDED' | 'NOT_NEEDED' | 'HAS_OLD_WEBSITE' | 'REVAMP',
+  appointmentBookingRequired: false,
+  telehealthRequired: false,
+  gmbStatus: 'HAVE_ALREADY' as 'HAVE_ALREADY' | 'NEED_TO_CREATE',
+  socialCreationStatus: 'HAVE_ALREADY' as 'HAVE_ALREADY' | 'NEED_TO_CREATE',
+  blogsPerMonth: 0,
+  linkedInCreationRequired: false,
+  otherServices: '',
+  notes: '',
+}
+
 export function EditClientDialog({ open, onOpenChange, client, onSuccess }: EditClientDialogProps) {
   const { data: session } = useSession()
   const [loading, setLoading] = useState(false)
@@ -98,20 +120,8 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
   const [competitors, setCompetitors] = useState<any[]>([])
   const [newCompetitor, setNewCompetitor] = useState({ name: '', googleMapLink: '' })
 
-  // Marketing State
-  const [marketing, setMarketing] = useState({
-    gmbOptimisation: false,
-    websiteSeo: false,
-    socialPostsPerWeek: 0,
-    socialPostsPerMonth: 0,
-    reelsPerMonth: 0,
-    googleAds: false,
-    metaAds: false,
-    reviewManagement: false,
-    posters: false,
-    videos: false,
-    notes: '',
-  })
+  // Marketing State (mirrors onboarding step8 + schema in lib/validations)
+  const [marketing, setMarketing] = useState(() => ({ ...DEFAULT_MARKETING }))
 
   // Approval Settings State
   const [approvalSettings, setApprovalSettings] = useState({
@@ -187,21 +197,32 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
       setCompetitors(client.competitors || client.client_competitors || [])
 
       // Load marketing
-      if (client.marketingRequirements || client.client_marketing_requirements) {
-        const m = client.marketingRequirements || client.client_marketing_requirements
+      const m = client.marketingRequirements || client.client_marketing_requirements
+      if (m) {
         setMarketing({
-          gmbOptimisation: m.gmbOptimisation || false,
-          websiteSeo: m.websiteSeo || false,
-          socialPostsPerWeek: m.socialPostsPerWeek || 0,
-          socialPostsPerMonth: m.socialPostsPerMonth || 0,
-          reelsPerMonth: m.reelsPerMonth || 0,
-          googleAds: m.googleAds || false,
-          metaAds: m.metaAds || false,
-          reviewManagement: m.reviewManagement || false,
-          posters: m.posters || false,
-          videos: m.videos || false,
-          notes: m.notes || '',
+          ...DEFAULT_MARKETING,
+          gmbOptimisation: m.gmbOptimisation ?? false,
+          websiteSeo: m.websiteSeo ?? false,
+          socialPostsPerWeek: m.socialPostsPerWeek ?? 0,
+          socialPostsPerMonth: m.socialPostsPerMonth ?? 0,
+          reelsPerMonth: m.reelsPerMonth ?? 0,
+          googleAds: m.googleAds ?? false,
+          metaAds: m.metaAds ?? false,
+          reviewManagement: m.reviewManagement ?? false,
+          postersPerMonth: m.postersPerMonth ?? (m.posters ? 1 : 0),
+          videosPerMonth: m.videosPerMonth ?? (m.videos ? 1 : 0),
+          websiteRequirement: m.websiteRequirement ?? DEFAULT_MARKETING.websiteRequirement,
+          appointmentBookingRequired: m.appointmentBookingRequired ?? false,
+          telehealthRequired: m.telehealthRequired ?? false,
+          gmbStatus: m.gmbStatus ?? DEFAULT_MARKETING.gmbStatus,
+          socialCreationStatus: m.socialCreationStatus ?? DEFAULT_MARKETING.socialCreationStatus,
+          blogsPerMonth: m.blogsPerMonth ?? 0,
+          linkedInCreationRequired: m.linkedInCreationRequired ?? false,
+          otherServices: m.otherServices ?? '',
+          notes: m.notes ?? '',
         })
+      } else {
+        setMarketing({ ...DEFAULT_MARKETING })
       }
 
       // Load approval settings
@@ -367,8 +388,12 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
         await upsertClientTargeting(client.id, targeting)
       }
 
-      // Save marketing
-      await upsertClientMarketingRequirement(client.id, marketing)
+      // Save marketing (posters/videos flags derived from monthly counts, same as onboarding step8)
+      await upsertClientMarketingRequirement(client.id, {
+        ...marketing,
+        posters: marketing.postersPerMonth > 0,
+        videos: marketing.videosPerMonth > 0,
+      })
 
       // Save approval settings
       await upsertClientApprovalSettings(client.id, {
@@ -1073,21 +1098,162 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
                       />
                       <Label>Review Management</Label>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={marketing.posters}
-                        onChange={(e) => setMarketing({ ...marketing, posters: e.target.checked })}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Posters per month</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={marketing.postersPerMonth}
+                        onChange={(e) =>
+                          setMarketing({
+                            ...marketing,
+                            postersPerMonth: parseInt(e.target.value, 10) || 0,
+                          })
+                        }
                       />
-                      <Label>Posters</Label>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={marketing.videos}
-                        onChange={(e) => setMarketing({ ...marketing, videos: e.target.checked })}
+                    <div>
+                      <Label>Videos per month</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={marketing.videosPerMonth}
+                        onChange={(e) =>
+                          setMarketing({
+                            ...marketing,
+                            videosPerMonth: parseInt(e.target.value, 10) || 0,
+                          })
+                        }
                       />
-                      <Label>Videos</Label>
+                    </div>
+                    <div>
+                      <Label>Website</Label>
+                      <Select
+                        value={marketing.websiteRequirement}
+                        onValueChange={(value) =>
+                          setMarketing({
+                            ...marketing,
+                            websiteRequirement: value as typeof marketing.websiteRequirement,
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NEEDED">Needed</SelectItem>
+                          <SelectItem value="NOT_NEEDED">No need</SelectItem>
+                          <SelectItem value="HAS_OLD_WEBSITE">Old website</SelectItem>
+                          <SelectItem value="REVAMP">Revamp</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Appointment booking</Label>
+                      <Select
+                        value={marketing.appointmentBookingRequired ? 'NEEDED' : 'NOT_NEEDED'}
+                        onValueChange={(value) =>
+                          setMarketing({ ...marketing, appointmentBookingRequired: value === 'NEEDED' })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NEEDED">Needed</SelectItem>
+                          <SelectItem value="NOT_NEEDED">No need</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Telehealth</Label>
+                      <Select
+                        value={marketing.telehealthRequired ? 'NEEDED' : 'NOT_NEEDED'}
+                        onValueChange={(value) =>
+                          setMarketing({ ...marketing, telehealthRequired: value === 'NEEDED' })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NEEDED">Needed</SelectItem>
+                          <SelectItem value="NOT_NEEDED">No need</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>GMB</Label>
+                      <Select
+                        value={marketing.gmbStatus}
+                        onValueChange={(value) =>
+                          setMarketing({
+                            ...marketing,
+                            gmbStatus: value as typeof marketing.gmbStatus,
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="HAVE_ALREADY">Have already</SelectItem>
+                          <SelectItem value="NEED_TO_CREATE">Need to create</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Insta / Facebook / YouTube</Label>
+                      <Select
+                        value={marketing.socialCreationStatus}
+                        onValueChange={(value) =>
+                          setMarketing({
+                            ...marketing,
+                            socialCreationStatus: value as typeof marketing.socialCreationStatus,
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="HAVE_ALREADY">Have already</SelectItem>
+                          <SelectItem value="NEED_TO_CREATE">Need to create</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Blogs per month</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={marketing.blogsPerMonth}
+                        onChange={(e) =>
+                          setMarketing({
+                            ...marketing,
+                            blogsPerMonth: parseInt(e.target.value, 10) || 0,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label>LinkedIn creation</Label>
+                      <Select
+                        value={marketing.linkedInCreationRequired ? 'NEEDED' : 'NOT_NEEDED'}
+                        onValueChange={(value) =>
+                          setMarketing({ ...marketing, linkedInCreationRequired: value === 'NEEDED' })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NEEDED">Needed</SelectItem>
+                          <SelectItem value="NOT_NEEDED">No need</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
@@ -1115,6 +1281,14 @@ export function EditClientDialog({ open, onOpenChange, client, onSuccess }: Edit
                         onChange={(e) => setMarketing({ ...marketing, reelsPerMonth: parseInt(e.target.value) || 0 })}
                       />
                     </div>
+                  </div>
+                  <div>
+                    <Label>Other services (specific)</Label>
+                    <Textarea
+                      value={marketing.otherServices}
+                      onChange={(e) => setMarketing({ ...marketing, otherServices: e.target.value })}
+                      rows={3}
+                    />
                   </div>
                   <div>
                     <Label>Notes</Label>
