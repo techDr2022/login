@@ -12,6 +12,7 @@ export default async function HomePage() {
   if (session) {
     redirect('/dashboard')
   }
+
   
   // Show landing page for unauthenticated users
   return <LandingPage />
