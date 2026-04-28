@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
-import { StickyChatButton } from './chat/StickyChatButton'
+import { TeamChatBotWidget } from './chat/team-chat-bot-widget'
 import { initChatSound } from '@/lib/chat-sound'
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
@@ -20,7 +20,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-      <StickyChatButton />
+      <TeamChatBotWidget />
     </div>
   )
 }
