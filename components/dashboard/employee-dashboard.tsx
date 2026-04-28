@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { TaskStatusTimeline } from './task-status-timeline'
 import { updateTaskStatus } from '@/app/actions/task-actions'
+import { formatDateLocal } from '@/lib/utils'
 
 interface Task {
   id: string
@@ -65,9 +66,9 @@ export function EmployeeDashboard() {
       if (!session?.user?.id) return
       
       try {
-        const today = new Date().toISOString().split('T')[0]
-        const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
-        const lastDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
+        const today = formatDateLocal(new Date())
+        const firstDayOfMonth = formatDateLocal(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+        const lastDayOfMonth = formatDateLocal(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))
         const userId = session.user.id
 
         // Get today's date range (start and end of today)
@@ -161,7 +162,7 @@ export function EmployeeDashboard() {
       const userId = session?.user?.id
       if (userId) {
         const cacheBuster = Date.now()
-        const today = new Date().toISOString().split('T')[0]
+        const today = formatDateLocal(new Date())
         const todayStart = new Date()
         todayStart.setHours(0, 0, 0, 0)
         const todayEnd = new Date()
@@ -219,7 +220,7 @@ export function EmployeeDashboard() {
       const userId = session?.user?.id
       if (userId) {
         const cacheBuster = Date.now()
-        const today = new Date().toISOString().split('T')[0]
+        const today = formatDateLocal(new Date())
         const todayStart = new Date()
         todayStart.setHours(0, 0, 0, 0)
         const todayEnd = new Date()

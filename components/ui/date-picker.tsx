@@ -15,6 +15,7 @@ interface DatePickerProps {
   placeholder?: string
   className?: string
   disabled?: boolean
+  minDate?: Date
 }
 
 export function DatePicker({
@@ -23,6 +24,7 @@ export function DatePicker({
   placeholder = 'Pick a date',
   className,
   disabled,
+  minDate,
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false)
 
@@ -44,6 +46,7 @@ export function DatePicker({
       <PopoverContent className="w-auto p-0" align="start">
         <ReactDatePicker
           selected={date || null}
+          minDate={minDate}
           onChange={(selectedDate: Date | null) => {
             onSelect?.(selectedDate)
             if (selectedDate) {

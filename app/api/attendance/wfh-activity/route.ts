@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode } from '@prisma/client'
 import { ATTENDANCE_CONFIG } from '@/lib/attendance-config'
+import { parseDateLocal, formatDateLocal } from '@/lib/utils'
 
 /**
  * GET /api/attendance/wfh-activity
@@ -53,8 +54,8 @@ export async function GET(request: NextRequest) {
     // If date range provided, get historical data
     let historicalData: any[] = []
     if (startDate && endDate) {
-      const start = new Date(startDate)
-      const end = new Date(endDate)
+      const start = parseDateLocal(startDate)
+      const end = parseDateLocal(endDate)
       end.setHours(23, 59, 59, 999)
 
       historicalData = await prisma.attendances.findMany({
@@ -179,7 +180,7 @@ export async function GET(request: NextRequest) {
       },
       historical: historicalData.map(record => ({
         ...record,
-        date: record.date.toISOString().split('T')[0],
+        date: formatDateLocal(record.date),
         loginTime: record.loginTime?.toISOString() ?? null,
         logoutTime: record.logoutTime?.toISOString() ?? null,
         lastActivityTime: record.lastActivityTime?.toISOString() ?? null,

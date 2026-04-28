@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
+import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -788,6 +789,14 @@ export function SuperAdminAttendancePanel() {
                 <li>Public holiday indicators</li>
                 <li><strong>Absent</strong> status highlighted in red</li>
               </ul>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+              <p className="text-sm text-amber-800">
+                <strong>Important:</strong> Set monthly employee salary before payroll export to get correct payable amount.
+              </p>
+              <Button asChild variant="outline" size="sm" className="mt-2">
+                <Link href="/invoices">Set Employee Salary</Link>
+              </Button>
             </div>
           </div>
           <DialogFooter>

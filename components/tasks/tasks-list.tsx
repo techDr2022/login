@@ -31,6 +31,7 @@ interface Task {
   assignedToId?: string
   clientId?: string
   dueDate?: string
+  createdAt?: string
   timeSpent?: number
   assignedTo?: {
     id: string
@@ -176,6 +177,17 @@ export function TasksList() {
     setIsSubmitting(true)
 
     try {
+      if (!formData.taskType && formData.dueDate) {
+        const today = new Date()
+        const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+        const [year, month, day] = formData.dueDate.split('-').map(Number)
+        const selectedDateOnly = new Date(year, month - 1, day)
+        if (selectedDateOnly < todayDateOnly) {
+          setError('Due date cannot be in the past')
+          return
+        }
+      }
+
       // Convert hours and minutes to decimal hours for storage
       const timeSpentInHours = formData.timeSpentHours + (formData.timeSpentMinutes / 60)
 
@@ -672,6 +684,7 @@ export function TasksList() {
                         }}
                         placeholder={formData.taskType ? "Auto-calculated from task type" : "Select due date"}
                         disabled={!!formData.taskType}
+                        minDate={new Date()}
                       />
                       {formData.taskType && (
                         <p className="text-xs text-muted-foreground mt-1">
@@ -740,6 +753,7 @@ export function TasksList() {
                 <TableHead>Client</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Assigned At</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -804,6 +818,16 @@ export function TasksList() {
                       >
                         {task.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {task.createdAt ? (
+                        <div className="flex flex-col">
+                          <span>{new Date(task.createdAt).toLocaleDateString()}</span>
+                          <span className="text-xs">{new Date(task.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      ) : (
+                        '-'
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { UserRole } from '@prisma/client'
 import { getInvoicesUnlockUserIdFromRequest } from '@/lib/invoices-unlock'
 import ExcelJS from 'exceljs'
+import { formatDateLocal } from '@/lib/utils'
 
 function formatDate(date: Date | string | null): string {
   if (!date) return '-'
@@ -15,6 +16,7 @@ function formatDate(date: Date | string | null): string {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
+    timeZone: 'Asia/Kolkata',
   })
 }
 
@@ -174,7 +176,7 @@ export async function GET(request: NextRequest) {
     summarySheet.getColumn(2).width = 20
 
     const buffer = await workbook.xlsx.writeBuffer()
-    const filename = `client-invoices-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+    const filename = `client-invoices-export-${formatDateLocal(new Date())}.xlsx`
 
     return new NextResponse(buffer, {
       headers: {

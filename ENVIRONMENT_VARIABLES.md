@@ -403,3 +403,18 @@ TWILIO_USE_TEMPLATE="true"
 - {{5}} = Total Hours (for clock-out: "8.50 hours" or "N/A" for clock-in)
 
 **See `ATTENDANCE_WHATSAPP_TEMPLATE_GUIDE.md` for detailed template setup instructions.**
+
+## Optional: Monthly Payslip Emails
+
+Set these variables to enable monthly payslip generation and employee email delivery from `/api/cron/monthly-payslip` via Resend.
+
+```env
+RESEND_API_KEY="re_xxxxxxxxxxxxxxxxx"
+RESEND_FROM_EMAIL="HR Team <hr@yourdomain.com>"
+```
+
+Optional payroll holiday overrides (comma-separated `YYYY-MM-DD` values):
+
+```env
+PAYROLL_PUBLIC_HOLIDAYS="2026-01-26,2026-08-15,2026-10-31"
+```

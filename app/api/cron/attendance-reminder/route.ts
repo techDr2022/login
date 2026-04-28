@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@prisma/client'
 import { sendWhatsAppNotification, formatAttendanceReminderMessage, getAttendanceReminderTemplateVariables } from '@/lib/whatsapp'
+import { formatDateLocal } from '@/lib/utils'
 
 /**
  * Attendance Reminder Cron Job
@@ -38,8 +39,7 @@ function isPublicHoliday(date: Date): boolean {
     '2025-11-08', // Diwali (Deepavali)
     '2025-12-25', // Christmas Day
   ]
-  const isoDate = date.toISOString().split('T')[0]
-  return PUBLIC_HOLIDAYS.includes(isoDate)
+  return PUBLIC_HOLIDAYS.includes(formatDateLocal(date))
 }
 
 export async function GET(request: NextRequest) {

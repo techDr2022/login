@@ -64,8 +64,10 @@ const RechartsChart = dynamic(
 
 interface Employee {
   id: string
+  employeeCode?: string
   name: string
   email: string
+  jobTitle?: string | null
   role: string
   isActive: boolean
   createdAt: string
@@ -297,6 +299,12 @@ export function EmployeeDetailDrawer({
             <div className="flex-1">
               <SheetTitle className="text-2xl">{employee.name}</SheetTitle>
               <SheetDescription>{employee.email}</SheetDescription>
+              <p className="text-sm text-muted-foreground mt-1">
+                {details?.employee?.jobTitle || employee.jobTitle || 'Designation not set'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Employee ID: {details?.employee?.employeeCode || employee.employeeCode || '---'}
+              </p>
             </div>
             <div className="flex gap-2">
               <Button

@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, TaskStatus } from '@prisma/client'
+import { buildEmployeeCodeMap } from '@/lib/employee-code'
 
 // GET /api/admin/employees/[id] - Get employee details with performance data
 export async function GET(
@@ -29,6 +30,7 @@ export async function GET(
         id: true,
         name: true,
         email: true,
+        jobTitle: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -70,6 +72,21 @@ export async function GET(
     if (!employee) {
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
     }
+
+    const codeSourceEmployees = await prisma.user.findMany({
+      where: {
+        role: {
+          not: UserRole.SUPER_ADMIN,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        joiningDate: true,
+        createdAt: true,
+      },
+    })
+    const employeeCodeMap = buildEmployeeCodeMap(codeSourceEmployees)
 
     // Calculate performance metrics
     const tasks = employee.Task_Task_assignedToIdToUser
@@ -116,6 +133,7 @@ export async function GET(
     return NextResponse.json({
       employee: {
         ...employee,
+        employeeCode: employeeCodeMap.get(employee.id) || '---',
         totalTasks,
         completedTasks,
         pendingTasks,
@@ -152,12 +170,14 @@ export async function PUT(
 
     const { id } = await context.params
     const body = await request.json()
-    const { name, email, role, isActive, joiningDate, adminNotes, phoneNumber } = body
+    const { name, email, jobTitle, role, isActive, joiningDate, adminNotes, phoneNumber } = body
+    const trimmedEmail = email !== undefined ? String(email).trim().toLowerCase() : undefined
+    const trimmedJobTitle = jobTitle !== undefined ? String(jobTitle).trim() : undefined
 
     // Check if email is being changed and if it already exists
-    if (email) {
+    if (trimmedEmail) {
       const existingUser = await prisma.user.findUnique({
-        where: { email },
+        where: { email: trimmedEmail },
       })
 
       if (existingUser && existingUser.id !== id) {
@@ -170,7 +190,18 @@ export async function PUT(
 
     const updateData: any = {}
     if (name !== undefined) updateData.name = name
-    if (email !== undefined) updateData.email = email
+    if (trimmedEmail !== undefined) {
+      if (!trimmedEmail) {
+        return NextResponse.json({ error: 'Personal email is required' }, { status: 400 })
+      }
+      updateData.email = trimmedEmail
+    }
+    if (trimmedJobTitle !== undefined) {
+      if (!trimmedJobTitle) {
+        return NextResponse.json({ error: 'Designation is required' }, { status: 400 })
+      }
+      updateData.jobTitle = trimmedJobTitle
+    }
     if (role !== undefined) updateData.role = role as UserRole
     if (isActive !== undefined) updateData.isActive = isActive
     if (joiningDate !== undefined)
@@ -185,6 +216,7 @@ export async function PUT(
         id: true,
         name: true,
         email: true,
+        jobTitle: true,
         role: true,
         isActive: true,
         createdAt: true,

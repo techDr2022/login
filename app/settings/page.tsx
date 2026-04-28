@@ -5,12 +5,11 @@ import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { LayoutWrapper } from '@/components/layout-wrapper'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { ChangePasswordForm } from '@/components/settings/change-password-form'
 import { NotificationsSettings } from '@/components/settings/notifications-settings'
 import { PhoneNumberForm } from '@/components/settings/phone-number-form'
 import { SubscriptionSettings } from '@/components/settings/subscription-settings'
+import { ProfileForm } from '@/components/settings/profile-form'
 import { prisma } from '@/lib/prisma'
 
 export default async function SettingsPage() {
@@ -21,10 +20,15 @@ export default async function SettingsPage() {
 
   const user = session.user
   
-  // Fetch user's phone number from database
+  // Fetch user profile details from database
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { phoneNumber: true },
+    select: {
+      name: true,
+      email: true,
+      jobTitle: true,
+      phoneNumber: true,
+    },
   })
 
   return (
@@ -34,19 +38,14 @@ export default async function SettingsPage() {
           <div>
             <h2 className="text-lg font-semibold">Profile settings</h2>
             <p className="text-sm text-muted-foreground">
-              Basic information about your account. (Read-only for now)
+              Update your personal email and designation.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={user.name ?? ''} readOnly />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input value={user.email ?? ''} readOnly />
-            </div>
-          </div>
+          <ProfileForm
+            currentName={dbUser?.name || user.name || ''}
+            currentEmail={dbUser?.email || user.email || ''}
+            currentJobTitle={dbUser?.jobTitle || ''}
+          />
         </Card>
 
         <Card className="p-6 space-y-4">

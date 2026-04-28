@@ -17,8 +17,10 @@ import {
 
 interface Employee {
   id: string
+  employeeCode?: string
   name: string
   email: string
+  jobTitle?: string | null
   role: string
   isActive: boolean
   createdAt: string
@@ -236,7 +238,11 @@ export function EmployeesTable({
                       </Avatar>
                       <div>
                         <div className="font-medium">{employee.name}</div>
+                        <div className="text-xs text-muted-foreground">ID: {employee.employeeCode || '---'}</div>
                         <div className="text-sm text-muted-foreground">{employee.email}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {employee.jobTitle?.trim() || 'Designation not set'}
+                        </div>
                       </div>
                     </div>
                   </TableCell>

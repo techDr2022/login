@@ -25,12 +25,35 @@ const PUBLIC_HOLIDAYS: string[] = [
 ]
 
 function isPublicHoliday(date: Date): boolean {
-  const isoDate = date.toISOString().split('T')[0]
-  return PUBLIC_HOLIDAYS.includes(isoDate)
+  return PUBLIC_HOLIDAYS.includes(formatDateLocal(date))
 }
 
 function isSunday(date: Date): boolean {
   return date.getDay() === 0
+}
+
+function getMonthKey(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
+function getWorkingDaysInMonth(monthKey: string): number {
+  const [yearStr, monthStr] = monthKey.split('-')
+  const year = Number(yearStr)
+  const monthIndex = Number(monthStr) - 1
+  const totalDays = new Date(year, monthIndex + 1, 0).getDate()
+  let workingDays = 0
+
+  for (let day = 1; day <= totalDays; day++) {
+    const date = new Date(year, monthIndex, day)
+    if (isSunday(date) || isPublicHoliday(date)) {
+      continue
+    }
+    workingDays += 1
+  }
+
+  return workingDays
 }
 
 function formatTime(date: Date | null | undefined): string {
@@ -39,7 +62,8 @@ function formatTime(date: Date | null | undefined): string {
     hour: '2-digit', 
     minute: '2-digit',
     second: '2-digit',
-    hour12: false 
+    hour12: false,
+    timeZone: 'Asia/Kolkata',
   })
 }
 
@@ -48,7 +72,8 @@ function formatDate(date: Date | string): string {
   return d.toLocaleDateString('en-US', { 
     year: 'numeric', 
     month: '2-digit', 
-    day: '2-digit' 
+    day: '2-digit',
+    timeZone: 'Asia/Kolkata',
   })
 }
 
@@ -86,6 +111,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid end date' }, { status: 400 })
     }
     end.setHours(23, 59, 59, 999)
+    const requestedStartKey = startDate
+    const requestedEndKey = endDate
 
     // Limit date range to 3 months to avoid performance issues
     const maxDays = 90
@@ -111,7 +138,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all attendance records for the date range
-    const attendances = await prisma.attendances.findMany({
+    const attendancesRaw = await prisma.attendances.findMany({
       where,
       include: {
         User: {
@@ -128,6 +155,10 @@ export async function GET(request: NextRequest) {
         { User: { name: 'asc' } },
         { date: 'asc' },
       ],
+    })
+    const attendances = attendancesRaw.filter((attendance) => {
+      const dateKey = formatDateLocal(attendance.date)
+      return dateKey >= requestedStartKey && dateKey <= requestedEndKey
     })
 
     // Get all employees to include absent records
@@ -146,9 +177,43 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    const employeeIds = allEmployees.map((employee) => employee.id)
+    const monthKeys = Array.from(
+      new Set(
+        (() => {
+          const keys: string[] = []
+          const cursor = new Date(start)
+          while (cursor <= end) {
+            keys.push(getMonthKey(cursor))
+            cursor.setDate(cursor.getDate() + 1)
+          }
+          return keys
+        })()
+      )
+    )
+
+    const employeeSalaries = employeeIds.length
+      ? await prisma.employeeSalary.findMany({
+          where: {
+            userId: { in: employeeIds },
+            monthKey: { in: monthKeys },
+            isActive: true,
+          },
+          select: {
+            userId: true,
+            monthKey: true,
+            amount: true,
+          },
+        })
+      : []
+
+    const salaryMap = new Map(
+      employeeSalaries.map((salary) => [`${salary.userId}-${salary.monthKey}`, salary.amount])
+    )
+
     // Create a map of existing attendances
     const attendanceMap = new Map(
-      attendances.map((a) => [`${a.userId}-${a.date.toISOString().split('T')[0]}`, a])
+      attendances.map((a) => [`${a.userId}-${formatDateLocal(a.date)}`, a])
     )
 
     // Generate absent records for employees
@@ -157,7 +222,7 @@ export async function GET(request: NextRequest) {
     for (const employee of allEmployees) {
       const currentDate = new Date(start)
       while (currentDate <= end) {
-        const isoDate = currentDate.toISOString().split('T')[0]
+        const isoDate = formatDateLocal(currentDate)
         const dateKey = `${employee.id}-${isoDate}`
         
         if (!attendanceMap.has(dateKey)) {
@@ -233,6 +298,48 @@ export async function GET(request: NextRequest) {
       return a.date.getTime() - b.date.getTime()
     })
 
+    const monthlyWorkingDaysCache = new Map<string, number>()
+    const payrollSummary = new Map<string, { name: string; presentDays: number; payableAmount: number }>()
+
+    for (const employee of allEmployees) {
+      payrollSummary.set(employee.id, {
+        name: employee.name,
+        presentDays: 0,
+        payableAmount: 0,
+      })
+    }
+
+    for (const attendance of allRecords) {
+      const summary = payrollSummary.get(attendance.userId)
+      if (!summary) continue
+
+      const monthKey = getMonthKey(attendance.date)
+      const salaryAmount = salaryMap.get(`${attendance.userId}-${monthKey}`) ?? 0
+      const isSundayHoliday = (attendance as any).isSundayHoliday === true
+      const isHoliday = isSundayHoliday || isPublicHoliday(attendance.date)
+      if (isHoliday) continue
+
+      let dayWeight = 0
+      if (attendance.status === AttendanceStatus.Present || attendance.status === AttendanceStatus.Late) {
+        dayWeight = 1
+      } else if (attendance.status === AttendanceStatus.HalfDay) {
+        dayWeight = 0.5
+      }
+
+      if (dayWeight <= 0) continue
+
+      let monthWorkingDays = monthlyWorkingDaysCache.get(monthKey)
+      if (!monthWorkingDays) {
+        monthWorkingDays = getWorkingDaysInMonth(monthKey)
+        monthlyWorkingDaysCache.set(monthKey, monthWorkingDays)
+      }
+      if (monthWorkingDays <= 0) continue
+
+      const perDayPay = salaryAmount / monthWorkingDays
+      summary.presentDays += dayWeight
+      summary.payableAmount += perDayPay * dayWeight
+    }
+
     // Generate Excel workbook with styling (Absent = red, Sunday Holiday = orange)
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Payroll Export', { views: [{ state: 'frozen', ySplit: 1 }] })
@@ -271,7 +378,10 @@ export async function GET(request: NextRequest) {
 
     // Add data rows
     for (const attendance of allRecords) {
-      const dayName = attendance.date.toLocaleDateString('en-US', { weekday: 'long' })
+      const dayName = attendance.date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        timeZone: 'Asia/Kolkata',
+      })
       const isHoliday = isPublicHoliday(attendance.date)
       const isSundayHoliday = (attendance as any).isSundayHoliday === true
       const status = attendance.status
@@ -307,6 +417,53 @@ export async function GET(request: NextRequest) {
         statusCell.font = { color: { argb: 'FFFF0000' }, bold: true } // Red, bold
       }
     }
+
+    worksheet.addRow([])
+    worksheet.addRow(['Payroll Totals'])
+    const totalsHeaderRow = worksheet.addRow(['Employee Name', 'Total Present Days', 'Payable Amount'])
+    totalsHeaderRow.font = { bold: true }
+    totalsHeaderRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    }
+
+    for (const employee of allEmployees.sort((a, b) => a.name.localeCompare(b.name))) {
+      const summary = payrollSummary.get(employee.id)
+      worksheet.addRow([
+        employee.name,
+        summary ? summary.presentDays.toFixed(2) : '0.00',
+        summary ? summary.payableAmount.toFixed(2) : '0.00',
+      ])
+    }
+
+    const summarySheet = workbook.addWorksheet('Payroll Summary', { views: [{ state: 'frozen', ySplit: 1 }] })
+    const summaryHeaders = ['Employee Name', 'Total Present Days', 'Payable Amount']
+    const summaryHeaderRow = summarySheet.addRow(summaryHeaders)
+    summaryHeaderRow.font = { bold: true }
+    summaryHeaderRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    }
+
+    for (const employee of allEmployees.sort((a, b) => a.name.localeCompare(b.name))) {
+      const summary = payrollSummary.get(employee.id)
+      summarySheet.addRow([
+        employee.name,
+        summary ? summary.presentDays.toFixed(2) : '0.00',
+        summary ? summary.payableAmount.toFixed(2) : '0.00',
+      ])
+    }
+
+    summarySheet.columns.forEach((col, i) => {
+      let maxLength = summaryHeaders[i]?.length || 10
+      col.eachCell?.({ includeEmpty: true }, (cell) => {
+        const cellLength = cell.value ? String(cell.value).length : 0
+        maxLength = Math.max(maxLength, cellLength)
+      })
+      col.width = Math.min(maxLength + 2, 40)
+    })
 
     // Auto-fit columns
     worksheet.columns.forEach((col, i) => {

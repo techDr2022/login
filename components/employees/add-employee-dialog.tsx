@@ -19,11 +19,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
 import { CheckCircle2, Copy, AlertCircle } from 'lucide-react'
 import { UserRole } from '@prisma/client'
+import { formatDateLocal } from '@/lib/utils'
 
 interface Employee {
   id: string
   name: string
   email: string
+  jobTitle?: string | null
   role: string
   isActive: boolean
   createdAt: string
@@ -48,10 +50,11 @@ export function AddEmployeeDialog({
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    jobTitle: '',
     role: 'EMPLOYEE' as UserRole,
     password: '',
     confirmPassword: '',
-    joiningDate: new Date().toISOString().split('T')[0],
+    joiningDate: formatDateLocal(new Date()),
     adminNotes: '',
     phoneNumber: '',
     isActive: true,
@@ -66,12 +69,13 @@ export function AddEmployeeDialog({
       setFormData({
         name: employee.name,
         email: employee.email,
+        jobTitle: employee.jobTitle || '',
         role: employee.role as UserRole,
         password: '',
         confirmPassword: '',
         joiningDate: employee.joiningDate
-          ? new Date(employee.joiningDate).toISOString().split('T')[0]
-          : new Date().toISOString().split('T')[0],
+          ? formatDateLocal(new Date(employee.joiningDate))
+          : formatDateLocal(new Date()),
         adminNotes: employee.adminNotes || '',
         phoneNumber: employee.phoneNumber || '',
         isActive: employee.isActive,
@@ -86,10 +90,11 @@ export function AddEmployeeDialog({
     setFormData({
       name: '',
       email: '',
+      jobTitle: '',
       role: 'EMPLOYEE',
       password: '',
       confirmPassword: '',
-      joiningDate: new Date().toISOString().split('T')[0],
+      joiningDate: formatDateLocal(new Date()),
       adminNotes: '',
       phoneNumber: '',
       isActive: true,
@@ -115,7 +120,7 @@ export function AddEmployeeDialog({
     setError('')
 
     // Validation
-    if (!formData.name || !formData.email || !formData.role) {
+    if (!formData.name || !formData.email || !formData.jobTitle || !formData.role) {
       setError('Please fill in all required fields')
       return
     }
@@ -143,6 +148,7 @@ export function AddEmployeeDialog({
         const updateData: any = {
           name: formData.name,
           email: formData.email,
+          jobTitle: formData.jobTitle,
           role: formData.role,
           joiningDate: formData.joiningDate,
           adminNotes: formData.adminNotes || null,
@@ -170,6 +176,7 @@ export function AddEmployeeDialog({
           body: JSON.stringify({
             name: formData.name,
             email: formData.email,
+            jobTitle: formData.jobTitle,
             role: formData.role,
             password: formData.password,
             joiningDate: formData.joiningDate,
@@ -281,7 +288,7 @@ export function AddEmployeeDialog({
             </div>
             <div>
               <Label htmlFor="email">
-                Email <span className="text-destructive">*</span>
+                Personal Email <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="email"
@@ -292,6 +299,20 @@ export function AddEmployeeDialog({
                 className="rounded-xl"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="jobTitle">
+              Designation <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="jobTitle"
+              value={formData.jobTitle}
+              onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+              placeholder="e.g. Graphic Designer Intern"
+              required
+              className="rounded-xl"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -320,7 +341,7 @@ export function AddEmployeeDialog({
                 onSelect={(date) =>
                   setFormData({
                     ...formData,
-                    joiningDate: date ? date.toISOString().split('T')[0] : '',
+                    joiningDate: date ? formatDateLocal(date) : '',
                   })
                 }
                 placeholder="Select joining date"

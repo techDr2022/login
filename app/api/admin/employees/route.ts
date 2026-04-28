@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, TaskStatus } from '@prisma/client'
+import { buildEmployeeCodeMap } from '@/lib/employee-code'
 
 // GET /api/admin/employees - Get all employees with performance metrics
 export async function GET(request: NextRequest) {
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         email: true,
+        jobTitle: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -77,6 +79,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate performance metrics for each employee
+    const employeeCodeMap = buildEmployeeCodeMap(
+      employees.map((employee) => ({
+        id: employee.id,
+        name: employee.name,
+        joiningDate: employee.joiningDate,
+        createdAt: employee.createdAt,
+      }))
+    )
+
     const employeesWithMetrics = employees.map((employee) => {
       try {
         const tasks = employee.Task_Task_assignedToIdToUser || []
@@ -131,8 +142,10 @@ export async function GET(request: NextRequest) {
 
         return {
           id: employee.id,
+          employeeCode: employeeCodeMap.get(employee.id) || '---',
           name: employee.name,
           email: employee.email,
+          jobTitle: employee.jobTitle,
           role: employee.role,
           isActive: employee.isActive,
           createdAt: createdAtStr,
@@ -171,8 +184,10 @@ export async function GET(request: NextRequest) {
 
         return {
           id: employee.id,
+          employeeCode: employeeCodeMap.get(employee.id) || '---',
           name: employee.name,
           email: employee.email,
+          jobTitle: employee.jobTitle,
           role: employee.role,
           isActive: employee.isActive,
           createdAt: createdAtStr,
@@ -217,18 +232,22 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, email, role, joiningDate, password, adminNotes, phoneNumber } = body
+    const { name, email, jobTitle, role, joiningDate, password, adminNotes, phoneNumber } = body
 
-    if (!name || !email || !role || !password) {
+    const trimmedName = String(name || '').trim()
+    const trimmedEmail = String(email || '').trim().toLowerCase()
+    const trimmedJobTitle = String(jobTitle || '').trim()
+
+    if (!trimmedName || !trimmedEmail || !trimmedJobTitle || !role || !password) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Name, personal email, designation, role and password are required' },
         { status: 400 }
       )
     }
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: trimmedEmail },
     })
 
     if (existingUser) {
@@ -249,8 +268,9 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.create({
       data: {
         id: userId,
-        name,
-        email,
+        name: trimmedName,
+        email: trimmedEmail,
+        jobTitle: trimmedJobTitle,
         passwordHash,
         role: role as UserRole,
         joiningDate: joiningDate ? new Date(joiningDate) : new Date(),
@@ -261,6 +281,7 @@ export async function POST(request: NextRequest) {
         id: true,
         name: true,
         email: true,
+        jobTitle: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -271,7 +292,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       user,
       credentials: {
-        email,
+        email: trimmedEmail,
         password, // Return plain password for display (only this time)
       },
     })

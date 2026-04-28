@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/encryption'
 import jsPDF from 'jspdf'
+import { formatDateLocal } from '@/lib/utils'
 
 export async function GET(
   request: NextRequest,
@@ -332,7 +333,7 @@ export async function GET(
     doc.setFontSize(8)
     doc.setFont('helvetica', 'normal')
     doc.text(
-      `Generated on: ${new Date().toLocaleString()}`,
+      `Generated on: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`,
       margin,
       finalY
     )
@@ -345,7 +346,7 @@ export async function GET(
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="client-onboarding-${client.name.replace(/[^a-z0-9]/gi, '_')}-${new Date().toISOString().split('T')[0]}.pdf"`,
+        'Content-Disposition': `attachment; filename="client-onboarding-${client.name.replace(/[^a-z0-9]/gi, '_')}-${formatDateLocal(new Date())}.pdf"`,
       },
     })
   } catch (error: any) {

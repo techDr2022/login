@@ -9,7 +9,10 @@ export default withAuth(
 
     // Public routes that don't require authentication
     const publicRoutes = ['/', '/pricing', '/login']
-    const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/api/subscriptions')
+    const isPublicRoute =
+      publicRoutes.includes(pathname) ||
+      pathname.startsWith('/api/subscriptions') ||
+      pathname.startsWith('/api/cron')
 
     // If on public route, allow access
     if (isPublicRoute) {
@@ -37,7 +40,10 @@ export default withAuth(
         const pathname = req.nextUrl.pathname
         // Public routes that don't require authentication
         const publicRoutes = ['/', '/pricing', '/login']
-        const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/api/subscriptions')
+        const isPublicRoute =
+          publicRoutes.includes(pathname) ||
+          pathname.startsWith('/api/subscriptions') ||
+          pathname.startsWith('/api/cron')
         
         // Allow access to public routes without token
         if (isPublicRoute) {

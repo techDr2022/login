@@ -16,8 +16,10 @@ import { Label } from '@/components/ui/label'
 
 interface Employee {
   id: string
+  employeeCode?: string
   name: string
   email: string
+  jobTitle?: string | null
   role: string
   isActive: boolean
   createdAt: string

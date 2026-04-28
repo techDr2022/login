@@ -22,6 +22,7 @@ import { Step8Marketing } from './onboarding-steps/step8-marketing'
 import { Step9Approvals } from './onboarding-steps/step9-approvals'
 import { Step10KPIs } from './onboarding-steps/step10-kpis'
 import { Step11Confirmation } from './onboarding-steps/step11-confirmation'
+import { formatDateLocal } from '@/lib/utils'
 
 type StepComponent = React.ComponentType<any>
 type Step = { id: number; title: string; component: StepComponent }
@@ -171,7 +172,7 @@ export function ClientOnboardingWizard() {
           const url = window.URL.createObjectURL(blob)
           const a = document.createElement('a')
           a.href = url
-          a.download = `client-onboarding-${data.basicInfo?.name?.replace(/[^a-z0-9]/gi, '_') || clientId}-${new Date().toISOString().split('T')[0]}.pdf`
+          a.download = `client-onboarding-${data.basicInfo?.name?.replace(/[^a-z0-9]/gi, '_') || clientId}-${formatDateLocal(new Date())}.pdf`
           document.body.appendChild(a)
           a.click()
           window.URL.revokeObjectURL(url)

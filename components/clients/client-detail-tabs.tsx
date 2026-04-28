@@ -20,6 +20,7 @@ import { UserRole } from '@prisma/client'
 import { canManageClients, canEditClient } from '@/lib/rbac'
 import { generateTasksForMonth } from '@/app/actions/client-onboarding-actions'
 import { EditClientDialog } from './edit-client-dialog'
+import { formatDateLocal } from '@/lib/utils'
 
 interface ClientDetailTabsProps {
   clientId: string
@@ -188,7 +189,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
       const a = document.createElement('a')
       a.href = url
       const clientName = client?.name?.replace(/[^a-z0-9]/gi, '_') || clientId
-      a.download = `client-onboarding-${clientName}-${new Date().toISOString().split('T')[0]}.pdf`
+      a.download = `client-onboarding-${clientName}-${formatDateLocal(new Date())}.pdf`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)

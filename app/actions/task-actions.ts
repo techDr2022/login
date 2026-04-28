@@ -240,6 +240,17 @@ export async function createTask(data: {
     }
     dueDate = providedDate
   }
+
+  // Due date must not be in the past (date-level check in local timezone).
+  if (dueDate) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const dueDateOnly = new Date(dueDate)
+    dueDateOnly.setHours(0, 0, 0, 0)
+    if (dueDateOnly < today) {
+      throw new Error('Due date cannot be in the past')
+    }
+  }
   
   // Convert empty string to undefined for optional fields
   const taskData: any = {

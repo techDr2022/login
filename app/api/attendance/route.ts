@@ -6,7 +6,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode, AttendanceStatus } from '@prisma/client'
-import { parseDateLocal } from '@/lib/utils'
+import { parseDateLocal, formatDateLocal } from '@/lib/utils'
 
 // Public holiday configuration (dates in YYYY-MM-DD format).
 // Add or update these dates based on your company's holiday calendar.
@@ -27,8 +27,7 @@ const PUBLIC_HOLIDAYS: string[] = [
 ]
 
 function isPublicHoliday(date: Date): boolean {
-  const isoDate = date.toISOString().split('T')[0]
-  return PUBLIC_HOLIDAYS.includes(isoDate)
+  return PUBLIC_HOLIDAYS.includes(formatDateLocal(date))
 }
 
 export async function GET(request: NextRequest) {
@@ -144,7 +143,7 @@ export async function GET(request: NextRequest) {
           // Skip absent record generation for large date ranges
         } else {
           const attendanceMap = new Map(
-            attendances.map((a) => [`${a.userId}-${a.date.toISOString().split('T')[0]}`, a])
+            attendances.map((a) => [`${a.userId}-${formatDateLocal(a.date)}`, a])
           )
 
           // Get all existing attendances for the date range in one query
@@ -163,7 +162,7 @@ export async function GET(request: NextRequest) {
           })
 
           const existingMap = new Set(
-            existingAttendances.map((a) => `${a.userId}-${a.date.toISOString().split('T')[0]}`)
+            existingAttendances.map((a) => `${a.userId}-${formatDateLocal(a.date)}`)
           )
 
           // 1. Auto-generate Present records for super admins (they are always present)
@@ -183,7 +182,7 @@ export async function GET(request: NextRequest) {
           for (const superAdmin of superAdmins) {
             const currentDate = new Date(start)
             while (currentDate <= end) {
-              const isoDate = currentDate.toISOString().split('T')[0]
+              const isoDate = formatDateLocal(currentDate)
               const dateKey = `${superAdmin.id}-${isoDate}`
               
               if (!existingMap.has(dateKey) && !attendanceMap.has(dateKey)) {
@@ -226,7 +225,7 @@ export async function GET(request: NextRequest) {
           for (const employee of allEmployees) {
             const currentDate = new Date(start)
             while (currentDate <= end) {
-              const isoDate = currentDate.toISOString().split('T')[0]
+              const isoDate = formatDateLocal(currentDate)
               const dateKey = `${employee.id}-${isoDate}`
               
               if (!existingMap.has(dateKey) && !attendanceMap.has(dateKey)) {
