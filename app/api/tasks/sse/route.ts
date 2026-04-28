@@ -25,6 +25,37 @@ export async function GET(request: NextRequest) {
     async start(controller) {
       const encoder = new TextEncoder()
       let isClosed = false
+      let timeout: NodeJS.Timeout | null = null
+      let heartbeatInterval: NodeJS.Timeout | null = null
+      let pollInterval: NodeJS.Timeout | null = null
+      let abortHandler: (() => void) | null = null
+
+      const cleanup = () => {
+        if (isClosed) return
+        isClosed = true
+        console.log(`[SSE] Cleaning up connection for user ${userId}`)
+        if (pollInterval) {
+          clearInterval(pollInterval)
+          pollInterval = null
+        }
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval)
+          heartbeatInterval = null
+        }
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        if (request.signal && abortHandler) {
+          request.signal.removeEventListener('abort', abortHandler)
+          abortHandler = null
+        }
+        try {
+          controller.close()
+        } catch {
+          // Controller may already be closed by runtime/client abort.
+        }
+      }
 
       const sendEvent = (data: any) => {
         if (isClosed) return
@@ -32,11 +63,8 @@ export async function GET(request: NextRequest) {
           const message = `data: ${JSON.stringify(data)}\n\n`
           controller.enqueue(encoder.encode(message))
         } catch (error) {
-          console.error('Error sending SSE event:', error)
-          // If controller is closed, mark as closed
-          if (error instanceof Error && error.message.includes('closed')) {
-            isClosed = true
-          }
+          console.error('[SSE] Error sending event, closing connection:', error)
+          cleanup()
         }
       }
 
@@ -72,7 +100,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Send heartbeat every 30 seconds to keep connection alive and detect disconnects faster
-      const heartbeatInterval = setInterval(() => {
+      heartbeatInterval = setInterval(() => {
         if (!isClosed) {
           sendEvent({ type: 'heartbeat', timestamp: new Date().toISOString() })
         }
@@ -84,9 +112,8 @@ export async function GET(request: NextRequest) {
       let consecutiveErrors = 0
       const MAX_CONSECUTIVE_ERRORS = 5
       
-      const pollInterval = setInterval(async () => {
+      pollInterval = setInterval(async () => {
         if (isClosed) {
-          clearInterval(pollInterval)
           return
         }
 
@@ -363,28 +390,10 @@ export async function GET(request: NextRequest) {
         }
       }, 1500) // Poll every 1.5 seconds for better real-time responsiveness
 
-      // Cleanup function
-      let timeout: NodeJS.Timeout | null = null
-      const cleanup = () => {
-        if (isClosed) return
-        isClosed = true
-        console.log(`[SSE] Cleaning up connection for user ${userId}`)
-        clearInterval(pollInterval)
-        clearInterval(heartbeatInterval)
-        if (timeout) {
-          clearTimeout(timeout)
-        }
-        try {
-          controller.close()
-        } catch (error) {
-          // Ignore errors on close
-          console.error('[SSE] Error closing controller:', error)
-        }
-      }
-
       // Handle client disconnect
       if (request.signal) {
-        request.signal.addEventListener('abort', cleanup)
+        abortHandler = () => cleanup()
+        request.signal.addEventListener('abort', abortHandler)
       }
 
       // Also set a timeout to close after 5 minutes of inactivity (increased for better stability)
