@@ -1,6 +1,37 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 
+const READ_THREADS_KEY = 'chat_read_thread_ids'
+const STORAGE_MAX_AGE = 24 * 60 * 60 * 1000 // 24 hours
+
+function markThreadAsReadInStorage(threadId: string) {
+  if (typeof window === 'undefined') return
+
+  try {
+    const stored = sessionStorage.getItem(READ_THREADS_KEY)
+    const now = Date.now()
+    let data: { threadIds: Array<{ id: string; timestamp: number }> } = { threadIds: [] }
+
+    if (stored) {
+      try {
+        data = JSON.parse(stored)
+        data.threadIds = data.threadIds.filter(
+          (entry) => now - entry.timestamp < STORAGE_MAX_AGE
+        )
+      } catch {
+        data = { threadIds: [] }
+      }
+    }
+
+    if (!data.threadIds.some((entry) => entry.id === threadId)) {
+      data.threadIds.push({ id: threadId, timestamp: now })
+      sessionStorage.setItem(READ_THREADS_KEY, JSON.stringify(data))
+    }
+  } catch (error) {
+    console.error('Error storing read thread ID:', error)
+  }
+}
+
 export interface Message {
   id: string
   threadId: string
@@ -100,15 +131,11 @@ export const useChatStore = create<ChatState>()(
         
         // Mark read threads (unreadCount = 0) in sessionStorage to prevent sounds on refresh
         // This handles the case where threads are loaded and some are already read
-        if (typeof window !== 'undefined') {
-          const { markThreadAsRead } = require('@/lib/socket/chatSocket')
-          threads.forEach((thread) => {
-            if (thread.unreadCount === 0) {
-              // Mark thread as read in sessionStorage
-              markThreadAsRead(thread.id)
-            }
-          })
-        }
+        threads.forEach((thread) => {
+          if (thread.unreadCount === 0) {
+            markThreadAsReadInStorage(thread.id)
+          }
+        })
       },
 
       setSelectedThread: (threadId) => {
@@ -304,10 +331,7 @@ export const useChatStore = create<ChatState>()(
         }))
         
         // Also mark in sessionStorage to persist across page refreshes
-        if (typeof window !== 'undefined') {
-          const { markThreadAsRead: markThreadAsReadStorage } = require('@/lib/socket/chatSocket')
-          markThreadAsReadStorage(threadId)
-        }
+        markThreadAsReadInStorage(threadId)
       },
 
       setIsOpen: (isOpen) => set({ isOpen }),
