@@ -17,6 +17,31 @@ import {
 import { sendWhatsAppNotification, formatAttendanceNotificationMessage, getAttendanceNotificationTemplateVariables } from '@/lib/whatsapp'
 import { revalidatePath } from 'next/cache'
 
+function getLocalDayRange(reference: Date) {
+  const start = new Date(reference)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  return { start, end }
+}
+
+async function findTodaysAttendance(userId: string, reference: Date) {
+  const { start, end } = getLocalDayRange(reference)
+  return prisma.attendances.findFirst({
+    where: {
+      userId,
+      OR: [
+        { loginTime: { gte: start, lt: end } },
+        { date: { gte: start, lt: end } },
+      ],
+    },
+    orderBy: [
+      { loginTime: 'desc' },
+      { date: 'desc' },
+    ],
+  })
+}
+
 export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFFICE) {
   const session = await getServerSession(authOptions)
   if (!session) throw new Error('Unauthorized')
@@ -47,15 +72,8 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
-  // Check if already clocked in today (and not clocked out yet)
-  const existing = await prisma.attendances.findUnique({
-    where: {
-      userId_date: {
-        userId: session.user.id,
-        date: today,
-      },
-    },
-  })
+  // Resolve today's row by local-day window to avoid timezone key mismatches.
+  const existing = await findTodaysAttendance(session.user.id, now)
 
   // Cast mode to AttendanceMode enum
   const attendanceMode = mode as AttendanceMode
@@ -183,6 +201,27 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
     }
   }
 
+  // If already completed attendance for today, keep it immutable.
+  // Do not reopen the same day by clearing logoutTime.
+  if (existing && existing.loginTime && existing.logoutTime) {
+    return {
+      id: existing.id,
+      userId: existing.userId,
+      date: existing.date.toISOString(),
+      loginTime: existing.loginTime?.toISOString() ?? null,
+      logoutTime: existing.logoutTime?.toISOString() ?? null,
+      status: existing.status,
+      mode: existing.mode,
+      earlySignInMinutes: existing.earlySignInMinutes,
+      lateSignInMinutes: existing.lateSignInMinutes,
+      earlyLogoutMinutes: existing.earlyLogoutMinutes,
+      lateLogoutMinutes: existing.lateLogoutMinutes,
+      totalHours: existing.totalHours,
+      lastActivityTime: existing.lastActivityTime?.toISOString() ?? null,
+      wfhActivityPings: existing.wfhActivityPings,
+    }
+  }
+
   let status: AttendanceStatus = AttendanceStatus.Present
   let earlySignInMinutes: number | null = null
   let lateSignInMinutes: number | null = null
@@ -243,39 +282,38 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
     lateSignInMinutes = null
   }
 
-  const attendance = await prisma.attendances.upsert({
-    where: {
-      userId_date: {
-        userId: session.user.id,
-        date: today,
-      },
-    },
-    update: {
-      loginTime: now,
-      logoutTime: null, // Clear logoutTime when clocking in again
-      status,
-      mode: attendanceMode,
-      earlySignInMinutes,
-      lateSignInMinutes,
-      earlyLogoutMinutes: null, // Clear early logout minutes
-      lateLogoutMinutes: null, // Clear late logout minutes
-      totalHours: null, // Clear total hours (will be calculated on clock out)
-      lastActivityTime: attendanceMode === AttendanceMode.WFH ? now : null,
-      wfhActivityPings: attendanceMode === AttendanceMode.WFH ? 1 : 0,
-    },
-    create: {
-      id: randomUUID(),
-      userId: session.user.id,
-      date: today,
-      loginTime: now,
-      status,
-      mode: attendanceMode,
-      earlySignInMinutes,
-      lateSignInMinutes,
-      lastActivityTime: attendanceMode === AttendanceMode.WFH ? now : null,
-      wfhActivityPings: attendanceMode === AttendanceMode.WFH ? 1 : 0,
-    },
-  })
+  const attendance = existing
+    ? await prisma.attendances.update({
+        where: { id: existing.id },
+        data: {
+          loginTime: now,
+          logoutTime: null, // Clear logoutTime when clocking in again
+          status,
+          mode: attendanceMode,
+          earlySignInMinutes,
+          lateSignInMinutes,
+          earlyLogoutMinutes: null, // Clear early logout minutes
+          lateLogoutMinutes: null, // Clear late logout minutes
+          totalHours: null, // Clear total hours (will be calculated on clock out)
+          lastActivityTime: attendanceMode === AttendanceMode.WFH ? now : null,
+          wfhActivityPings: attendanceMode === AttendanceMode.WFH ? 1 : 0,
+          date: today,
+        },
+      })
+    : await prisma.attendances.create({
+        data: {
+          id: randomUUID(),
+          userId: session.user.id,
+          date: today,
+          loginTime: now,
+          status,
+          mode: attendanceMode,
+          earlySignInMinutes,
+          lateSignInMinutes,
+          lastActivityTime: attendanceMode === AttendanceMode.WFH ? now : null,
+          wfhActivityPings: attendanceMode === AttendanceMode.WFH ? 1 : 0,
+        },
+      })
 
   await logActivity(session.user.id, 'CREATE', 'Attendance', attendance.id)
 
@@ -404,14 +442,7 @@ export async function clockOut() {
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
-  let attendance = await prisma.attendances.findUnique({
-    where: {
-      userId_date: {
-        userId: session.user.id,
-        date: today,
-      },
-    },
-  })
+  let attendance = await findTodaysAttendance(session.user.id, now)
 
   if (!attendance || !attendance.loginTime) {
     throw new Error('Please clock in first')
@@ -433,20 +464,30 @@ export async function clockOut() {
         },
       })
       // Re-fetch attendance after clearing invalid data
-      attendance = await prisma.attendances.findUnique({
-        where: {
-          userId_date: {
-            userId: session.user.id,
-            date: today,
-          },
-        },
-      })
+      attendance = await findTodaysAttendance(session.user.id, now)
       if (!attendance || !attendance.loginTime) {
         throw new Error('Failed to refresh attendance data')
       }
       // Continue with clock out after clearing invalid data
     } else {
-      throw new Error('Already clocked out today. Please refresh the page to see your attendance status.')
+      // Idempotent behavior: if already clocked out, return the current record
+      // instead of throwing a server error that can break the page shell.
+      return {
+        id: attendance.id,
+        userId: attendance.userId,
+        date: attendance.date.toISOString(),
+        loginTime: attendance.loginTime?.toISOString() ?? null,
+        logoutTime: attendance.logoutTime?.toISOString() ?? null,
+        status: attendance.status,
+        mode: attendance.mode,
+        earlySignInMinutes: attendance.earlySignInMinutes,
+        lateSignInMinutes: attendance.lateSignInMinutes,
+        earlyLogoutMinutes: attendance.earlyLogoutMinutes,
+        lateLogoutMinutes: attendance.lateLogoutMinutes,
+        totalHours: attendance.totalHours,
+        lastActivityTime: attendance.lastActivityTime?.toISOString() ?? null,
+        wfhActivityPings: attendance.wfhActivityPings,
+      }
     }
   }
 
@@ -509,8 +550,13 @@ export async function clockOut() {
   // For OFFICE mode, status was already set on clock in (Present or Late)
   // For LEAVE mode, status remains Present
 
-  const updated = await prisma.attendances.update({
-    where: { id: attendance.id },
+  // Guarded write: only set logout when it is still null, then verify persisted state.
+  // This avoids race conditions across multiple tabs/retries.
+  const updateResult = await prisma.attendances.updateMany({
+    where: {
+      id: attendance.id,
+      logoutTime: null,
+    },
     data: {
       logoutTime: now,
       totalHours,
@@ -519,6 +565,37 @@ export async function clockOut() {
       lateLogoutMinutes,
     },
   })
+
+  const updated = await prisma.attendances.findUnique({
+    where: { id: attendance.id },
+  })
+
+  if (!updated) {
+    throw new Error('Attendance record not found after clock-out')
+  }
+
+  if (!updated.logoutTime) {
+    if (updateResult.count === 0) {
+      // Another request likely already clocked out this record. Return current DB state.
+      return {
+        id: updated.id,
+        userId: updated.userId,
+        date: updated.date.toISOString(),
+        loginTime: updated.loginTime?.toISOString() ?? null,
+        logoutTime: null,
+        status: updated.status,
+        mode: updated.mode,
+        earlySignInMinutes: updated.earlySignInMinutes,
+        lateSignInMinutes: updated.lateSignInMinutes,
+        earlyLogoutMinutes: updated.earlyLogoutMinutes,
+        lateLogoutMinutes: updated.lateLogoutMinutes,
+        totalHours: updated.totalHours,
+        lastActivityTime: updated.lastActivityTime?.toISOString() ?? null,
+        wfhActivityPings: updated.wfhActivityPings,
+      }
+    }
+    throw new Error('Clock-out update did not persist. Please try again.')
+  }
 
   await logActivity(session.user.id, 'UPDATE', 'Attendance', updated.id)
 

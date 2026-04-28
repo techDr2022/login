@@ -58,12 +58,17 @@ export async function GET(request: NextRequest) {
       }
 
       const sendEvent = (data: any) => {
-        if (isClosed) return
+        if (isClosed || request.signal.aborted) return
         try {
           const message = `data: ${JSON.stringify(data)}\n\n`
           controller.enqueue(encoder.encode(message))
         } catch (error) {
-          console.error('[SSE] Error sending event, closing connection:', error)
+          const isAlreadyClosedError =
+            error instanceof Error &&
+            (error.message.includes('already closed') || error.message.includes('Invalid state'))
+          if (!isAlreadyClosedError) {
+            console.error('[SSE] Error sending event, closing connection:', error)
+          }
           cleanup()
         }
       }

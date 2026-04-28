@@ -78,15 +78,26 @@ export function EmployeeAttendancePanel() {
       const todayDate = new Date()
       todayDate.setHours(0, 0, 0, 0)
       const today = formatDateLocal(todayDate)
-      // Add cache-busting parameter to force fresh data
-      const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : ''
+      // Always add cache-busting for attendance status to avoid stale clock in/out UI.
+      const cacheBuster = `&_t=${Date.now()}`
       const res = await fetch(`/api/attendance?userId=${session?.user?.id}&startDate=${today}&endDate=${today}${cacheBuster}`, {
-        cache: forceRefresh ? 'no-store' : 'default',
+        cache: 'no-store',
       })
       const data = await res.json()
       
       if (data.attendances && data.attendances.length > 0) {
-        const att = data.attendances[0]
+        // Prefer a completed record if available; otherwise take latest login.
+        // This prevents UI from flipping back to "Clock Out" when duplicate
+        // same-day rows exist due prior inconsistent date writes.
+        const sortedAttendances = [...data.attendances].sort((a: any, b: any) => {
+          const aCompleted = !!a.logoutTime
+          const bCompleted = !!b.logoutTime
+          if (aCompleted !== bCompleted) return aCompleted ? -1 : 1
+          const aLogin = a.loginTime ? new Date(a.loginTime).getTime() : 0
+          const bLogin = b.loginTime ? new Date(b.loginTime).getTime() : 0
+          return bLogin - aLogin
+        })
+        const att = sortedAttendances[0]
         const updatedAttendance: AttendanceRecord = {
           id: att.id,
           date: att.date,
@@ -124,7 +135,8 @@ export function EmployeeAttendancePanel() {
       const startDateStr = formatDateLocal(startDate)
       const endDateStr = formatDateLocal(endDate)
       const res = await fetch(
-        `/api/attendance?userId=${session?.user?.id}&startDate=${startDateStr}&endDate=${endDateStr}&page=${page}&limit=10`
+        `/api/attendance?userId=${session?.user?.id}&startDate=${startDateStr}&endDate=${endDateStr}&page=${page}&limit=10&_t=${Date.now()}`,
+        { cache: 'no-store' }
       )
       const data = await res.json()
       
@@ -251,12 +263,49 @@ export function EmployeeAttendancePanel() {
   const handleClockOut = async () => {
     try {
       setClockingOut(true)
-      await clockOut()
+      const applyAttendanceResult = (result: any) => {
+        if (!result || !result.loginTime) return
+        const dateStr = result.date.includes('T')
+          ? result.date.split('T')[0]
+          : result.date
+
+        setTodayAttendance({
+          id: result.id,
+          date: dateStr,
+          loginTime: result.loginTime,
+          logoutTime: result.logoutTime,
+          status: result.status as string,
+          mode: result.mode as string,
+          totalHours: result.totalHours,
+          lateSignInMinutes: result.lateSignInMinutes || null,
+          earlyLogoutMinutes: result.earlyLogoutMinutes || null,
+        })
+      }
+
+      const result = await clockOut()
+      
+      // Update UI immediately from server action result so the button state
+      // changes even before the follow-up fetch completes.
+      applyAttendanceResult(result)
       
       // Force refresh attendance data after clock out
       router.refresh()
       await new Promise(resolve => setTimeout(resolve, 300))
-      await fetchTodayAttendance(true)
+      let refreshed = await fetchTodayAttendance(true)
+      
+      // In case of eventual consistency/race conditions, retry once if the
+      // record still appears as not clocked-out after a successful action.
+      if (refreshed?.loginTime && !refreshed?.logoutTime) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        const retried = await clockOut()
+        applyAttendanceResult(retried)
+        await new Promise(resolve => setTimeout(resolve, 300))
+        refreshed = await fetchTodayAttendance(true)
+      }
+
+      if (refreshed?.logoutTime) {
+        alert('Clock-out successful')
+      }
       await fetchAttendanceHistory()
     } catch (error: any) {
       alert(error.message || 'Failed to clock out')
@@ -300,7 +349,9 @@ export function EmployeeAttendancePanel() {
 
   // Compute these values based on current state
   // Using useMemo to ensure they update when state changes
-  const canClockIn = !todayAttendance || !todayAttendance.loginTime || !!todayAttendance.logoutTime
+  // Clock-in allowed only when there's no login for today.
+  // Once clocked out, attendance is completed for the day.
+  const canClockIn = !todayAttendance || !todayAttendance.loginTime
   const canClockOut = !!(todayAttendance?.loginTime && !todayAttendance?.logoutTime)
 
   return (

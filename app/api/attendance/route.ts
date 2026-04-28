@@ -114,7 +114,11 @@ export async function GET(request: NextRequest) {
         },
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { date: 'desc' },
+        orderBy: [
+          { date: 'desc' },
+          { loginTime: 'desc' },
+          { id: 'desc' },
+        ],
       }),
       prisma.attendances.count({ where }),
     ])
