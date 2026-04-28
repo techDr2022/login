@@ -421,6 +421,28 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Assigned At */}
+                <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
+                  <Clock className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground mb-1">Assigned At</p>
+                    <p className="font-semibold">
+                      {new Date(task.createdAt).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(task.createdAt).toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                </div>
+
                 {/* Due Date */}
                 {task.dueDate && (
                   <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg">
