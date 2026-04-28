@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         email: true,
+        payslipEmail: true,
         jobTitle: true,
         role: true,
         isActive: true,
@@ -145,6 +146,7 @@ export async function GET(request: NextRequest) {
           employeeCode: employeeCodeMap.get(employee.id) || '---',
           name: employee.name,
           email: employee.email,
+          payslipEmail: employee.payslipEmail,
           jobTitle: employee.jobTitle,
           role: employee.role,
           isActive: employee.isActive,
@@ -187,6 +189,7 @@ export async function GET(request: NextRequest) {
           employeeCode: employeeCodeMap.get(employee.id) || '---',
           name: employee.name,
           email: employee.email,
+          payslipEmail: employee.payslipEmail,
           jobTitle: employee.jobTitle,
           role: employee.role,
           isActive: employee.isActive,
@@ -232,10 +235,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, email, jobTitle, role, joiningDate, password, adminNotes, phoneNumber } = body
+    const { name, email, payslipEmail, jobTitle, role, joiningDate, password, adminNotes, phoneNumber } = body
 
     const trimmedName = String(name || '').trim()
     const trimmedEmail = String(email || '').trim().toLowerCase()
+    const trimmedPayslipEmail = payslipEmail !== undefined && payslipEmail !== null
+      ? String(payslipEmail).trim().toLowerCase()
+      : ''
     const trimmedJobTitle = String(jobTitle || '').trim()
 
     if (!trimmedName || !trimmedEmail || !trimmedJobTitle || !role || !password) {
@@ -270,6 +276,7 @@ export async function POST(request: NextRequest) {
         id: userId,
         name: trimmedName,
         email: trimmedEmail,
+        payslipEmail: trimmedPayslipEmail || null,
         jobTitle: trimmedJobTitle,
         passwordHash,
         role: role as UserRole,
@@ -281,6 +288,7 @@ export async function POST(request: NextRequest) {
         id: true,
         name: true,
         email: true,
+        payslipEmail: true,
         jobTitle: true,
         role: true,
         isActive: true,

@@ -25,6 +25,7 @@ interface Employee {
   id: string
   name: string
   email: string
+  payslipEmail?: string | null
   jobTitle?: string | null
   role: string
   isActive: boolean
@@ -50,6 +51,7 @@ export function AddEmployeeDialog({
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    payslipEmail: '',
     jobTitle: '',
     role: 'EMPLOYEE' as UserRole,
     password: '',
@@ -69,6 +71,7 @@ export function AddEmployeeDialog({
       setFormData({
         name: employee.name,
         email: employee.email,
+        payslipEmail: employee.payslipEmail || '',
         jobTitle: employee.jobTitle || '',
         role: employee.role as UserRole,
         password: '',
@@ -90,6 +93,7 @@ export function AddEmployeeDialog({
     setFormData({
       name: '',
       email: '',
+      payslipEmail: '',
       jobTitle: '',
       role: 'EMPLOYEE',
       password: '',
@@ -148,6 +152,7 @@ export function AddEmployeeDialog({
         const updateData: any = {
           name: formData.name,
           email: formData.email,
+          payslipEmail: formData.payslipEmail || null,
           jobTitle: formData.jobTitle,
           role: formData.role,
           joiningDate: formData.joiningDate,
@@ -176,6 +181,7 @@ export function AddEmployeeDialog({
           body: JSON.stringify({
             name: formData.name,
             email: formData.email,
+            payslipEmail: formData.payslipEmail || null,
             jobTitle: formData.jobTitle,
             role: formData.role,
             password: formData.password,
@@ -288,7 +294,7 @@ export function AddEmployeeDialog({
             </div>
             <div>
               <Label htmlFor="email">
-                Personal Email <span className="text-destructive">*</span>
+                Login Email <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="email"
@@ -299,6 +305,18 @@ export function AddEmployeeDialog({
                 className="rounded-xl"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="payslipEmail">Personal Email (Payslips)</Label>
+            <Input
+              id="payslipEmail"
+              type="email"
+              value={formData.payslipEmail}
+              onChange={(e) => setFormData({ ...formData, payslipEmail: e.target.value })}
+              placeholder="Optional: used only for monthly payslips"
+              className="rounded-xl"
+            />
           </div>
 
           <div>

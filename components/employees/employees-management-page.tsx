@@ -19,6 +19,7 @@ interface Employee {
   employeeCode?: string
   name: string
   email: string
+  payslipEmail?: string | null
   jobTitle?: string | null
   role: string
   isActive: boolean
@@ -56,7 +57,8 @@ export function EmployeesManagementPage() {
       filtered = filtered.filter(
         (emp) =>
           emp.name.toLowerCase().includes(search.toLowerCase()) ||
-          emp.email.toLowerCase().includes(search.toLowerCase())
+          emp.email.toLowerCase().includes(search.toLowerCase()) ||
+          (emp.payslipEmail || '').toLowerCase().includes(search.toLowerCase())
       )
     }
 

@@ -67,6 +67,7 @@ interface Employee {
   employeeCode?: string
   name: string
   email: string
+  payslipEmail?: string | null
   jobTitle?: string | null
   role: string
   isActive: boolean
@@ -298,7 +299,10 @@ export function EmployeeDetailDrawer({
             </Avatar>
             <div className="flex-1">
               <SheetTitle className="text-2xl">{employee.name}</SheetTitle>
-              <SheetDescription>{employee.email}</SheetDescription>
+              <SheetDescription>Login: {employee.email}</SheetDescription>
+              <p className="text-sm text-muted-foreground">
+                Payslip: {details?.employee?.payslipEmail || employee.payslipEmail || '-'}
+              </p>
               <p className="text-sm text-muted-foreground mt-1">
                 {details?.employee?.jobTitle || employee.jobTitle || 'Designation not set'}
               </p>

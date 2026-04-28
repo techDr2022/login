@@ -80,9 +80,9 @@ export async function GET(request: NextRequest) {
       where: {
         role: UserRole.EMPLOYEE,
         isActive: true,
-        email: { not: '' },
+        OR: [{ payslipEmail: { not: null } }, { email: { not: '' } }],
       },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, payslipEmail: true },
       orderBy: { name: 'asc' },
     })
 
@@ -90,7 +90,8 @@ export async function GET(request: NextRequest) {
       employees = employees.filter((employee) => {
         const name = employee.name.toLowerCase()
         const email = employee.email?.toLowerCase() || ''
-        return name.includes(employeeQuery) || email.includes(employeeQuery)
+        const payslipEmail = employee.payslipEmail?.toLowerCase() || ''
+        return name.includes(employeeQuery) || email.includes(employeeQuery) || payslipEmail.includes(employeeQuery)
       })
     }
 
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest) {
     }> = []
 
     for (const employee of employees) {
-      const email = (recipientOverride || employee.email || '').trim()
+      const email = (recipientOverride || employee.payslipEmail || employee.email || '').trim()
       if (!email) {
         results.push({
           employeeId: employee.id,

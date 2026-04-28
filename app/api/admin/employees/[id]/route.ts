@@ -30,6 +30,7 @@ export async function GET(
         id: true,
         name: true,
         email: true,
+        payslipEmail: true,
         jobTitle: true,
         role: true,
         isActive: true,
@@ -170,8 +171,12 @@ export async function PUT(
 
     const { id } = await context.params
     const body = await request.json()
-    const { name, email, jobTitle, role, isActive, joiningDate, adminNotes, phoneNumber } = body
+    const { name, email, payslipEmail, jobTitle, role, isActive, joiningDate, adminNotes, phoneNumber } = body
     const trimmedEmail = email !== undefined ? String(email).trim().toLowerCase() : undefined
+    const trimmedPayslipEmail =
+      payslipEmail !== undefined
+        ? String(payslipEmail || '').trim().toLowerCase()
+        : undefined
     const trimmedJobTitle = jobTitle !== undefined ? String(jobTitle).trim() : undefined
 
     // Check if email is being changed and if it already exists
@@ -192,9 +197,12 @@ export async function PUT(
     if (name !== undefined) updateData.name = name
     if (trimmedEmail !== undefined) {
       if (!trimmedEmail) {
-        return NextResponse.json({ error: 'Personal email is required' }, { status: 400 })
+        return NextResponse.json({ error: 'Login email is required' }, { status: 400 })
       }
       updateData.email = trimmedEmail
+    }
+    if (trimmedPayslipEmail !== undefined) {
+      updateData.payslipEmail = trimmedPayslipEmail || null
     }
     if (trimmedJobTitle !== undefined) {
       if (!trimmedJobTitle) {
@@ -216,6 +224,7 @@ export async function PUT(
         id: true,
         name: true,
         email: true,
+        payslipEmail: true,
         jobTitle: true,
         role: true,
         isActive: true,

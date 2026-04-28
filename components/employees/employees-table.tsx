@@ -20,6 +20,7 @@ interface Employee {
   employeeCode?: string
   name: string
   email: string
+  payslipEmail?: string | null
   jobTitle?: string | null
   role: string
   isActive: boolean
@@ -239,7 +240,12 @@ export function EmployeesTable({
                       <div>
                         <div className="font-medium">{employee.name}</div>
                         <div className="text-xs text-muted-foreground">ID: {employee.employeeCode || '---'}</div>
-                        <div className="text-sm text-muted-foreground">{employee.email}</div>
+                        <div className="text-sm text-muted-foreground">
+                          Login: {employee.email}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Payslip: {employee.payslipEmail || '-'}
+                        </div>
                         <div className="text-xs text-muted-foreground">
                           {employee.jobTitle?.trim() || 'Designation not set'}
                         </div>
