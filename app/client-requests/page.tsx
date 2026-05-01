@@ -14,12 +14,16 @@ export default async function ClientRequestsPage() {
   }
 
   const rows = await getClientRequests()
-  const initialRequests = rows.map((r) => ({
-    ...r,
-    receivedAt: r.receivedAt.toISOString(),
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }))
+  const initialRequests = rows.map((r) => {
+    const { assignees, ...rest } = r
+    return {
+      ...rest,
+      receivedAt: r.receivedAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+      assignees: assignees.map((a) => ({ id: a.user.id, name: a.user.name })),
+    }
+  })
 
   return (
     <LayoutWrapper>

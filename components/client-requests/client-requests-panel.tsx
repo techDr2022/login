@@ -6,6 +6,7 @@ import {
   ClientRequestType,
 } from '@prisma/client'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -43,6 +44,7 @@ import {
   updateClientRequest,
 } from '@/app/actions/client-request-actions'
 import { format } from 'date-fns'
+import { useSession } from 'next-auth/react'
 
 export type SerializedClientRequestRow = {
   id: string
@@ -56,12 +58,11 @@ export type SerializedClientRequestRow = {
   status: ClientRequestStatus
   receivedAt: string
   createdById: string
-  assignedToId: string | null
   createdAt: string
   updatedAt: string
   Client: { id: string; name: string; doctorOrHospitalName: string } | null
   createdBy: { id: string; name: string }
-  assignedTo: { id: string; name: string } | null
+  assignees: { id: string; name: string }[]
 }
 
 const TYPE_LABEL: Record<ClientRequestType, string> = {
@@ -95,7 +96,7 @@ function statusBadgeVariant(
   }
 }
 
-function emptyForm() {
+function emptyForm(createdById = '') {
   return {
     clientId: '' as string,
     clientName: '',
@@ -104,7 +105,8 @@ function emptyForm() {
     summary: '',
     notes: '',
     status: 'NEW' as ClientRequestStatus,
-    assignedToId: '' as string,
+    createdById: createdById as string,
+    assigneeIds: [] as string[],
     receivedAt: new Date(),
   }
 }
@@ -114,12 +116,13 @@ export function ClientRequestsPanel({
 }: {
   initialRequests: SerializedClientRequestRow[]
 }) {
+  const { data: session } = useSession()
   const [rows, setRows] = useState(initialRequests)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState(() => emptyForm())
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
   const [isPending, startTransition] = useTransition()
@@ -128,19 +131,23 @@ export function ClientRequestsPanel({
     startTransition(async () => {
       const next = await getClientRequests()
       setRows(
-        next.map((r) => ({
-          ...r,
-          receivedAt: r.receivedAt.toISOString(),
-          createdAt: r.createdAt.toISOString(),
-          updatedAt: r.updatedAt.toISOString(),
-        }))
+        next.map((r) => {
+          const { assignees, ...rest } = r
+          return {
+            ...rest,
+            receivedAt: r.receivedAt.toISOString(),
+            createdAt: r.createdAt.toISOString(),
+            updatedAt: r.updatedAt.toISOString(),
+            assignees: assignees.map((a) => ({ id: a.user.id, name: a.user.name })),
+          }
+        })
       )
     })
   }, [])
 
   const openNew = () => {
     setEditingId(null)
-    setForm(emptyForm())
+    setForm(emptyForm(session?.user?.id ?? ''))
     setDialogOpen(true)
   }
 
@@ -154,7 +161,8 @@ export function ClientRequestsPanel({
       summary: r.summary,
       notes: r.notes ?? '',
       status: r.status,
-      assignedToId: r.assignedToId ?? '',
+      createdById: r.createdById,
+      assigneeIds: r.assignees.map((a) => a.id),
       receivedAt: new Date(r.receivedAt),
     })
     setDialogOpen(true)
@@ -201,6 +209,8 @@ export function ClientRequestsPanel({
         clientLabel,
         r.contactPhone,
         TYPE_LABEL[r.requestType],
+        r.createdBy?.name,
+        ...r.assignees.map((a) => a.name),
       ]
         .filter(Boolean)
         .join(' ')
@@ -229,7 +239,8 @@ export function ClientRequestsPanel({
             notes: form.notes || null,
             status: form.status,
             receivedAt: form.receivedAt,
-            assignedToId: form.assignedToId || null,
+            createdById: form.createdById || null,
+            assigneeIds: form.assigneeIds,
           })
         } else {
           await createClientRequest({
@@ -240,7 +251,8 @@ export function ClientRequestsPanel({
             summary: form.summary,
             notes: form.notes || null,
             receivedAt: form.receivedAt,
-            assignedToId: form.assignedToId || null,
+            createdById: form.createdById?.trim() || null,
+            assigneeIds: form.assigneeIds,
           })
         }
         setDialogOpen(false)
@@ -392,18 +404,18 @@ export function ClientRequestsPanel({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Assign to (optional)</Label>
+                  <Label>Assigned by</Label>
                   <Select
-                    value={form.assignedToId || '__none__'}
+                    value={form.createdById || '__none__'}
                     onValueChange={(v) =>
-                      setForm((f) => ({ ...f, assignedToId: v === '__none__' ? '' : v }))
+                      setForm((f) => ({ ...f, createdById: v === '__none__' ? '' : v }))
                     }
                   >
                     <SelectTrigger className="rounded-xl">
-                      <SelectValue placeholder="Unassigned" />
+                      <SelectValue placeholder="Select user" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">Unassigned</SelectItem>
+                      <SelectItem value="__none__">—</SelectItem>
                       {users.map((u) => (
                         <SelectItem key={u.id} value={u.id}>
                           {u.name}
@@ -411,6 +423,38 @@ export function ClientRequestsPanel({
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Assigned to (optional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Select one or more people responsible for this request.
+                  </p>
+                  <div className="max-h-44 space-y-2 overflow-y-auto rounded-xl border p-3">
+                    {users.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Loading users…</p>
+                    ) : (
+                      users.map((u) => (
+                        <label
+                          key={u.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-muted/60"
+                        >
+                          <Checkbox
+                            checked={form.assigneeIds.includes(u.id)}
+                            onCheckedChange={(c) => {
+                              const on = c === true
+                              setForm((f) => ({
+                                ...f,
+                                assigneeIds: on
+                                  ? Array.from(new Set([...f.assigneeIds, u.id]))
+                                  : f.assigneeIds.filter((id) => id !== u.id),
+                              }))
+                            }}
+                          />
+                          <span className="text-sm">{u.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
               <DialogFooter>
@@ -480,14 +524,15 @@ export function ClientRequestsPanel({
                   <TableHead>Type</TableHead>
                   <TableHead className="min-w-[200px]">Request</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Assigned</TableHead>
+                  <TableHead>Assigned by</TableHead>
+                  <TableHead className="min-w-[140px]">Assigned to</TableHead>
                   <TableHead className="w-[100px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
                       No requests yet. Log the next WhatsApp ask so the team sees it here.
                     </TableCell>
                   </TableRow>
@@ -508,7 +553,12 @@ export function ClientRequestsPanel({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {r.assignedTo?.name ?? '—'}
+                        {r.createdBy?.name ?? '—'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {r.assignees.length === 0
+                          ? '—'
+                          : r.assignees.map((a) => a.name).join(', ')}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
