@@ -340,6 +340,44 @@ export async function GET(request: NextRequest) {
       summary.payableAmount += perDayPay * dayWeight
     }
 
+    // 1 paid leave per calendar month: first working-day absence in that month is paid
+    const absentDaysByEmployeeMonth = new Map<string, number>()
+    for (const attendance of allRecords) {
+      if (attendance.status !== AttendanceStatus.Absent) continue
+      if ((attendance as any).isSundayHoliday === true) continue
+      if (isPublicHoliday(attendance.date)) continue
+      const mk = getMonthKey(attendance.date)
+      const compositeKey = `${attendance.userId}::${mk}`
+      absentDaysByEmployeeMonth.set(
+        compositeKey,
+        (absentDaysByEmployeeMonth.get(compositeKey) ?? 0) + 1
+      )
+    }
+
+    for (const [compositeKey, absentCount] of absentDaysByEmployeeMonth) {
+      const sep = compositeKey.indexOf('::')
+      if (sep === -1) continue
+      const uid = compositeKey.slice(0, sep)
+      const monthKey = compositeKey.slice(sep + 2)
+      const plDays = Math.min(absentCount, 1)
+      if (plDays <= 0) continue
+
+      const summary = payrollSummary.get(uid)
+      if (!summary) continue
+
+      const salaryAmount = salaryMap.get(`${uid}-${monthKey}`) ?? 0
+      let monthWorkingDays = monthlyWorkingDaysCache.get(monthKey)
+      if (!monthWorkingDays) {
+        monthWorkingDays = getWorkingDaysInMonth(monthKey)
+        monthlyWorkingDaysCache.set(monthKey, monthWorkingDays)
+      }
+      if (monthWorkingDays <= 0) continue
+
+      const perDayPay = salaryAmount / monthWorkingDays
+      summary.presentDays += plDays
+      summary.payableAmount += perDayPay * plDays
+    }
+
     // Generate Excel workbook with styling (Absent = red, Sunday Holiday = orange)
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Payroll Export', { views: [{ state: 'frozen', ySplit: 1 }] })

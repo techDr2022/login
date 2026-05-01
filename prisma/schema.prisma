@@ -59,6 +59,7 @@ model Client {
   client_usps                   client_usps[]
   monthlyProductions            MonthlyProduction[]
   clientVideoMonths             ClientVideoMonth[]
+  clientRequests                ClientRequest[]
   brandName                     String?
   primaryWhatsAppGroupLink      String?
 
@@ -166,9 +167,50 @@ model User {
   user_presence                           UserPresence?
   chat_notifications                      ChatNotification[]
   employeeSalaries                        EmployeeSalary[]
+  clientRequestsCreated                   ClientRequest[] @relation("ClientRequest_createdBy")
+  clientRequestsAssigned                  ClientRequest[] @relation("ClientRequest_assignedTo")
 
   @@index([isActive])
   @@index([role])
+}
+
+enum ClientRequestType {
+  POSTER
+  VIDEO
+  POSTER_AND_VIDEO
+  OTHER
+}
+
+enum ClientRequestStatus {
+  NEW
+  IN_PROGRESS
+  DONE
+  NOT_DOING
+}
+
+model ClientRequest {
+  id           String              @id @default(cuid())
+  source       String              @default("whatsapp")
+  clientId     String?
+  clientName   String?
+  contactPhone String?
+  requestType  ClientRequestType   @default(OTHER)
+  summary      String
+  notes        String?
+  status       ClientRequestStatus @default(NEW)
+  receivedAt   DateTime            @default(now())
+  createdById  String
+  assignedToId String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  Client       Client?             @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdBy    User                @relation("ClientRequest_createdBy", fields: [createdById], references: [id], onDelete: Cascade)
+  assignedTo   User?               @relation("ClientRequest_assignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([receivedAt])
+  @@index([clientId])
+  @@index([createdById])
 }
 
 model EmployeeSalary {

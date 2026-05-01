@@ -29,6 +29,9 @@ export default [
       "postcss.config.js",
       "tailwind.config.ts",
       "scripts/**/*.{js,ts}",
+      "login/next.config.js",
+      "login/postcss.config.js",
+      "login/scripts/**/*.{js,ts}",
       "store/chatStore.ts",
     ],
     rules: {

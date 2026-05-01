@@ -21,6 +21,7 @@ import {
   Palette,
   Receipt,
   Video,
+  Inbox,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { href: '/designer', label: 'Designer Workspace', icon: Palette },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
   { href: '/clients', label: 'Clients', icon: Users },
+  { href: '/client-requests', label: 'Client requests', icon: Inbox },
   { href: '/employees', label: 'Employees', icon: UserCog, roles: [UserRole.SUPER_ADMIN] },
   { href: '/attendance', label: 'Attendance', icon: Clock },
   { href: '/chat', label: 'Team Chat', icon: MessageCircle },

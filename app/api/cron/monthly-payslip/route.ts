@@ -3,26 +3,34 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { buildPayslipData, generatePayslipPDF, resolvePayslipMonthKey } from '@/lib/payslip'
+import { buildPayslipData, generatePayslipPDF } from '@/lib/payslip'
 import { sendMail } from '@/lib/mailer'
+import { isCronRequestAuthorized } from '@/lib/cron-auth'
 
-function getCurrentMonthKeyInIST(date = new Date()): string {
+/** Calendar month immediately before the given instant, in Asia/Kolkata (YYYY-MM). */
+function getPreviousMonthKeyInIST(date = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-IN', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric',
     month: '2-digit',
   }).formatToParts(date)
-  const year = parts.find((part) => part.type === 'year')?.value || '1970'
-  const month = parts.find((part) => part.type === 'month')?.value || '01'
-  return `${year}-${month}`
+  const year = Number(parts.find((part) => part.type === 'year')?.value || '1970')
+  const month = Number(parts.find((part) => part.type === 'month')?.value || '1')
+  let prevYear = year
+  let prevMonth = month - 1
+  if (prevMonth === 0) {
+    prevMonth = 12
+    prevYear -= 1
+  }
+  return `${prevYear}-${String(prevMonth).padStart(2, '0')}`
 }
 
 /**
  * Monthly Payslip Cron Job
  *
- * Suggested Vercel schedule:
- * - "30 15 * * *" (runs daily at 9:00 PM IST, UTC+5:30)
- *   Route safety-check ensures it sends only on month last day at 9 PM IST.
+ * Vercel schedule (see vercel.json):
+ * - "30 15 1 * *" → 1st of each month at 9:00 PM IST (15:30 UTC)
+ *   Sends payslips for the previous calendar month unless monthKey is overridden.
  *
  * Manual test:
  * - GET /api/cron/monthly-payslip?secret=<CRON_SECRET>&monthKey=2026-03&force=true
@@ -30,47 +38,28 @@ function getCurrentMonthKeyInIST(date = new Date()): string {
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
-    const secret = searchParams.get('secret')
-    const cronSecret = process.env.CRON_SECRET
-    if (cronSecret && secret !== cronSecret) {
+    if (!isCronRequestAuthorized(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const force = searchParams.get('force') === 'true'
     const inputMonthKey = searchParams.get('monthKey') || undefined
-    // Default behavior: send current month payslip on month-end run.
-    // If caller explicitly passes monthKey, respect it.
-    const monthKey = inputMonthKey || getCurrentMonthKeyInIST()
+    const monthKey = inputMonthKey || getPreviousMonthKeyInIST()
     const employeeQuery = searchParams.get('employee')?.trim().toLowerCase()
     const recipientOverride = searchParams.get('to')?.trim()
 
-    // Safety: default cron should run on month last day at 9 PM IST only
-    // (unless forced for manual backfills).
     if (!force) {
-      const today = new Date()
       const parts = new Intl.DateTimeFormat('en-IN', {
         timeZone: 'Asia/Kolkata',
-        year: 'numeric',
-        month: '2-digit',
         day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).formatToParts(today)
-
-      const year = Number(parts.find((part) => part.type === 'year')?.value || '0')
-      const month = Number(parts.find((part) => part.type === 'month')?.value || '0')
+      }).formatToParts(new Date())
       const day = Number(parts.find((part) => part.type === 'day')?.value || '0')
-      const hour = Number(parts.find((part) => part.type === 'hour')?.value || '0')
-      const minute = Number(parts.find((part) => part.type === 'minute')?.value || '0')
-      const isTargetTimeWindow = hour === 21 && minute <= 20
-      const lastDayOfMonth = new Date(year, month, 0).getDate()
 
-      if (day !== lastDayOfMonth || !isTargetTimeWindow) {
+      if (day !== 1) {
         return NextResponse.json({
           success: true,
           skipped: true,
-          message: 'Skipped - payslip cron runs on month last day at 9 PM IST unless force=true',
+          message: 'Skipped - payslip cron runs on the 1st of each month (IST) for the previous month unless force=true',
           monthKey,
         })
       }

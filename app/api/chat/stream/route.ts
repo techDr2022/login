@@ -90,7 +90,9 @@ export async function GET(request: NextRequest) {
         clearInterval(pollInterval)
         try {
           controller.close()
-        } catch (_) {}
+        } catch {
+          // Stream controller may already be closed
+        }
       }
 
       if (request.signal) {

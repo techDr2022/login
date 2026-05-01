@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { UserRole } from '@prisma/client'
 import { sendWhatsAppNotification, formatAttendanceReminderMessage, getAttendanceReminderTemplateVariables } from '@/lib/whatsapp'
 import { formatDateLocal } from '@/lib/utils'
+import { isCronRequestAuthorized } from '@/lib/cron-auth'
 
 /**
  * Attendance Reminder Cron Job
@@ -45,11 +46,7 @@ function isPublicHoliday(date: Date): boolean {
 export async function GET(request: NextRequest) {
   try {
     // Optional: Add secret key for security (recommended for production)
-    const searchParams = request.nextUrl.searchParams
-    const secret = searchParams.get('secret')
-    const cronSecret = process.env.CRON_SECRET
-
-    if (cronSecret && secret !== cronSecret) {
+    if (!isCronRequestAuthorized(request)) {
       console.error('[Attendance Reminder] ❌ Unauthorized: Invalid secret')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

@@ -8,6 +8,7 @@ import {
   formatPaymentReminderMessage,
   getPaymentReminderTemplateVariables,
 } from '@/lib/whatsapp'
+import { isCronRequestAuthorized } from '@/lib/cron-auth'
 
 /**
  * Payment Reminder Cron Job
@@ -28,12 +29,7 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    // Optional: Add secret key for security (recommended for production)
-    const searchParams = request.nextUrl.searchParams
-    const secret = searchParams.get('secret')
-    const cronSecret = process.env.CRON_SECRET
-
-    if (cronSecret && secret !== cronSecret) {
+    if (!isCronRequestAuthorized(request)) {
       console.error('[Payment Reminder] ❌ Unauthorized: Invalid secret')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
