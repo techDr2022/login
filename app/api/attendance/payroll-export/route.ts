@@ -6,31 +6,12 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode, AttendanceStatus } from '@prisma/client'
 import { parseDateLocal, formatDateLocal } from '@/lib/utils'
+import {
+  isAttendanceSunday,
+  isAttendancePublicHoliday,
+  isAttendanceNonWorkingCalendarDay,
+} from '@/lib/attendance-holidays'
 import ExcelJS from 'exceljs'
-
-// Public holiday configuration (dates in YYYY-MM-DD format).
-const PUBLIC_HOLIDAYS: string[] = [
-  '2025-01-14', // Sankranthi Festival
-  '2025-01-26', // Republic Day
-  '2025-03-04', // Holi Festival
-  '2025-03-26', // Ram Navami
-  '2025-03-30', // Ugadhi
-  '2025-03-31', // Ramadan
-  '2025-06-07', // Bakrid
-  '2025-08-09', // Ganesh Chaturthi
-  '2025-08-15', // Independence Day
-  '2025-10-20', // Dussehra
-  '2025-11-08', // Diwali (Deepavali)
-  '2025-12-25', // Christmas Day
-]
-
-function isPublicHoliday(date: Date): boolean {
-  return PUBLIC_HOLIDAYS.includes(formatDateLocal(date))
-}
-
-function isSunday(date: Date): boolean {
-  return date.getDay() === 0
-}
 
 function getMonthKey(date: Date): string {
   const year = date.getFullYear()
@@ -47,7 +28,7 @@ function getWorkingDaysInMonth(monthKey: string): number {
 
   for (let day = 1; day <= totalDays; day++) {
     const date = new Date(year, monthIndex, day)
-    if (isSunday(date) || isPublicHoliday(date)) {
+    if (isAttendanceNonWorkingCalendarDay(date)) {
       continue
     }
     workingDays += 1
@@ -230,7 +211,7 @@ export async function GET(request: NextRequest) {
           dateOnly.setHours(0, 0, 0, 0)
 
           // Sunday: show as Holiday (orange), not Absent
-          if (isSunday(dateOnly)) {
+          if (isAttendanceSunday(dateOnly)) {
             allRecords.push({
               id: `holiday-${employee.id}-${isoDate}`,
               userId: employee.id,
@@ -257,7 +238,7 @@ export async function GET(request: NextRequest) {
               User: employee,
               isSundayHoliday: true,
             } as any)
-          } else if (!isPublicHoliday(dateOnly)) {
+          } else if (!isAttendancePublicHoliday(dateOnly)) {
             // Skip creating Absent records on public holidays (non-Sunday)
             allRecords.push({
               id: `absent-${employee.id}-${isoDate}`,
@@ -316,7 +297,7 @@ export async function GET(request: NextRequest) {
       const monthKey = getMonthKey(attendance.date)
       const salaryAmount = salaryMap.get(`${attendance.userId}-${monthKey}`) ?? 0
       const isSundayHoliday = (attendance as any).isSundayHoliday === true
-      const isHoliday = isSundayHoliday || isPublicHoliday(attendance.date)
+      const isHoliday = isSundayHoliday || isAttendancePublicHoliday(attendance.date)
       if (isHoliday) continue
 
       let dayWeight = 0
@@ -345,7 +326,7 @@ export async function GET(request: NextRequest) {
     for (const attendance of allRecords) {
       if (attendance.status !== AttendanceStatus.Absent) continue
       if ((attendance as any).isSundayHoliday === true) continue
-      if (isPublicHoliday(attendance.date)) continue
+      if (isAttendancePublicHoliday(attendance.date)) continue
       const mk = getMonthKey(attendance.date)
       const compositeKey = `${attendance.userId}::${mk}`
       absentDaysByEmployeeMonth.set(
@@ -420,7 +401,7 @@ export async function GET(request: NextRequest) {
         weekday: 'long',
         timeZone: 'Asia/Kolkata',
       })
-      const isHoliday = isPublicHoliday(attendance.date)
+      const isHoliday = isAttendancePublicHoliday(attendance.date)
       const isSundayHoliday = (attendance as any).isSundayHoliday === true
       const status = attendance.status
       const isAbsent = status === AttendanceStatus.Absent && !isSundayHoliday

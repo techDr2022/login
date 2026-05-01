@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
 import { formatDateLocal } from '@/lib/utils'
+import { getAttendanceDisplayStatus, type AttendanceLogDisplayStatus } from '@/lib/attendance-holidays'
 import { WFHActivityMonitor } from './wfh-activity-monitor'
 
 interface GlobalStats {
@@ -90,8 +91,29 @@ export function SuperAdminAttendancePanel() {
     to: new Date(),
   })
   const [payrollSelectedEmployee, setPayrollSelectedEmployee] = useState<string>('all')
+  const [payrollSummaryDateRange, setPayrollSummaryDateRange] = useState<{ from?: Date; to?: Date }>({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    to: new Date(),
+  })
+  const [payrollSummaryEmployee, setPayrollSummaryEmployee] = useState<string>('all')
   const [exportingPayroll, setExportingPayroll] = useState(false)
   const [payrollExportError, setPayrollExportError] = useState<string | null>(null)
+  const [payrollSummaryLoading, setPayrollSummaryLoading] = useState(false)
+  const [payrollSummary, setPayrollSummary] = useState<{
+    startDate: string
+    endDate: string
+    workingDays: number
+    presentDays: number
+    finalSalary: number
+    employees: Array<{
+      userId: string
+      name: string
+      payableDays: number
+      paidLeaveDays: number
+      unpaidAbsentDays: number
+      payAmount: number
+    }>
+  } | null>(null)
   const [markAllDialogOpen, setMarkAllDialogOpen] = useState(false)
   const [markAllDate, setMarkAllDate] = useState<Date | null>(new Date())
   const [markAllMode, setMarkAllMode] = useState<AttendanceMode>(AttendanceMode.OFFICE)
@@ -174,17 +196,9 @@ export function SuperAdminAttendancePanel() {
       // Filter by attendance type
       let filteredLogs = logs
       if (attendanceType !== 'all') {
-        if (attendanceType === 'Present') {
-          filteredLogs = logs.filter(l => l.status === 'Present')
-        } else if (attendanceType === 'Late') {
-          filteredLogs = logs.filter(l => l.status === 'Late')
-        } else if (attendanceType === 'HalfDay') {
-          filteredLogs = logs.filter(l => l.status === 'HalfDay')
-        } else if (attendanceType === 'Absent') {
-          filteredLogs = logs.filter(l => l.status === 'Absent')
-        } else if (attendanceType === 'WFH') {
-          filteredLogs = logs.filter(l => l.mode === 'WFH')
-        }
+        filteredLogs = logs.filter(
+          (l) => getAttendanceDisplayStatus(l.status, String(l.date)) === attendanceType
+        )
       }
       
       setAttendanceLogs(filteredLogs)
@@ -252,18 +266,14 @@ export function SuperAdminAttendancePanel() {
     return new Date(time).toLocaleString()
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const getStatusBadge = (display: AttendanceLogDisplayStatus) => {
+    switch (display) {
       case 'Present':
         return <Badge className="bg-green-100 text-green-800 border-green-200">Present</Badge>
-      case 'Late':
-        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Late</Badge>
-      case 'HalfDay':
-        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Half Day</Badge>
       case 'Absent':
         return <Badge className="bg-red-100 text-red-800 border-red-200">Absent</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
+      case 'Holiday':
+        return <Badge className="bg-amber-100 text-amber-900 border-amber-200">Holiday</Badge>
     }
   }
 
@@ -344,6 +354,41 @@ export function SuperAdminAttendancePanel() {
       setExportingPayroll(false)
     }
   }
+
+  const fetchPayrollSummary = useCallback(async () => {
+    if (!payrollSummaryDateRange.from || !payrollSummaryDateRange.to) {
+      setPayrollSummary(null)
+      return
+    }
+
+    setPayrollSummaryLoading(true)
+    try {
+      const params = new URLSearchParams({
+        startDate: formatDateLocal(payrollSummaryDateRange.from),
+        endDate: formatDateLocal(payrollSummaryDateRange.to),
+      })
+      if (payrollSummaryEmployee !== 'all') {
+        params.set('userId', payrollSummaryEmployee)
+      }
+      const url = `/api/attendance/payroll-summary?${params.toString()}`
+
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error('Failed to load payroll summary')
+      }
+      const data = await response.json()
+      setPayrollSummary(data)
+    } catch (error) {
+      console.error('Error fetching payroll summary:', error)
+      setPayrollSummary(null)
+    } finally {
+      setPayrollSummaryLoading(false)
+    }
+  }, [payrollSummaryDateRange, payrollSummaryEmployee])
+
+  useEffect(() => {
+    fetchPayrollSummary()
+  }, [fetchPayrollSummary])
 
   const saveSettings = async () => {
     // TODO: Implement settings save API
@@ -572,10 +617,8 @@ export function SuperAdminAttendancePanel() {
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="Present">Present</SelectItem>
-                  <SelectItem value="Late">Late</SelectItem>
-                  <SelectItem value="HalfDay">Half Day</SelectItem>
                   <SelectItem value="Absent">Absent</SelectItem>
-                  <SelectItem value="WFH">WFH</SelectItem>
+                  <SelectItem value="Holiday">Holiday</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -596,6 +639,136 @@ export function SuperAdminAttendancePanel() {
               />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Payroll Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Payroll Summary
+          </CardTitle>
+          <CardDescription>
+            Working days in range, per-employee payable days, unpaid absences, and pay amount (set monthly salary under Invoices).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Employee</Label>
+              <Select value={payrollSummaryEmployee} onValueChange={setPayrollSummaryEmployee}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Employees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Employees</SelectItem>
+                  {employees.map(emp => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Date Range (Maximum 3 months)</Label>
+              <DateRangePicker
+                dateRange={payrollSummaryDateRange}
+                onSelect={(range) => {
+                  if (range?.from && range?.to) {
+                    const monthsDiff = (range.to.getTime() - range.from.getTime()) / (1000 * 60 * 60 * 24 * 30)
+                    if (monthsDiff > 3) {
+                      alert('Date range cannot exceed 3 months')
+                      return
+                    }
+                  }
+                  setPayrollSummaryDateRange(range || {})
+                }}
+              />
+            </div>
+          </div>
+          {payrollSummaryLoading ? (
+            <p className="text-sm text-muted-foreground">Loading payroll summary...</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-md border bg-background p-4">
+                <p className="text-xs text-muted-foreground">Working Days</p>
+                <p className="text-2xl font-semibold">{payrollSummary?.workingDays ?? 0}</p>
+              </div>
+              <div className="rounded-md border bg-background p-4">
+                <p className="text-xs text-muted-foreground">Payable days (total)</p>
+                <p className="text-2xl font-semibold">{payrollSummary?.presentDays?.toFixed(2) ?? '0.00'}</p>
+              </div>
+              <div className="rounded-md border bg-background p-4">
+                <p className="text-xs text-muted-foreground">Pay amount (total)</p>
+                <p className="text-2xl font-semibold text-green-700">
+                  ₹{payrollSummary?.finalSalary?.toFixed(2) ?? '0.00'}
+                </p>
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Range: {payrollSummary?.startDate || '-'} to {payrollSummary?.endDate || '-'} · Payable days include half-days (0.5) and up to 1 paid leave per calendar month in the range.
+          </p>
+          {!payrollSummaryLoading && payrollSummary && (
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead className="text-right">Payable days</TableHead>
+                    <TableHead className="text-right">Paid leave</TableHead>
+                    <TableHead className="text-right">Absent (unpaid)</TableHead>
+                    <TableHead className="text-right">Pay amount (₹)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payrollSummary.employees.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                        No employees in this filter
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    payrollSummary.employees.map((row) => (
+                      <TableRow key={row.userId}>
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.payableDays.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.paidLeaveDays.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.unpaidAbsentDays.toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums text-green-700">
+                          ₹{row.payAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+                {payrollSummary.employees.length > 0 && (
+                  <TableFooter>
+                    <TableRow className="bg-muted/50 font-medium">
+                      <TableCell>Total ({payrollSummary.employees.length})</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {payrollSummary.employees.reduce((s, r) => s + r.payableDays, 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {payrollSummary.employees.reduce((s, r) => s + r.paidLeaveDays, 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {payrollSummary.employees.reduce((s, r) => s + r.unpaidAbsentDays, 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-green-700">
+                        ₹
+                        {payrollSummary.employees
+                          .reduce((s, r) => s + r.payAmount, 0)
+                          .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
+                )}
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -655,7 +828,9 @@ export function SuperAdminAttendancePanel() {
                     <TableCell>{format(new Date(log.date), 'MMM dd, yyyy')}</TableCell>
                     <TableCell>{formatTime(log.loginTime)}</TableCell>
                     <TableCell>{formatTime(log.logoutTime)}</TableCell>
-                    <TableCell>{getStatusBadge(log.status)}</TableCell>
+                    <TableCell>
+                      {getStatusBadge(getAttendanceDisplayStatus(log.status, String(log.date)))}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{log.mode}</Badge>
                     </TableCell>
