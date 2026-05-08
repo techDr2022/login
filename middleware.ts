@@ -12,7 +12,8 @@ export default withAuth(
     const isPublicRoute =
       publicRoutes.includes(pathname) ||
       pathname.startsWith('/api/subscriptions') ||
-      pathname.startsWith('/api/cron')
+      pathname.startsWith('/api/cron') ||
+      pathname.startsWith('/api/extension')
 
     // If on public route, allow access
     if (isPublicRoute) {
@@ -43,7 +44,8 @@ export default withAuth(
         const isPublicRoute =
           publicRoutes.includes(pathname) ||
           pathname.startsWith('/api/subscriptions') ||
-          pathname.startsWith('/api/cron')
+          pathname.startsWith('/api/cron') ||
+          pathname.startsWith('/api/extension')
         
         // Allow access to public routes without token
         if (isPublicRoute) {

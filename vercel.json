@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/monthly-payslip",
       "schedule": "30 15 1 * *"
+    },
+    {
+      "path": "/api/cron/weekly-review-response-tasks",
+      "schedule": "30 6 * * 5"
     }
   ],
   "functions": {

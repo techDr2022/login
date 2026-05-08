@@ -29,23 +29,42 @@ const nextConfig = {
   
   // Headers for caching and performance
   async headers() {
+    const allowExtEmbed = process.env.ALLOW_CHROME_EXTENSION_EMBED === 'true'
+    const extIds = (process.env.CHROME_EXTENSION_IDS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+    const pageSecurity = [
+      {
+        key: 'X-DNS-Prefetch-Control',
+        value: 'on',
+      },
+      {
+        key: 'X-Content-Type-Options',
+        value: 'nosniff',
+      },
+    ]
+
+    if (allowExtEmbed && extIds.length > 0) {
+      const ancestors = ["'self'", ...extIds.map((id) => `chrome-extension://${id}`)].join(
+        ' '
+      )
+      pageSecurity.push({
+        key: 'Content-Security-Policy',
+        value: `frame-ancestors ${ancestors}`,
+      })
+    } else {
+      pageSecurity.push({
+        key: 'X-Frame-Options',
+        value: 'SAMEORIGIN',
+      })
+    }
+
     return [
       {
         source: '/:path*',
-        headers: [
-          {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on'
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'SAMEORIGIN'
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff'
-          },
-        ],
+        headers: pageSecurity,
       },
       {
         source: '/api/:path*',

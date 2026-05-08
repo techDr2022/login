@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Calendar, DollarSign, Clock, Edit, CheckCircle, Send, Search, Receipt, Wallet, Plus, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, ListPlus, Users } from 'lucide-react'
+import { Calendar, DollarSign, Clock, Edit, CheckCircle, Send, Search, Receipt, Wallet, Plus, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, ListPlus, Users, TrendingUp, AlertTriangle, Activity } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { format } from 'date-fns'
 import { getClientInvoices, updateClientInvoice, markPaymentAsReceived, sendInvoiceToClient, ClientInvoice, InvoiceLineItemInput } from '@/app/actions/invoice-actions'
@@ -37,6 +37,9 @@ import {
 } from '@/app/actions/employee-salary-actions'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Progress } from '@/components/ui/progress'
+import { Separator } from '@/components/ui/separator'
 
 export function InvoicesDashboard() {
   const [invoices, setInvoices] = useState<ClientInvoice[]>([])
@@ -44,7 +47,9 @@ export function InvoicesDashboard() {
   const [employees, setEmployees] = useState<ActiveEmployee[]>([])
   const [employeeSalaries, setEmployeeSalaries] = useState<EmployeeSalaryItem[]>([])
   const [salaryInputs, setSalaryInputs] = useState<Record<string, string>>({})
+  const [adsBudgetInputs, setAdsBudgetInputs] = useState<Record<string, string>>({})
   const [savingSalaryUserId, setSavingSalaryUserId] = useState<string | null>(null)
+  const [savingAdsBudgetClientId, setSavingAdsBudgetClientId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [editingInvoice, setEditingInvoice] = useState<ClientInvoice | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -111,6 +116,14 @@ export function InvoicesDashboard() {
     }
     setSalaryInputs(nextInputs)
   }, [employees, employeeSalaries])
+
+  useEffect(() => {
+    const nextAdsInputs: Record<string, string> = {}
+    for (const invoice of invoices) {
+      nextAdsInputs[invoice.id] = invoice.adsBudget != null ? String(invoice.adsBudget) : ''
+    }
+    setAdsBudgetInputs(nextAdsInputs)
+  }, [invoices])
 
   const handleEdit = (invoice: ClientInvoice) => {
     setEditingInvoice(invoice)
@@ -299,6 +312,26 @@ export function InvoicesDashboard() {
   const totalDeductions = officeDeductions + employeeSalaryTotal
   const profitThisMonth = thisMonthRevenue - totalDeductions
   const activeClientsCount = invoices.filter((inv) => inv.status === 'ACTIVE').length
+  const adsBudgetClients = invoices
+    .filter((inv) => (inv.adsBudget ?? 0) > 0)
+    .sort((a, b) => (b.adsBudget ?? 0) - (a.adsBudget ?? 0))
+  const totalAdsBudget = adsBudgetClients.reduce((sum, inv) => sum + (inv.adsBudget ?? 0), 0)
+  const overdueCount = filteredInvoices.filter((inv) => getPaymentStatus(inv.nextPaymentDate) === 'overdue').length
+  const dueSoonCount = filteredInvoices.filter((inv) => getPaymentStatus(inv.nextPaymentDate) === 'due').length
+  const upcomingCount = filteredInvoices.filter((inv) => getPaymentStatus(inv.nextPaymentDate) === 'upcoming').length
+  const priorityInvoices = filteredInvoices
+    .filter((inv) => {
+      const status = getPaymentStatus(inv.nextPaymentDate)
+      return status === 'overdue' || status === 'due'
+    })
+    .slice(0, 5)
+  const collectionHealth =
+    filteredInvoices.length === 0
+      ? 100
+      : Math.max(
+          0,
+          Math.round(((filteredInvoices.length - overdueCount - Math.max(0, dueSoonCount * 0.5)) / filteredInvoices.length) * 100)
+        )
 
   const handleAddExpense = async () => {
     if (!newExpenseName.trim() || !newExpenseAmount || parseFloat(newExpenseAmount) <= 0) {
@@ -359,6 +392,42 @@ export function InvoicesDashboard() {
     }
   }
 
+  const handleAdsBudgetInputChange = (clientId: string, value: string) => {
+    setAdsBudgetInputs((prev) => ({ ...prev, [clientId]: value }))
+  }
+
+  const handleSaveAdsBudget = async (clientId: string) => {
+    const value = adsBudgetInputs[clientId] ?? ''
+    if (value.trim() === '') {
+      try {
+        setSavingAdsBudgetClientId(clientId)
+        await updateClientInvoice(clientId, { adsBudget: null })
+        await loadInvoices()
+      } catch (error: any) {
+        alert(error.message || 'Failed to clear ads budget.')
+      } finally {
+        setSavingAdsBudgetClientId(null)
+      }
+      return
+    }
+
+    const amount = Number(value)
+    if (!Number.isFinite(amount) || amount < 0) {
+      alert('Please enter a valid non-negative ads budget.')
+      return
+    }
+
+    try {
+      setSavingAdsBudgetClientId(clientId)
+      await updateClientInvoice(clientId, { adsBudget: amount })
+      await loadInvoices()
+    } catch (error: any) {
+      alert(error.message || 'Failed to save ads budget.')
+    } finally {
+      setSavingAdsBudgetClientId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -377,76 +446,166 @@ export function InvoicesDashboard() {
           {loadError}
         </div>
       )}
-      {/* Header */}
-      <div>
-        <p className="text-sm text-muted-foreground">Client Invoices</p>
-        <h1 className="text-2xl font-semibold">Invoice Management</h1>
+      <div className="rounded-lg border bg-card px-4 py-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Finance</p>
+            <h1 className="text-lg font-semibold tracking-tight">Invoices Dashboard</h1>
+          </div>
+          <div className="w-full max-w-sm">
+            <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Collection Health</span>
+              <span className="font-medium text-foreground">{collectionHealth}%</span>
+            </div>
+            <Progress value={collectionHealth} className="h-1" />
+          </div>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card className="rounded-xl border shadow-sm">
+      <Tabs defaultValue="invoices" className="space-y-4">
+        <TabsList className="grid h-8 w-full grid-cols-4 rounded-md bg-muted/60 p-0.5">
+          <TabsTrigger value="overview" className="rounded-md text-[11px]">Overview</TabsTrigger>
+          <TabsTrigger value="operations" className="rounded-md text-[11px]">Operations</TabsTrigger>
+          <TabsTrigger value="invoices" className="rounded-md text-[11px]">Invoice Registry</TabsTrigger>
+          <TabsTrigger value="ads-budget" className="rounded-md text-[11px]">Ads Budget</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <Card className="rounded-lg border border-emerald-200/60 bg-emerald-50/40 shadow-none dark:border-emerald-900/40 dark:bg-emerald-950/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-600" />
+            <DollarSign className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString('en-IN')}</div>
+            <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">₹{totalRevenue.toLocaleString('en-IN')}</div>
             <p className="text-xs text-muted-foreground mt-1">Full planned invoice value</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border shadow-sm">
+        <Card className="rounded-lg border border-blue-200/60 bg-blue-50/40 shadow-none dark:border-blue-900/40 dark:bg-blue-950/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">This Month Revenue</CardTitle>
             <Calendar className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">₹{thisMonthRevenue.toLocaleString('en-IN')}</div>
+            <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">₹{thisMonthRevenue.toLocaleString('en-IN')}</div>
             <p className="text-xs text-muted-foreground mt-1">Active in current month window</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border shadow-sm">
+        <Card className="rounded-lg border border-indigo-200/60 bg-indigo-50/40 shadow-none dark:border-indigo-900/40 dark:bg-indigo-950/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Employees Salary</CardTitle>
             <Users className="h-4 w-4 text-indigo-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-indigo-600">₹{employeeSalaryTotal.toLocaleString('en-IN')}</div>
+            <div className="text-2xl font-bold text-indigo-700 dark:text-indigo-400">₹{employeeSalaryTotal.toLocaleString('en-IN')}</div>
             <p className="text-xs text-muted-foreground mt-1">{format(now, 'MMMM yyyy')}</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border shadow-sm">
+        <Card className="rounded-lg border border-amber-200/60 bg-amber-50/40 shadow-none dark:border-amber-900/40 dark:bg-amber-950/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Deductions</CardTitle>
-            <Receipt className="h-4 w-4 text-orange-600" />
+            <Receipt className="h-4 w-4 text-amber-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">₹{totalDeductions.toLocaleString('en-IN')}</div>
+            <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">₹{totalDeductions.toLocaleString('en-IN')}</div>
             <p className="text-xs text-muted-foreground mt-1">Salary + office expenses</p>
           </CardContent>
         </Card>
-        <Card className="rounded-xl border shadow-sm">
+        <Card className={`rounded-lg border shadow-none ${
+          profitThisMonth >= 0
+            ? 'border-emerald-200/60 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+            : 'border-rose-200/60 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/20'
+        }`}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Profit (This Month)</CardTitle>
-            <Wallet className="h-4 w-4 text-emerald-600" />
+            <Wallet className={`h-4 w-4 ${profitThisMonth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`} />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${profitThisMonth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            <div className={`text-2xl font-bold ${profitThisMonth >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
               ₹{profitThisMonth.toLocaleString('en-IN')}
             </div>
             <p className="text-xs text-muted-foreground mt-1">Revenue - deductions</p>
           </CardContent>
         </Card>
-      </div>
+          </div>
 
-      <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground flex items-center justify-between">
-        <span>Active Clients</span>
-        <span className="font-semibold text-foreground">{activeClientsCount}</span>
-      </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Card className="rounded-lg border shadow-none">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Overdue Payments</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <span className="text-2xl font-bold">{overdueCount}</span>
+                <AlertTriangle className="h-5 w-5 text-foreground/70" />
+              </CardContent>
+            </Card>
+            <Card className="rounded-lg border shadow-none">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Due Within 7 Days</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <span className="text-2xl font-bold">{dueSoonCount}</span>
+                <Clock className="h-5 w-5 text-foreground/70" />
+              </CardContent>
+            </Card>
+            <Card className="rounded-lg border shadow-none">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Stable</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <span className="text-2xl font-bold">{upcomingCount}</span>
+                <Activity className="h-5 w-5 text-foreground/70" />
+              </CardContent>
+            </Card>
+            <Card className="rounded-lg border shadow-none">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Profit Momentum</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <span className="text-2xl font-bold">
+                  {profitThisMonth >= 0 ? '+' : ''}
+                  {Math.round((profitThisMonth / Math.max(thisMonthRevenue || 1, 1)) * 100)}%
+                </span>
+                <TrendingUp className="h-5 w-5 text-foreground/70" />
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="rounded-lg border shadow-none">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">High Priority Collections</CardTitle>
+              <CardDescription>Top accounts that need immediate payment follow-up.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {priorityInvoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No high-priority invoices at the moment.</p>
+              ) : (
+                priorityInvoices.map((invoice) => {
+                  const daysUntil = getDaysUntilPayment(invoice.nextPaymentDate)
+                  return (
+                    <div key={invoice.id} className="rounded-md border bg-muted/20 px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium">{invoice.name}</p>
+                          <p className="text-xs text-muted-foreground">{invoice.doctorOrHospitalName || 'No organization name'}</p>
+                        </div>
+                        <Badge variant={daysUntil !== null && daysUntil < 0 ? 'destructive' : 'default'}>
+                          {daysUntil !== null && daysUntil < 0 ? `${Math.abs(daysUntil)}d overdue` : `${daysUntil ?? '-'}d left`}
+                        </Badge>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
       {/* Deductions sections */}
+      <TabsContent value="operations" className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="rounded-xl border shadow-sm">
+        <Card className="rounded-lg border shadow-none">
           <CardHeader className="pb-2 pt-3 px-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -566,7 +725,7 @@ export function InvoicesDashboard() {
         </CardContent>
         </Card>
 
-        <Card className="rounded-xl border shadow-sm">
+        <Card className="rounded-lg border shadow-none">
           <CardHeader className="pb-2 pt-3 px-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -611,18 +770,20 @@ export function InvoicesDashboard() {
           </CardContent>
         </Card>
       </div>
+      </TabsContent>
 
       {/* Invoices Table */}
-      <Card className="rounded-xl border shadow-sm">
+      <TabsContent value="invoices" className="space-y-4">
+      <Card className="rounded-lg border shadow-none">
         <CardHeader>
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <CardTitle className="text-lg">Client Invoices</CardTitle>
+              <CardTitle className="text-base">Client Invoices</CardTitle>
               <CardDescription>
                 Sorted by nearest payment due date. Manage client payment dates and amounts.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <Label htmlFor="clientSearch" className="text-xs text-muted-foreground sr-only">
                   Search clients
@@ -635,13 +796,13 @@ export function InvoicesDashboard() {
                     placeholder="Search clients..."
                     value={clientSearch}
                     onChange={(e) => setClientSearch(e.target.value)}
-                    className="h-8 w-48 pl-8"
+                    className="h-7 w-40 pl-8 text-xs"
                   />
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Label htmlFor="planFilter" className="text-xs text-muted-foreground">
-                  Plan Filter
+                  Plan
                 </Label>
                 <Select
                   value={planFilter}
@@ -649,7 +810,7 @@ export function InvoicesDashboard() {
                     setPlanFilter(value as 'ALL' | 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS')
                   }
                 >
-                  <SelectTrigger id="planFilter" className="h-8 w-40">
+                  <SelectTrigger id="planFilter" className="h-7 w-36 text-xs">
                     <SelectValue placeholder="All plans" />
                   </SelectTrigger>
                   <SelectContent>
@@ -662,7 +823,7 @@ export function InvoicesDashboard() {
               </div>
               <div className="flex items-center gap-2">
                 <Label htmlFor="serviceFilter" className="text-xs text-muted-foreground">
-                  Service Filter
+                  Service
                 </Label>
                 <Select
                   value={serviceFilter}
@@ -670,7 +831,7 @@ export function InvoicesDashboard() {
                     setServiceFilter(value as 'ALL' | 'DIGITAL_MARKETING' | 'WEB_DEVELOPMENT')
                   }
                 >
-                  <SelectTrigger id="serviceFilter" className="h-8 w-44">
+                  <SelectTrigger id="serviceFilter" className="h-7 w-40 text-xs">
                     <SelectValue placeholder="All services" />
                   </SelectTrigger>
                   <SelectContent>
@@ -680,11 +841,15 @@ export function InvoicesDashboard() {
                   </SelectContent>
                 </Select>
               </div>
-              <Badge variant="outline" className="flex items-center gap-2">
+              <Badge variant="outline" className="hidden items-center gap-2 md:flex">
                 <Clock className="h-3 w-3" />
-                Sorted by Due Date
+                Due Date Order
               </Badge>
-              <Button variant="outline" size="sm" asChild>
+              <Badge variant="secondary" className="hidden items-center gap-2 md:flex">
+                <Activity className="h-3 w-3" />
+                Health: {collectionHealth}%
+              </Badge>
+              <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
                 <a
                   href="/api/invoices/export"
                   download="client-invoices-export.xlsx"
@@ -712,7 +877,6 @@ export function InvoicesDashboard() {
                   , click on a client, and use the "Invoice" tab in the edit dialog to add:
                 </p>
                 <ul className="text-sm text-muted-foreground text-left max-w-md mx-auto space-y-1 mt-4">
-                  <li>• Project start and end dates</li>
                   <li>• Monthly payment amount</li>
                   <li>• Next payment due date</li>
                   <li>• Last payment received date</li>
@@ -723,54 +887,43 @@ export function InvoicesDashboard() {
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Client Name</TableHead>
-                    <TableHead>Project Start</TableHead>
-                    <TableHead>Project End</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Monthly Amount</TableHead>
-                    <TableHead className="flex items-center gap-2">
+                    <TableHead className="h-9 text-xs">Client Name</TableHead>
+                    <TableHead className="h-9 text-xs">Plan</TableHead>
+                    <TableHead className="h-9 text-xs">Monthly Amount</TableHead>
+                    <TableHead className="h-9 text-xs">
+                      <div className="flex items-center gap-1.5">
                       <span>Next Payment</span>
                       <Clock className="h-3 w-3 text-muted-foreground" />
+                      </div>
                     </TableHead>
-                    <TableHead>Last Payment</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="h-9 text-xs">Last Payment</TableHead>
+                    <TableHead className="h-9 text-xs">Status</TableHead>
+                    <TableHead className="h-9 text-xs">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedInvoices.map((invoice, index) => {
+                  {paginatedInvoices.map((invoice) => {
                     const paymentStatus = getPaymentStatus(invoice.nextPaymentDate)
                     const daysUntil = getDaysUntilPayment(invoice.nextPaymentDate)
                     const isOverdue = daysUntil !== null && daysUntil < 0
                     const isDueSoon = daysUntil !== null && daysUntil >= 0 && daysUntil <= 7
 
                     return (
-                      <TableRow 
+                      <TableRow
                         key={invoice.id}
-                        className={
-                          isOverdue ? 'bg-red-50 dark:bg-red-950/20' :
-                          isDueSoon ? 'bg-yellow-50 dark:bg-yellow-950/20' :
-                          index < 3 ? 'bg-blue-50/50 dark:bg-blue-950/10' :
-                          ''
-                        }
+                        className={`h-12 ${isOverdue ? 'bg-destructive/5' : isDueSoon ? 'bg-amber-500/5' : ''}`}
                       >
-                        <TableCell className="font-medium">
+                        <TableCell className="py-2.5 font-medium">
                           <div>
-                            <div>{invoice.name}</div>
-                            <div className="text-xs text-muted-foreground">{invoice.doctorOrHospitalName}</div>
+                            <div className="text-sm">{invoice.name}</div>
+                            <div className="text-[11px] text-muted-foreground">{invoice.doctorOrHospitalName}</div>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          {invoice.startDate ? format(new Date(invoice.startDate), 'MMM dd, yyyy') : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {invoice.endDate ? format(new Date(invoice.endDate), 'MMM dd, yyyy') : '-'}
-                        </TableCell>
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           {invoice.planDuration ? (
                             <Badge variant="outline">
                               {invoice.planDuration === 'ONE_MONTH' ? '1 Month' :
@@ -779,13 +932,13 @@ export function InvoicesDashboard() {
                             </Badge>
                           ) : '-'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-2.5 text-sm">
                           {invoice.monthlyAmount ? `₹${invoice.monthlyAmount.toLocaleString('en-IN')}` : '-'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           {invoice.nextPaymentDate ? (
                             <div className="space-y-1">
-                              <div className="font-medium">{format(new Date(invoice.nextPaymentDate), 'MMM dd, yyyy')}</div>
+                              <div className="text-sm font-medium">{format(new Date(invoice.nextPaymentDate), 'MMM dd, yyyy')}</div>
                               {daysUntil !== null && (
                                 <div className={`text-xs ${
                                   daysUntil < 0 ? 'text-red-600 font-semibold' : 
@@ -793,9 +946,9 @@ export function InvoicesDashboard() {
                                   daysUntil <= 7 ? 'text-yellow-600 font-medium' : 
                                   'text-muted-foreground'
                                 }`}>
-                                  {daysUntil < 0 ? `⚠️ ${Math.abs(daysUntil)} days overdue` : 
-                                   daysUntil === 0 ? '⚠️ Due today' : 
-                                   daysUntil <= 7 ? `⏰ ${daysUntil} days left` : 
+                                  {daysUntil < 0 ? `${Math.abs(daysUntil)} days overdue` : 
+                                   daysUntil === 0 ? 'Due today' : 
+                                   daysUntil <= 7 ? `${daysUntil} days left` : 
                                    `${daysUntil} days left`}
                                 </div>
                               )}
@@ -804,11 +957,11 @@ export function InvoicesDashboard() {
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           {invoice.lastPaymentDate ? (
                             <div className="space-y-1">
-                              <div className="font-medium">{format(new Date(invoice.lastPaymentDate), 'MMM dd, yyyy')}</div>
-                              <div className="text-xs text-green-600 flex items-center gap-1">
+                              <div className="text-sm font-medium">{format(new Date(invoice.lastPaymentDate), 'MMM dd, yyyy')}</div>
+                              <div className="text-[11px] text-green-600 flex items-center gap-1">
                                 <CheckCircle className="h-3 w-3" />
                                 Paid
                               </div>
@@ -817,7 +970,7 @@ export function InvoicesDashboard() {
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-2.5">
                           {paymentStatus === 'overdue' && (
                             <Badge variant="destructive">Overdue</Badge>
                           )}
@@ -829,13 +982,14 @@ export function InvoicesDashboard() {
                           )}
                           {paymentStatus === 'none' && <Badge variant="outline">No Date</Badge>}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+                        <TableCell className="py-2.5">
+                          <div className="flex items-center gap-1.5">
                             {/* Preview / Download PDF Invoice */}
                             <Button
                               asChild
                               variant="outline"
                               size="sm"
+                              className="h-7 px-2 text-xs"
                               title="Preview invoice"
                             >
                               <Link href={`/admin/invoices/${invoice.id}`}>
@@ -846,6 +1000,7 @@ export function InvoicesDashboard() {
                               asChild
                               variant="outline"
                               size="sm"
+                              className="h-7 px-2 text-xs"
                               title="Download invoice PDF"
                             >
                               <a
@@ -861,7 +1016,8 @@ export function InvoicesDashboard() {
                             {invoice.monthlyAmount && invoice.nextPaymentDate && (
                               <Button 
                                 variant="outline" 
-                                size="sm" 
+                                size="sm"
+                                className="h-7 px-2"
                                 onClick={() => handleSendInvoice(invoice)}
                                 title="Send invoice to client via WhatsApp"
                               >
@@ -873,9 +1029,9 @@ export function InvoicesDashboard() {
                             {invoice.nextPaymentDate && daysUntil !== null && daysUntil <= 7 && (
                               <Button 
                                 variant="default" 
-                                size="sm" 
+                                size="sm"
+                                className="h-7 px-2 bg-green-600 hover:bg-green-700"
                                 onClick={() => handleMarkAsPaid(invoice)}
-                                className="bg-green-600 hover:bg-green-700"
                                 title="Mark payment as received"
                               >
                                 <CheckCircle className="h-4 w-4 mr-1" />
@@ -884,7 +1040,7 @@ export function InvoicesDashboard() {
                             )}
 
                             {/* Edit Invoice */}
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(invoice)}>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEdit(invoice)}>
                               <Edit className="h-4 w-4" />
                             </Button>
                           </div>
@@ -899,14 +1055,15 @@ export function InvoicesDashboard() {
           
           {/* Pagination */}
           {filteredInvoices.length > itemsPerPage && (
-            <div className="flex items-center justify-between px-2 py-4 border-t">
-              <div className="text-sm text-muted-foreground">
+            <div className="flex items-center justify-between px-2 py-3 border-t">
+              <div className="text-xs text-muted-foreground">
                 Showing {startIndex + 1} to {Math.min(endIndex, filteredInvoices.length)} of {filteredInvoices.length} clients
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-7 text-xs"
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
                 >
@@ -939,7 +1096,7 @@ export function InvoicesDashboard() {
                         variant={currentPage === page ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setCurrentPage(page)}
-                        className="w-8 h-8 p-0"
+                        className="h-7 w-7 p-0 text-xs"
                       >
                         {page}
                       </Button>
@@ -949,6 +1106,7 @@ export function InvoicesDashboard() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-7 text-xs"
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
                 >
@@ -960,6 +1118,86 @@ export function InvoicesDashboard() {
           )}
         </CardContent>
       </Card>
+      </TabsContent>
+      <TabsContent value="ads-budget" className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="rounded-lg border shadow-none">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Clients With Ads Budget</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold">{adsBudgetClients.length}</p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-lg border shadow-none md:col-span-2">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Monthly Ads Budget</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-semibold text-blue-700 dark:text-blue-400">₹{totalAdsBudget.toLocaleString('en-IN')}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="rounded-lg border shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Client Ads Budget</CardTitle>
+            <CardDescription>Add monthly ad spend for clients who pay separately for ads.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="h-9 text-xs">Client</TableHead>
+                    <TableHead className="h-9 text-xs">Service</TableHead>
+                    <TableHead className="h-9 text-xs">Ads Budget (Monthly)</TableHead>
+                    <TableHead className="h-9 text-xs">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invoices.map((invoice) => (
+                    <TableRow key={invoice.id}>
+                      <TableCell className="py-2.5">
+                        <div>
+                          <p className="text-sm font-medium">{invoice.name}</p>
+                          <p className="text-[11px] text-muted-foreground">{invoice.doctorOrHospitalName || 'No organization name'}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2.5 text-xs text-muted-foreground">
+                        {invoice.services?.length ? invoice.services.join(', ') : 'N/A'}
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={adsBudgetInputs[invoice.id] ?? ''}
+                          onChange={(e) => handleAdsBudgetInputChange(invoice.id, e.target.value)}
+                          className="h-8 w-40 text-xs"
+                        />
+                      </TableCell>
+                      <TableCell className="py-2.5">
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={savingAdsBudgetClientId === invoice.id}
+                          onClick={() => handleSaveAdsBudget(invoice.id)}
+                        >
+                          {savingAdsBudgetClientId === invoice.id ? 'Saving...' : 'Save'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      </Tabs>
+
+      <Separator className="opacity-60" />
 
       {/* Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

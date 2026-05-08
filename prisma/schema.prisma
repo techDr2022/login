@@ -39,6 +39,7 @@ model Client {
   gstNumber                     String?
   gstRate                       Float?                         @default(18.0) // Default GST rate 18%
   discountPercent               Float?                         // Discount % applied to monthly amount (fallback when no line items)
+  adsBudget                     Float?                         // Monthly ad spend paid by client
   invoiceLineItems              Json?                          // [{ description, qty, rate, discountPercent? }] for item-wise invoice
   scopeFinalised                Boolean                        @default(false)
   onboardingCompletedAt         DateTime?

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Techdr Task Assistant - Settings</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 12px; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 14px; margin-top: 12px; }
+      label { display: block; font-weight: 600; margin: 8px 0 4px; }
+      input, select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+      button { margin-top: 10px; padding: 8px 12px; border: none; border-radius: 6px; background: #128c7e; color: #fff; font-weight: 600; cursor: pointer; }
+      button.secondary { background: #555; margin-left: 8px; }
+      .hint { font-size: 12px; color: #555; margin-top: 6px; line-height: 1.45; }
+      #status, #defaultsStatus { margin-top: 8px; font-size: 13px; }
+      .ok { color: #0a7; } .err { color: #c22; }
+    </style>
+  </head>
+  <body>
+    <h1>Techdr Task Assistant</h1>
+    <p class="hint">
+      Team flow: click extension -> login once -> assign tasks from popup directly.
+      WhatsApp right-click uses quick defaults from this page.
+    </p>
+
+    <div class="card">
+      <h3>App URL</h3>
+      <form id="urlForm">
+        <label for="baseUrl">Base URL</label>
+        <input id="baseUrl" type="text" placeholder="https://login.techdr.in" />
+        <button type="submit">Save URL</button>
+      </form>
+      <div id="status"></div>
+    </div>
+
+    <div class="card">
+      <h3>Quick-add defaults (WhatsApp right click)</h3>
+      <p class="hint">Optional. Popup form can always override these.</p>
+      <form id="defaultsForm">
+        <label for="defaultPriority">Priority</label>
+        <select id="defaultPriority">
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+          <option value="Urgent">Urgent</option>
+        </select>
+        <label for="defaultAssignedToId">Assigned to (User ID)</label>
+        <input id="defaultAssignedToId" type="text" placeholder="optional user id" />
+        <label for="defaultClientId">Client (Client ID)</label>
+        <input id="defaultClientId" type="text" placeholder="optional client id" />
+        <label for="defaultTaskType">Task type</label>
+        <input id="defaultTaskType" type="text" placeholder="optional task template name" />
+        <label for="defaultDueDate">Due date (YYYY-MM-DD, used when task type empty)</label>
+        <input id="defaultDueDate" type="text" placeholder="2026-05-31" />
+        <button type="submit">Save defaults</button>
+      </form>
+      <div id="defaultsStatus"></div>
+    </div>
+
+    <div class="card">
+      <h3>Session</h3>
+      <button id="clearSession" class="secondary" type="button">Clear saved login</button>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+  </html>
+

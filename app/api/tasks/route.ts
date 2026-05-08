@@ -17,6 +17,20 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams
+
+    if (searchParams.get('taskTemplates') === '1') {
+      const templates = await prisma.taskTemplate.findMany({
+        where: { isActive: true },
+        orderBy: { taskType: 'asc' },
+        select: {
+          taskType: true,
+          durationHours: true,
+          isActive: true,
+        },
+      })
+      return NextResponse.json({ templates })
+    }
+
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
     const search = searchParams.get('search') || ''

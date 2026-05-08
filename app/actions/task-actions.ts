@@ -8,7 +8,12 @@ import { createTaskSchema, updateTaskSchema, updateTaskStatusSchema } from '@/li
 import { logActivity } from '@/lib/activity-log'
 import { canManageTasks, canApproveTasks } from '@/lib/rbac'
 import { UserRole, TaskStatus } from '@prisma/client'
-import { sendWhatsAppNotification, formatTaskAssignmentMessage, getTaskAssignmentTemplateVariables } from '@/lib/whatsapp'
+import {
+  sendWhatsAppNotification,
+  formatTaskAssignmentMessage,
+  getTaskAssignmentTemplateVariables,
+  getTaskWhatsAppContentTemplateSid,
+} from '@/lib/whatsapp'
 import { revalidatePath } from 'next/cache'
 
 // Helper function to handle task dependencies - creates/assigns next task when a task is completed
@@ -334,7 +339,13 @@ export async function createTask(data: {
         )
 
         console.log(`[WhatsApp] Attempting to send notification to ${assignedToUser.phoneNumber}`)
-        const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message, templateVariables)
+        const result = await sendWhatsAppNotification(
+          assignedToUser.phoneNumber,
+          message,
+          templateVariables,
+          undefined,
+          getTaskWhatsAppContentTemplateSid()
+        )
         
         if (result.success) {
           console.log(`[WhatsApp] ✅ Notification sent successfully. Message ID: ${result.messageId || 'N/A'}`)
@@ -528,7 +539,13 @@ export async function updateTask(id: string, data: {
           )
 
           console.log(`[WhatsApp] Attempting to send notification to ${assignedToUser.phoneNumber}`)
-          const result = await sendWhatsAppNotification(assignedToUser.phoneNumber, message, templateVariables)
+          const result = await sendWhatsAppNotification(
+            assignedToUser.phoneNumber,
+            message,
+            templateVariables,
+            undefined,
+            getTaskWhatsAppContentTemplateSid()
+          )
             
           if (result.success) {
             console.log(`[WhatsApp] ✅ Notification sent successfully. Message ID: ${result.messageId || 'N/A'}`)

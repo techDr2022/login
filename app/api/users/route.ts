@@ -29,10 +29,9 @@ export async function GET(request: NextRequest) {
         where.role = roleParam as UserRole
       }
     } else {
-      // If no role specified, return all active users (employees and super admins)
-      // This is useful for task assignment dropdowns
+      // Task assignment and similar dropdowns: all active staff (employees, managers, super admins)
       where.role = {
-        in: [UserRole.EMPLOYEE, UserRole.SUPER_ADMIN],
+        in: [UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPER_ADMIN],
       }
     }
 
@@ -50,7 +49,7 @@ export async function GET(request: NextRequest) {
     // Debug logging in development
     if (process.env.NODE_ENV === 'development') {
       console.log(`[API /users] Returning ${users.length} users`, {
-        roleFilter: roleParam || 'all (EMPLOYEE + SUPER_ADMIN)',
+        roleFilter: roleParam || 'EMPLOYEE + MANAGER + SUPER_ADMIN',
         users: users.map(u => ({ name: u.name, email: u.email, role: u.role })),
       })
     }

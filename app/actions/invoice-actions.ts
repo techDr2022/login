@@ -38,6 +38,7 @@ export interface ClientInvoice {
   gstNumber: string | null
   gstRate: number | null
   discountPercent: number | null
+  adsBudget: number | null
   services: string[]
   invoiceLineItems: InvoiceLineItemInput[] | null
   accountManager: {
@@ -60,43 +61,63 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
 
   // Fetch all clients so the invoices tab can show and manage invoice data for every client.
   // Note: We cast this query to `any` because the local Prisma TS types can lag behind schema/migrations in some setups.
-  const clients = (await prisma.client.findMany({
-    select: {
-      id: true,
-      name: true,
-      doctorOrHospitalName: true,
-      startDate: true,
-      endDate: true,
-      monthlyAmount: true,
-      planDuration: true,
-      nextPaymentDate: true,
-      lastPaymentDate: true,
-      status: true,
-      isGST: true,
-      gstNumber: true,
-      gstRate: true,
-      discountPercent: true,
-      services: true,
-      invoiceLineItems: true,
-      User: {
-        select: {
-          id: true,
-          name: true,
-        },
+  const baseSelect = {
+    id: true,
+    name: true,
+    doctorOrHospitalName: true,
+    startDate: true,
+    endDate: true,
+    monthlyAmount: true,
+    planDuration: true,
+    nextPaymentDate: true,
+    lastPaymentDate: true,
+    status: true,
+    isGST: true,
+    gstNumber: true,
+    gstRate: true,
+    discountPercent: true,
+    services: true,
+    invoiceLineItems: true,
+    User: {
+      select: {
+        id: true,
+        name: true,
       },
-    } as any,
-    orderBy: [
-      {
-        nextPaymentDate: {
-          sort: 'asc',
-          nulls: 'last',
-        },
+    },
+  } as const
+
+  const orderBy = [
+    {
+      nextPaymentDate: {
+        sort: 'asc',
+        nulls: 'last',
       },
-      {
-        name: 'asc',
-      },
-    ],
-  } as any)) as any[]
+    },
+    {
+      name: 'asc',
+    },
+  ] as const
+
+  let clients: any[]
+  try {
+    clients = (await prisma.client.findMany({
+      select: {
+        ...baseSelect,
+        adsBudget: true,
+      } as any,
+      orderBy: orderBy as any,
+    } as any)) as any[]
+  } catch (error: any) {
+    const message = String(error?.message ?? '')
+    if (!message.includes('Unknown field `adsBudget`')) {
+      throw error
+    }
+
+    clients = (await prisma.client.findMany({
+      select: baseSelect as any,
+      orderBy: orderBy as any,
+    } as any)) as any[]
+  }
 
   return clients.map((client) => ({
     id: client.id,
@@ -113,6 +134,7 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
     gstNumber: client.gstNumber,
     gstRate: client.gstRate,
     discountPercent: (client as { discountPercent?: number | null }).discountPercent ?? null,
+    adsBudget: (client as { adsBudget?: number | null }).adsBudget ?? null,
     services: (client as { services?: string[] }).services ?? [],
     invoiceLineItems: (client as { invoiceLineItems?: InvoiceLineItemInput[] | null }).invoiceLineItems ?? null,
     accountManager: client.User
@@ -137,6 +159,7 @@ export async function updateClientInvoice(
     gstNumber?: string | null
     gstRate?: number | null
     discountPercent?: number | null
+    adsBudget?: number | null
     invoiceLineItems?: InvoiceLineItemInput[] | null
   }
 ) {
@@ -185,10 +208,24 @@ export async function updateClientInvoice(
     finalData.endDate = endDate
   }
 
-  await prisma.client.update({
-    where: { id: clientId },
-    data: finalData,
-  })
+  try {
+    await prisma.client.update({
+      where: { id: clientId },
+      data: finalData,
+    })
+  } catch (error: any) {
+    const message = String(error?.message ?? '')
+    if (!message.includes('Unknown argument `adsBudget`')) {
+      throw error
+    }
+
+    const { adsBudget, ...fallbackData } = finalData as Record<string, unknown>
+    void adsBudget
+    await prisma.client.update({
+      where: { id: clientId },
+      data: fallbackData,
+    })
+  }
 }
 
 export async function markPaymentAsReceived(clientId: string) {

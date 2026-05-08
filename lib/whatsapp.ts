@@ -65,7 +65,13 @@ async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse
   const fromNumber = process.env.TWILIO_WHATSAPP_FROM
   // Use custom template SID if provided, otherwise use default
   const templateSid = message.templateSid || process.env.TWILIO_WHATSAPP_TEMPLATE_SID // Optional: Content Template SID
-  const useTemplate = process.env.TWILIO_USE_TEMPLATE === 'true' || process.env.TWILIO_USE_ATTENDANCE_TEMPLATE === 'true' // Optional: Force template usage
+  // Use approved Content when SID exists; explicit per-message SID (e.g. task) must work without TWILIO_USE_TEMPLATE
+  const useTemplate =
+    Boolean(templateSid) &&
+    !message.forceFreeform &&
+    (process.env.TWILIO_USE_TEMPLATE === 'true' ||
+      process.env.TWILIO_USE_ATTENDANCE_TEMPLATE === 'true' ||
+      Boolean(message.templateSid))
 
   console.log('[WhatsApp] Twilio configuration check:', {
     accountSid: accountSid ? 'SET' : 'MISSING',
@@ -110,7 +116,7 @@ async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse
       to: `whatsapp:${normalizedTo}`,
     }
 
-    if (templateSid && useTemplate && !message.forceFreeform) {
+    if (templateSid && useTemplate) {
       // Use Content Template (requires pre-approved template in Twilio)
       console.log('[WhatsApp] Using Content Template:', templateSid)
       messagePayload.contentSid = templateSid
@@ -356,8 +362,21 @@ export function formatTaskAssignmentMessage(
 }
 
 /**
+ * Twilio / Meta Content Template SID for task assignment notifications.
+ * Prefer TWILIO_WHATSAPP_TASK_TEMPLATE_SID so task copy never shares the attendance template SID.
+ */
+export function getTaskWhatsAppContentTemplateSid(): string | undefined {
+  const sid = process.env.TWILIO_WHATSAPP_TASK_TEMPLATE_SID || process.env.TWILIO_WHATSAPP_TEMPLATE_SID
+  return sid && sid.trim() ? sid.trim() : undefined
+}
+
+/**
  * Get template variables for WhatsApp template
  * Returns variables in the order: [taskTitle, assignedByName, priority, dueDate, clientName]
+ *
+ * The approved template body must use exactly five placeholders (Twilio variables 1–5), e.g.:
+ * Task: {{1}} / Assigned by: {{2}} / Priority: {{3}} / Due: {{4}} / Client: {{5}}
+ * Do not paste documentation like "{{3}} = Priority" into the template — that text is sent verbatim.
  */
 export function getTaskAssignmentTemplateVariables(
   taskTitle: string,

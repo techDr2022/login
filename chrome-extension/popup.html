@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Techdr Task Assistant</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; width: 360px; box-sizing: border-box; }
+      h2 { margin: 0 0 8px; font-size: 16px; }
+      label { display: block; font-size: 12px; font-weight: 600; margin: 8px 0 4px; color: #444; }
+      input, select, textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+      textarea { min-height: 72px; resize: vertical; }
+      button { margin-top: 10px; width: 100%; padding: 10px; border: none; border-radius: 6px; background: #128c7e; color: #fff; font-weight: 700; cursor: pointer; }
+      button.secondary { background: #555; margin-top: 6px; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      #msg { margin-top: 8px; font-size: 12px; line-height: 1.4; }
+      .ok { color: #0a7; } .err { color: #c22; }
+      .hint { margin-top: 8px; font-size: 11px; color: #666; line-height: 1.4; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <section id="loginView" hidden>
+      <h2>Login</h2>
+      <div class="hint">First time only. After login, this popup opens directly to assign task flow.</div>
+      <div class="hint" id="sessionHint"></div>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" />
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+      <button id="loginBtn" type="button">Login & continue</button>
+      <button id="settingsBtn" class="secondary" type="button">Open settings</button>
+      <div id="loginMsg"></div>
+    </section>
+
+    <section id="taskView" hidden>
+      <h2>Assign task</h2>
+      <div class="hint" id="userInfo"></div>
+      <label for="titleInput">Task text / title</label>
+      <textarea id="titleInput" placeholder="Paste message text or type task title..."></textarea>
+      <div class="row">
+        <div>
+          <label for="priority">Priority</label>
+          <select id="priority">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="High">High</option>
+            <option value="Urgent">Urgent</option>
+          </select>
+        </div>
+        <div>
+          <label for="dueDate">Due date</label>
+          <input id="dueDate" type="date" />
+        </div>
+      </div>
+      <label for="assignedToId">Assign to</label>
+      <select id="assignedToId"><option value="">Unassigned</option></select>
+      <label for="clientId">Client</label>
+      <select id="clientId"><option value="">None</option></select>
+      <label for="taskType">Task type</label>
+      <select id="taskType"><option value="">None (manual due date)</option></select>
+      <button id="createBtn" type="button">Create task</button>
+      <button id="logoutBtn" class="secondary" type="button">Logout</button>
+      <div id="taskMsg"></div>
+      <div class="hint">WhatsApp quick path: select message text -> right click -> Add selection as task.</div>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+  </html>
+
