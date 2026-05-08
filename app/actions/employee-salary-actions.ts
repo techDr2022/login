@@ -39,6 +39,14 @@ async function requireSuperAdminAndUnlock(): Promise<void> {
   if (!unlocked) throw new Error('Unlock the Invoices tab first (password or OTP).')
 }
 
+async function requireSuperAdminOnly(): Promise<void> {
+  const session = await getServerSession(authOptions)
+  if (!session) throw new Error('Unauthorized')
+  if (session.user.role !== UserRole.SUPER_ADMIN) {
+    throw new Error('Only super admins can manage employee salary')
+  }
+}
+
 async function ensureEmployeeSalaryTable(): Promise<void> {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "EmployeeSalary" (
@@ -87,7 +95,7 @@ async function ensureEmployeeSalaryTable(): Promise<void> {
 }
 
 export async function getActiveEmployees(): Promise<ActiveEmployee[]> {
-  await requireSuperAdminAndUnlock()
+  await requireSuperAdminOnly()
   const users = await prisma.user.findMany({
     where: {
       role: UserRole.EMPLOYEE,
@@ -104,7 +112,7 @@ export async function getActiveEmployees(): Promise<ActiveEmployee[]> {
 }
 
 export async function getCurrentMonthSalaries(): Promise<EmployeeSalaryItem[]> {
-  await requireSuperAdminAndUnlock()
+  await requireSuperAdminOnly()
   await ensureEmployeeSalaryTable()
 
   const monthKey = getCurrentMonthKey()

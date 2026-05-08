@@ -16,6 +16,23 @@ async function requireInvoicesUnlock(): Promise<void> {
   if (!unlocked) throw new Error('Unlock the Invoices tab first (password or OTP).')
 }
 
+function isAdsBudgetMissingCompatError(error: unknown): boolean {
+  const err = error as {
+    code?: string
+    message?: string
+    meta?: { column?: string }
+  }
+  const message = String(err?.message ?? '')
+  const column = String(err?.meta?.column ?? '')
+
+  return (
+    message.includes('Unknown field `adsBudget`') ||
+    message.includes('Unknown argument `adsBudget`') ||
+    message.includes('The column `Client.adsBudget` does not exist in the current database') ||
+    (err?.code === 'P2022' && column.toLowerCase().includes('adsbudget'))
+  )
+}
+
 export interface InvoiceLineItemInput {
   description: string
   qty: number
@@ -56,8 +73,6 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
   if (session.user.role !== UserRole.SUPER_ADMIN) {
     throw new Error('Only super admins can view invoices')
   }
-
-  await requireInvoicesUnlock()
 
   // Fetch all clients so the invoices tab can show and manage invoice data for every client.
   // Note: We cast this query to `any` because the local Prisma TS types can lag behind schema/migrations in some setups.
@@ -108,8 +123,7 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
       orderBy: orderBy as any,
     } as any)) as any[]
   } catch (error: any) {
-    const message = String(error?.message ?? '')
-    if (!message.includes('Unknown field `adsBudget`')) {
+    if (!isAdsBudgetMissingCompatError(error)) {
       throw error
     }
 
@@ -214,8 +228,7 @@ export async function updateClientInvoice(
       data: finalData,
     })
   } catch (error: any) {
-    const message = String(error?.message ?? '')
-    if (!message.includes('Unknown argument `adsBudget`')) {
+    if (!isAdsBudgetMissingCompatError(error)) {
       throw error
     }
 

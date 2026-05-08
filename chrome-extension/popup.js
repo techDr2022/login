@@ -43,7 +43,7 @@ async function fetchJson(baseUrl, path, token, options = {}) {
         ...(options.headers || {}),
       },
     })
-  } catch (err) {
+  } catch {
     throw new Error(
       `Network error (Failed to fetch). Check Base URL and grant extension site access for ${baseUrl}.`
     )

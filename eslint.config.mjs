@@ -40,6 +40,18 @@ export default [
     },
   },
   {
+    files: ["chrome-extension/**/*.js"],
+    languageOptions: {
+      globals: {
+        chrome: "readonly",
+        document: "readonly",
+        window: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+      },
+    },
+  },
+  {
     ignores: [
       "node_modules/**",
       ".next/**",
