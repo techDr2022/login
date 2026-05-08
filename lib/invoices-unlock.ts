@@ -28,6 +28,7 @@ function verifyPayload(token: string): { userId: string; exp: number } | null {
     const data = Buffer.from(raw, 'base64url').toString('utf8')
     const payload = JSON.parse(data) as { userId: string; exp: number }
     const secret = getSecret()
+    if (!secret) return null
     const hmac = crypto.createHmac('sha256', secret)
     hmac.update(data)
     const expected = hmac.digest('hex')
