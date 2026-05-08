@@ -4,14 +4,16 @@ import crypto from 'crypto'
 const COOKIE_NAME = 'invoices_unlocked'
 const COOKIE_MAX_AGE = 30 * 60 // 30 minutes in seconds
 
-function getSecret(): string {
+function getSecret(): string | null {
   const secret = process.env.NEXTAUTH_SECRET
-  if (!secret) throw new Error('NEXTAUTH_SECRET is required for invoices unlock')
-  return secret
+  return secret || null
 }
 
 function signPayload(payload: { userId: string; exp: number }): string {
   const secret = getSecret()
+  if (!secret) {
+    throw new Error('NEXTAUTH_SECRET is required for invoices unlock')
+  }
   const data = JSON.stringify(payload)
   const hmac = crypto.createHmac('sha256', secret)
   hmac.update(data)
@@ -40,6 +42,8 @@ function verifyPayload(token: string): { userId: string; exp: number } | null {
 
 /** Check if the request has a valid invoices-unlock cookie for the given userId. */
 export async function isInvoicesUnlockedForUser(userId: string): Promise<boolean> {
+  // Fail closed when NEXTAUTH_SECRET is missing to avoid server-render crashes.
+  if (!getSecret()) return false
   const cookieStore = await cookies()
   const cookie = cookieStore.get(COOKIE_NAME)
   if (!cookie?.value) return false
