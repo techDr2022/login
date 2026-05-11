@@ -119,8 +119,14 @@ export function ClientsList() {
         ...(debouncedSearch && { search: debouncedSearch }),
         ...(statusFilter !== 'all' && { status: statusFilter }),
       })
-      const res = await fetch(`/api/clients?${params}`)
+      const res = await fetch(`/api/clients?${params}`, { credentials: 'same-origin' })
       const data = await res.json()
+      if (!res.ok) {
+        setError(typeof data.error === 'string' ? data.error : 'Failed to load clients')
+        setClients([])
+        return
+      }
+      setError('')
       const filteredClients = data.clients || []
       
       // Sort clients alphabetically by name
