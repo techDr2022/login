@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode, AttendanceStatus } from '@prisma/client'
 import { parseDateLocal, formatDateLocal } from '@/lib/utils'
-import { isAttendancePublicHoliday } from '@/lib/attendance-holidays'
+import { isAttendancePublicHoliday, getAttendanceHolidayDateKeys } from '@/lib/attendance-holidays'
 
 export async function GET(request: NextRequest) {
   try {
@@ -125,6 +125,7 @@ export async function GET(request: NextRequest) {
         if (daysDiff > maxDays) {
           // Skip absent record generation for large date ranges
         } else {
+          const holidayDates = await getAttendanceHolidayDateKeys()
           const attendanceMap = new Map(
             attendances.map((a) => [`${a.userId}-${formatDateLocal(a.date)}`, a])
           )
@@ -216,7 +217,7 @@ export async function GET(request: NextRequest) {
                 dateOnly.setHours(0, 0, 0, 0)
 
                 // Skip creating Absent records on public holidays
-                if (!isAttendancePublicHoliday(dateOnly)) {
+                if (!isAttendancePublicHoliday(dateOnly, holidayDates)) {
                   attendances.push({
                     id: `absent-${employee.id}-${isoDate}`,
                     userId: employee.id,

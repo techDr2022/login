@@ -9,37 +9,125 @@ import { UserRole, AttendanceStatus, AttendanceMode } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { 
   ATTENDANCE_CONFIG, 
-  getOfficeStartTime, 
+  getOfficeStartTime,
+  getOfficeEndTime,
+  getLunchStartTime,
+  getISTDayStart,
+  parseISTTimeOnDate,
   isLate as checkIsLate,
   getHalfDayThresholdTime,
   getAbsentThresholdTime
 } from '@/lib/attendance-config'
 import { sendWhatsAppNotification, formatAttendanceNotificationMessage, getAttendanceNotificationTemplateVariables } from '@/lib/whatsapp'
 import { revalidatePath } from 'next/cache'
-
-function getLocalDayRange(reference: Date) {
-  const start = new Date(reference)
-  start.setHours(0, 0, 0, 0)
-  const end = new Date(start)
-  end.setDate(end.getDate() + 1)
-  return { start, end }
-}
+import { parseDateLocal } from '@/lib/utils'
 
 async function findTodaysAttendance(userId: string, reference: Date) {
-  const { start, end } = getLocalDayRange(reference)
+  const today = getISTDayStart(reference)
   return prisma.attendances.findFirst({
     where: {
       userId,
-      OR: [
-        { loginTime: { gte: start, lt: end } },
-        { date: { gte: start, lt: end } },
-      ],
+      date: today,
     },
-    orderBy: [
-      { loginTime: 'desc' },
-      { date: 'desc' },
-    ],
   })
+}
+
+function recalculateAttendanceFields(
+  mode: AttendanceMode,
+  dayStart: Date,
+  loginTime: Date,
+  logoutTime: Date | null
+): {
+  status: AttendanceStatus
+  totalHours: number | null
+  earlySignInMinutes: number | null
+  lateSignInMinutes: number | null
+  earlyLogoutMinutes: number | null
+  lateLogoutMinutes: number | null
+} {
+  let status: AttendanceStatus = AttendanceStatus.Present
+  let earlySignInMinutes: number | null = null
+  let lateSignInMinutes: number | null = null
+  let earlyLogoutMinutes: number | null = null
+  let lateLogoutMinutes: number | null = null
+  let totalHours: number | null = null
+
+  if (mode === AttendanceMode.OFFICE) {
+    const expectedLoginTime = getOfficeStartTime(dayStart)
+    const halfDayThreshold = getHalfDayThresholdTime(dayStart)
+    const absentThreshold = getAbsentThresholdTime(dayStart)
+
+    if (loginTime >= absentThreshold) {
+      earlySignInMinutes = 0
+      lateSignInMinutes = Math.round((loginTime.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+      status = AttendanceStatus.Absent
+    } else if (loginTime >= halfDayThreshold) {
+      earlySignInMinutes = 0
+      lateSignInMinutes = Math.round((loginTime.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+      status = AttendanceStatus.HalfDay
+    } else if (checkIsLate(loginTime, expectedLoginTime)) {
+      earlySignInMinutes = 0
+      lateSignInMinutes = Math.round((loginTime.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+      status = AttendanceStatus.Late
+    } else {
+      const diffMinutes = Math.round((loginTime.getTime() - expectedLoginTime.getTime()) / (1000 * 60))
+      if (diffMinutes < 0) {
+        earlySignInMinutes = Math.abs(diffMinutes)
+        lateSignInMinutes = 0
+      } else {
+        earlySignInMinutes = 0
+        lateSignInMinutes = 0
+      }
+      status = AttendanceStatus.Present
+    }
+  } else if (mode === AttendanceMode.LEAVE) {
+    status = AttendanceStatus.Present
+  }
+
+  if (logoutTime) {
+    if (mode === AttendanceMode.OFFICE) {
+      const expectedLogoutTime = getOfficeEndTime(dayStart)
+      const diffMinutes = Math.round((logoutTime.getTime() - expectedLogoutTime.getTime()) / (1000 * 60))
+      if (diffMinutes < 0) {
+        earlyLogoutMinutes = Math.abs(diffMinutes)
+        lateLogoutMinutes = 0
+      } else if (diffMinutes > 0) {
+        earlyLogoutMinutes = 0
+        lateLogoutMinutes = diffMinutes
+      } else {
+        earlyLogoutMinutes = 0
+        lateLogoutMinutes = 0
+      }
+    }
+
+    totalHours = (logoutTime.getTime() - loginTime.getTime()) / (1000 * 60 * 60)
+
+    if (mode === AttendanceMode.OFFICE) {
+      const lunchStartTime = getLunchStartTime(dayStart)
+      if (logoutTime >= lunchStartTime) {
+        totalHours -= ATTENDANCE_CONFIG.LUNCH_DURATION_MINUTES / 60
+      }
+      if (totalHours < 0) totalHours = 0
+    } else if (mode === AttendanceMode.WFH) {
+      status =
+        totalHours >= ATTENDANCE_CONFIG.WFH_MIN_HOURS_FOR_PRESENT
+          ? AttendanceStatus.Present
+          : AttendanceStatus.Absent
+      earlySignInMinutes = null
+      lateSignInMinutes = null
+      earlyLogoutMinutes = null
+      lateLogoutMinutes = null
+    }
+  }
+
+  return {
+    status,
+    totalHours,
+    earlySignInMinutes,
+    lateSignInMinutes,
+    earlyLogoutMinutes,
+    lateLogoutMinutes,
+  }
 }
 
 export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFFICE) {
@@ -69,10 +157,9 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
   }
 
   const now = new Date()
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
+  const today = getISTDayStart(now)
 
-  // Resolve today's row by local-day window to avoid timezone key mismatches.
+  // Resolve today's row by IST day window to avoid timezone key mismatches.
   const existing = await findTodaysAttendance(session.user.id, now)
 
   // Cast mode to AttendanceMode enum
@@ -83,6 +170,19 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
   if (existing && existing.loginTime && !existing.logoutTime) {
     // If mode is the same, prevent duplicate clock in
     if (existing.mode === attendanceMode) {
+      const staleOpen = await prisma.attendances.findFirst({
+        where: {
+          userId: session.user.id,
+          loginTime: { not: null },
+          logoutTime: null,
+          date: { lt: today },
+        },
+      })
+      if (staleOpen) {
+        throw new Error(
+          'You still have an open attendance session from a previous day. Ask your admin to set your check-out time for that day, then clock in again.'
+        )
+      }
       throw new Error('Already clocked in today with the same mode')
     }
     
@@ -439,8 +539,7 @@ export async function clockOut() {
   }
 
   const now = new Date()
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
+  const today = getISTDayStart(now)
 
   let attendance = await findTodaysAttendance(session.user.id, now)
 
@@ -710,8 +809,7 @@ export async function startLunchBreak() {
   }
 
   const now = new Date()
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
+  const today = getISTDayStart(now)
 
   const attendance = await prisma.attendances.findUnique({
     where: {
@@ -759,8 +857,7 @@ export async function endLunchBreak() {
   }
 
   const now = new Date()
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
+  const today = getISTDayStart(now)
 
   const attendance = await prisma.attendances.findUnique({
     where: {
@@ -812,8 +909,7 @@ export async function pingWFHActivity() {
   }
 
   const now = new Date()
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
+  const today = getISTDayStart(now)
 
   const attendance = await prisma.attendances.findUnique({
     where: {
@@ -857,9 +953,7 @@ export async function markAllAttendanceForDay(date: Date, mode: AttendanceMode =
     throw new Error('Only super admin can mark all attendance')
   }
 
-  // Set the date to start of day
-  const targetDate = new Date(date)
-  targetDate.setHours(0, 0, 0, 0)
+  const targetDate = getISTDayStart(new Date(date))
 
   // Get all active employees
   const employees = await prisma.user.findMany({
@@ -876,10 +970,9 @@ export async function markAllAttendanceForDay(date: Date, mode: AttendanceMode =
     throw new Error('No active employees found')
   }
 
-  // Get office start and end times for the target date
+  // Get office start and end times for the target date (IST)
   const officeStartTime = getOfficeStartTime(targetDate)
-  const officeEndTime = new Date(targetDate)
-  officeEndTime.setHours(ATTENDANCE_CONFIG.OFFICE_END_HOUR, ATTENDANCE_CONFIG.OFFICE_END_MINUTE, 0, 0)
+  const officeEndTime = getOfficeEndTime(targetDate)
 
   // Calculate total hours (excluding lunch break)
   const totalHours = (officeEndTime.getTime() - officeStartTime.getTime()) / (1000 * 60 * 60) - (ATTENDANCE_CONFIG.LUNCH_DURATION_MINUTES / 60)
@@ -955,6 +1048,142 @@ export async function markAllAttendanceForDay(date: Date, mode: AttendanceMode =
     errorCount: errors.length,
     results,
     errors: errors.length > 0 ? errors : undefined,
+  }
+}
+
+export async function editAttendanceByAdmin(input: {
+  attendanceId?: string
+  userId?: string
+  date?: string
+  loginTime?: string | null
+  logoutTime?: string | null
+  mode?: AttendanceMode
+  remark?: string
+}) {
+  const session = await getServerSession(authOptions)
+  if (!session) throw new Error('Unauthorized')
+
+  if (session.user.role !== UserRole.SUPER_ADMIN) {
+    throw new Error('Only super admin can edit attendance')
+  }
+
+  if (!session.user?.id) {
+    throw new Error('Invalid session')
+  }
+
+  let record = input.attendanceId
+    ? await prisma.attendances.findUnique({ where: { id: input.attendanceId } })
+    : null
+
+  if (!record) {
+    if (!input.userId || !input.date) {
+      throw new Error('Attendance record not found. Provide userId and date to create one.')
+    }
+    const dayStart = getISTDayStart(parseDateLocal(input.date))
+    record = await prisma.attendances.findUnique({
+      where: {
+        userId_date: {
+          userId: input.userId,
+          date: dayStart,
+        },
+      },
+    })
+    if (!record) {
+      if (!input.loginTime) {
+        throw new Error('Check-in time is required when creating a new attendance record')
+      }
+      const loginTime = parseISTTimeOnDate(dayStart, input.loginTime)
+      const logoutTime = input.logoutTime
+        ? parseISTTimeOnDate(dayStart, input.logoutTime)
+        : null
+      if (logoutTime && logoutTime <= loginTime) {
+        throw new Error('Check-out must be after check-in')
+      }
+      const mode = input.mode ?? AttendanceMode.OFFICE
+      const metrics = recalculateAttendanceFields(mode, dayStart, loginTime, logoutTime)
+      record = await prisma.attendances.create({
+        data: {
+          id: randomUUID(),
+          userId: input.userId,
+          date: dayStart,
+          loginTime,
+          logoutTime,
+          mode,
+          remark: input.remark ?? null,
+          editedBy: session.user.id,
+          editedAt: new Date(),
+          lastActivityTime: mode === AttendanceMode.WFH && !logoutTime ? loginTime : null,
+          wfhActivityPings: mode === AttendanceMode.WFH && !logoutTime ? 1 : 0,
+          ...metrics,
+        },
+      })
+      await logActivity(session.user.id, 'CREATE', 'Attendance', record.id)
+      revalidatePath('/attendance')
+      revalidatePath('/dashboard')
+      return { id: record.id, success: true }
+    }
+  }
+
+  const dayStart = getISTDayStart(record.date)
+  const loginTime =
+    input.loginTime === undefined
+      ? record.loginTime
+      : input.loginTime
+        ? parseISTTimeOnDate(dayStart, input.loginTime)
+        : null
+  const logoutTime =
+    input.logoutTime === undefined
+      ? record.logoutTime
+      : input.logoutTime
+        ? parseISTTimeOnDate(dayStart, input.logoutTime)
+        : null
+
+  if (!loginTime) {
+    throw new Error('Check-in time is required')
+  }
+  if (logoutTime && logoutTime <= loginTime) {
+    throw new Error('Check-out must be after check-in')
+  }
+
+  const mode = input.mode ?? record.mode
+  const metrics = recalculateAttendanceFields(mode, dayStart, loginTime, logoutTime)
+
+  let lastActivityTime: Date | null = record.lastActivityTime
+  let wfhActivityPings = record.wfhActivityPings
+  if (mode === AttendanceMode.WFH) {
+    if (mode !== record.mode) {
+      lastActivityTime = logoutTime ? null : loginTime
+      wfhActivityPings = logoutTime ? record.wfhActivityPings : Math.max(record.wfhActivityPings, 1)
+    }
+  } else {
+    lastActivityTime = null
+    wfhActivityPings = 0
+  }
+
+  const updated = await prisma.attendances.update({
+    where: { id: record.id },
+    data: {
+      loginTime,
+      logoutTime,
+      mode,
+      remark: input.remark !== undefined ? input.remark : record.remark,
+      editedBy: session.user.id,
+      editedAt: new Date(),
+      lastActivityTime,
+      wfhActivityPings,
+      ...metrics,
+    },
+  })
+
+  await logActivity(session.user.id, 'UPDATE', 'Attendance', updated.id)
+  revalidatePath('/attendance')
+  revalidatePath('/dashboard')
+
+  return {
+    id: updated.id,
+    success: true,
+    loginTime: updated.loginTime?.toISOString() ?? null,
+    logoutTime: updated.logoutTime?.toISOString() ?? null,
   }
 }
 

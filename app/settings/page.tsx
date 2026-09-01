@@ -28,6 +28,7 @@ export default async function SettingsPage() {
       email: true,
       jobTitle: true,
       phoneNumber: true,
+      joiningDate: true,
     },
   })
 
@@ -45,6 +46,7 @@ export default async function SettingsPage() {
             currentName={dbUser?.name || user.name || ''}
             currentEmail={dbUser?.email || user.email || ''}
             currentJobTitle={dbUser?.jobTitle || ''}
+            joiningDate={dbUser?.joiningDate?.toISOString() ?? null}
           />
         </Card>
 

@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { Edit, Trash2, Eye, AlertTriangle, Zap, CheckCircle2, MoreHorizontal } from 'lucide-react'
+import { format } from 'date-fns'
+import { parseDateLocal } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -249,6 +251,15 @@ export function EmployeesTable({
                         <div className="text-xs text-muted-foreground">
                           {employee.jobTitle?.trim() || 'Designation not set'}
                         </div>
+                        {employee.joiningDate && (
+                          <div className="text-xs text-muted-foreground">
+                            Joined:{' '}
+                            {format(
+                              parseDateLocal(employee.joiningDate.slice(0, 10)),
+                              'MMM dd, yyyy'
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </TableCell>

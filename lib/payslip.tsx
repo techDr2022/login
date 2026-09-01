@@ -3,21 +3,16 @@ import { renderToBuffer, Document, Page, Text, View, StyleSheet } from '@react-p
 import { AttendanceStatus, UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { buildEmployeeCodeMap } from '@/lib/employee-code'
-
-const DEFAULT_PUBLIC_HOLIDAYS: string[] = [
-  '2025-01-14',
-  '2025-01-26',
-  '2025-03-04',
-  '2025-03-26',
-  '2025-03-30',
-  '2025-03-31',
-  '2025-06-07',
-  '2025-08-09',
-  '2025-08-15',
-  '2025-10-20',
-  '2025-11-08',
-  '2025-12-25',
-]
+import { getISTDateKey, dateAtISTWallClock } from '@/lib/attendance-config'
+import { isAttendanceNonWorkingCalendarDay, getAttendanceHolidayDateKeys } from '@/lib/attendance-holidays'
+import {
+  applyPaidLeaveCarryForward,
+  compareMonthKeys,
+  getEmployeePaidLeaveStartMonthKey,
+  getMonthKey,
+  getMonthKeysBetween,
+} from '@/lib/payroll-paid-leave'
+import { countWorkingDaysInMonth, getTodayISTDateKey } from '@/lib/payroll-calculations'
 
 export interface PayslipData {
   employeeId: string
@@ -27,6 +22,7 @@ export interface PayslipData {
   monthKey: string
   workingDays: number
   presentDays: number
+  paidLeaveDays: number
   absentDays: number
   perDaySalary: number
   deductionAmount: number
@@ -44,33 +40,14 @@ function monthKeyToLabel(monthKey: string): string {
 }
 
 function formatDateKey(date: Date): string {
-  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
-}
-
-function getPublicHolidays(): Set<string> {
-  const extra = (process.env.PAYROLL_PUBLIC_HOLIDAYS || '')
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean)
-  return new Set([...DEFAULT_PUBLIC_HOLIDAYS, ...extra])
-}
-
-function isSunday(date: Date): boolean {
-  return date.getDay() === 0
-}
-
-function isPublicHoliday(date: Date, holidays: Set<string>): boolean {
-  return holidays.has(formatDateKey(date))
+  return getISTDateKey(date)
 }
 
 function getMonthDateRange(monthKey: string): { start: Date; end: Date } {
   const [yearStr, monthStr] = monthKey.split('-')
-  const year = Number(yearStr)
-  const monthIndex = Number(monthStr) - 1
-  const start = new Date(year, monthIndex, 1)
-  const end = new Date(year, monthIndex + 1, 0)
-  start.setHours(0, 0, 0, 0)
-  end.setHours(23, 59, 59, 999)
+  const start = dateAtISTWallClock(`${monthKey}-01`, 0, 0, 0)
+  const lastDay = new Date(Number(yearStr), Number(monthStr), 0).getDate()
+  const end = dateAtISTWallClock(`${monthKey}-${String(lastDay).padStart(2, '0')}`, 23, 59, 59)
   return { start, end }
 }
 
@@ -98,17 +75,8 @@ async function getFormattedEmployeeCode(userId: string): Promise<string> {
   return employeeCodeMap.get(userId) || '---'
 }
 
-function getWorkingDaysInMonth(monthKey: string, holidays: Set<string>): number {
-  const { start, end } = getMonthDateRange(monthKey)
-  const cursor = new Date(start)
-  let days = 0
-  while (cursor <= end) {
-    if (!isSunday(cursor) && !isPublicHoliday(cursor, holidays)) {
-      days += 1
-    }
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return days
+function getWorkingDaysInMonth(monthKey: string, holidayDates: ReadonlySet<string>): number {
+  return countWorkingDaysInMonth(monthKey, holidayDates)
 }
 
 function monthKeyToRange(monthKey: string): string {
@@ -283,7 +251,11 @@ function PayslipPdf({ data }: { data: PayslipData }) {
                 <Text style={styles.value}>{data.presentDays.toFixed(2)}</Text>
               </View>
               <View style={styles.row}>
-                <Text style={styles.label}>Absent Days</Text>
+                <Text style={styles.label}>Paid Leave</Text>
+                <Text style={styles.value}>{data.paidLeaveDays.toFixed(2)}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Absent Days (LOP)</Text>
                 <Text style={styles.value}>{data.absentDays.toFixed(2)}</Text>
               </View>
             </View>
@@ -353,7 +325,7 @@ export async function generatePayslipPDF(data: PayslipData): Promise<Uint8Array>
 export async function buildPayslipData(userId: string, monthKey: string): Promise<PayslipData | null> {
   const employee = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, jobTitle: true, isActive: true },
+    select: { id: true, name: true, email: true, jobTitle: true, isActive: true, joiningDate: true },
   })
 
   if (!employee?.isActive || !employee.email) return null
@@ -365,36 +337,92 @@ export async function buildPayslipData(userId: string, monthKey: string): Promis
 
   if (!salary?.isActive || salary.amount <= 0) return null
 
-  const holidays = getPublicHolidays()
+  const holidayDates = await getAttendanceHolidayDateKeys()
   const formattedEmployeeCode = await getFormattedEmployeeCode(userId)
   const { start, end } = getMonthDateRange(monthKey)
-  const workingDays = getWorkingDaysInMonth(monthKey, holidays)
+  const workingDays = getWorkingDaysInMonth(monthKey, holidayDates)
   if (workingDays <= 0) return null
 
+  const simulationStart = employee.joiningDate
+    ? new Date(employee.joiningDate.getFullYear(), employee.joiningDate.getMonth(), 1)
+    : start
+
   const attendances = await prisma.attendances.findMany({
-    where: { userId, date: { gte: start, lte: end } },
+    where: { userId, date: { gte: simulationStart, lte: end } },
     select: { date: true, status: true },
   })
 
   const attendanceByDay = new Map(attendances.map((a) => [formatDateKey(a.date), a.status]))
+  const todayKey = getTodayISTDateKey()
+  const isWorkingDay = (date: Date) => !isAttendanceNonWorkingCalendarDay(date, holidayDates)
+  const joinKey = employee.joiningDate ? getISTDateKey(employee.joiningDate) : null
 
   let presentDays = 0
+  let rawAbsentDays = 0
+  const absentDaysByMonth = new Map<string, number>()
   const cursor = new Date(start)
-  while (cursor <= end) {
-    if (!isSunday(cursor) && !isPublicHoliday(cursor, holidays)) {
-      const status = attendanceByDay.get(formatDateKey(cursor))
-      if (status === AttendanceStatus.Present || status === AttendanceStatus.Late) {
-        presentDays += 1
-      } else if (status === AttendanceStatus.HalfDay) {
-        presentDays += 0.5
-      }
+  const endCopy = new Date(end)
+
+  while (cursor <= endCopy) {
+    const dayKey = formatDateKey(cursor)
+    if (joinKey && dayKey < joinKey) {
+      cursor.setDate(cursor.getDate() + 1)
+      continue
     }
+    if (!isWorkingDay(cursor)) {
+      cursor.setDate(cursor.getDate() + 1)
+      continue
+    }
+    if (dayKey >= todayKey) {
+      cursor.setDate(cursor.getDate() + 1)
+      continue
+    }
+
+    const status = attendanceByDay.get(dayKey) ?? AttendanceStatus.Absent
+    if (status === AttendanceStatus.Present || status === AttendanceStatus.Late) {
+      presentDays += 1
+    } else if (status === AttendanceStatus.HalfDay) {
+      presentDays += 0.5
+    } else if (status === AttendanceStatus.Absent) {
+      rawAbsentDays += 1
+      const mk = getMonthKey(cursor)
+      absentDaysByMonth.set(mk, (absentDaysByMonth.get(mk) ?? 0) + 1)
+    }
+
     cursor.setDate(cursor.getDate() + 1)
   }
 
-  const absentDays = Math.max(0, workingDays - presentDays)
+  const employeeJoinMonthKey = getEmployeePaidLeaveStartMonthKey(employee.joiningDate)
+  const simulationEnd = new Date(end.getFullYear(), end.getMonth(), 1)
+  const simulationMonths = getMonthKeysBetween(simulationStart, simulationEnd).filter((mk) => {
+    if (employeeJoinMonthKey && compareMonthKeys(mk, employeeJoinMonthKey) < 0) return false
+    return true
+  })
+
+  const priorAbsentDaysByMonth = new Map<string, number>()
+  for (const record of attendances) {
+    const dayKey = formatDateKey(record.date)
+    if (dayKey >= `${monthKey}-01`) continue
+    if (joinKey && dayKey < joinKey) continue
+    const date = record.date
+    if (!isWorkingDay(date)) continue
+    if (dayKey >= todayKey) continue
+    if (record.status !== AttendanceStatus.Absent) continue
+    const mk = getMonthKey(date)
+    priorAbsentDaysByMonth.set(mk, (priorAbsentDaysByMonth.get(mk) ?? 0) + 1)
+  }
+
+  const allAbsentDaysByMonth = new Map(priorAbsentDaysByMonth)
+  for (const [mk, count] of absentDaysByMonth) {
+    allAbsentDaysByMonth.set(mk, (allAbsentDaysByMonth.get(mk) ?? 0) + count)
+  }
+
+  const { paidLeaveByMonth } = applyPaidLeaveCarryForward(simulationMonths, allAbsentDaysByMonth)
+  const paidLeaveDays = paidLeaveByMonth.get(monthKey) ?? 0
+  const payableDays = presentDays + paidLeaveDays
+  const absentDays = Math.max(0, rawAbsentDays - paidLeaveDays)
   const perDay = salary.amount / workingDays
-  const payableSalary = perDay * presentDays
+  const payableSalary = perDay * payableDays
   const deductionAmount = salary.amount - payableSalary
 
   return {
@@ -405,6 +433,7 @@ export async function buildPayslipData(userId: string, monthKey: string): Promis
     monthKey,
     workingDays,
     presentDays,
+    paidLeaveDays,
     absentDays,
     perDaySalary: perDay,
     deductionAmount,

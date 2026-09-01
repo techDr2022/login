@@ -1,19 +1,37 @@
 'use client'
 
 import { useState } from 'react'
+import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CheckCircle2, AlertCircle } from 'lucide-react'
+import { parseDateLocal } from '@/lib/utils'
 
 interface ProfileFormProps {
   currentName: string
   currentEmail: string
   currentJobTitle: string
+  joiningDate?: string | null
 }
 
-export function ProfileForm({ currentName, currentEmail, currentJobTitle }: ProfileFormProps) {
+function formatJoiningDate(joiningDate?: string | null): string {
+  if (!joiningDate) return 'Not set'
+  const dateKey = joiningDate.slice(0, 10)
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateKey)
+    ? parseDateLocal(dateKey)
+    : new Date(joiningDate)
+  if (Number.isNaN(date.getTime())) return 'Not set'
+  return format(date, 'MMM dd, yyyy')
+}
+
+export function ProfileForm({
+  currentName,
+  currentEmail,
+  currentJobTitle,
+  joiningDate,
+}: ProfileFormProps) {
   const [email, setEmail] = useState(currentEmail)
   const [jobTitle, setJobTitle] = useState(currentJobTitle)
   const [loading, setLoading] = useState(false)
@@ -85,6 +103,13 @@ export function ProfileForm({ currentName, currentEmail, currentJobTitle }: Prof
           <Input value={currentName} readOnly />
         </div>
         <div className="space-y-2">
+          <Label>Joined on</Label>
+          <Input value={formatJoiningDate(joiningDate)} readOnly />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
           <Label htmlFor="personalEmail">
             Personal Email <span className="text-destructive">*</span>
           </Label>
@@ -96,20 +121,18 @@ export function ProfileForm({ currentName, currentEmail, currentJobTitle }: Prof
             required
           />
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="designation">
-          Designation <span className="text-destructive">*</span>
-        </Label>
-        <Input
-          id="designation"
-          value={jobTitle}
-          onChange={(e) => setJobTitle(e.target.value)}
-          placeholder="e.g. Graphic Designer Intern"
-          required
-          className="max-w-md"
-        />
+        <div className="space-y-2">
+          <Label htmlFor="designation">
+            Designation <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="designation"
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            placeholder="e.g. Graphic Designer Intern"
+            required
+          />
+        </div>
       </div>
 
       <Button type="submit" disabled={loading}>

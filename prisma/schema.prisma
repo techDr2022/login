@@ -168,6 +168,7 @@ model User {
   user_presence                           UserPresence?
   chat_notifications                      ChatNotification[]
   employeeSalaries                        EmployeeSalary[]
+  attendance_holidays                     attendance_holidays[]
   clientRequestsCreated                   ClientRequest[]        @relation("ClientRequest_createdBy")
   clientRequestAssignees                  ClientRequestAssignee[]
 
@@ -284,6 +285,17 @@ model attendances {
   @@index([date])
   @@index([mode])
   @@index([userId])
+}
+
+model attendance_holidays {
+  id        String   @id @default(cuid())
+  date      DateTime @unique @db.Date
+  name      String?
+  createdBy String?
+  createdAt DateTime @default(now())
+  User      User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([date])
 }
 
 model chat_messages {

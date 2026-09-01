@@ -10,16 +10,19 @@ import {
   isAttendanceSunday,
   isAttendancePublicHoliday,
   isAttendanceNonWorkingCalendarDay,
+  getAttendanceHolidayDateKeys,
 } from '@/lib/attendance-holidays'
+import {
+  applyPaidLeaveCarryForward,
+  buildAbsentDaysByMonth,
+  compareMonthKeys,
+  getEmployeePaidLeaveStartMonthKey,
+  getMonthKey,
+  getMonthKeysBetween,
+} from '@/lib/payroll-paid-leave'
 import ExcelJS from 'exceljs'
 
-function getMonthKey(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
-}
-
-function getWorkingDaysInMonth(monthKey: string): number {
+function getWorkingDaysInMonth(monthKey: string, holidayDates: ReadonlySet<string>): number {
   const [yearStr, monthStr] = monthKey.split('-')
   const year = Number(yearStr)
   const monthIndex = Number(monthStr) - 1
@@ -28,7 +31,7 @@ function getWorkingDaysInMonth(monthKey: string): number {
 
   for (let day = 1; day <= totalDays; day++) {
     const date = new Date(year, monthIndex, day)
-    if (isAttendanceNonWorkingCalendarDay(date)) {
+    if (isAttendanceNonWorkingCalendarDay(date, holidayDates)) {
       continue
     }
     workingDays += 1
@@ -94,6 +97,7 @@ export async function GET(request: NextRequest) {
     end.setHours(23, 59, 59, 999)
     const requestedStartKey = startDate
     const requestedEndKey = endDate
+    const holidayDates = await getAttendanceHolidayDateKeys()
 
     // Limit date range to 3 months to avoid performance issues
     const maxDays = 90
@@ -155,23 +159,47 @@ export async function GET(request: NextRequest) {
         email: true,
         jobTitle: true,
         phoneNumber: true,
+        joiningDate: true,
       },
     })
 
     const employeeIds = allEmployees.map((employee) => employee.id)
-    const monthKeys = Array.from(
-      new Set(
-        (() => {
-          const keys: string[] = []
-          const cursor = new Date(start)
-          while (cursor <= end) {
-            keys.push(getMonthKey(cursor))
-            cursor.setDate(cursor.getDate() + 1)
-          }
-          return keys
-        })()
-      )
-    )
+
+    const simulationStart = allEmployees.reduce((earliest, employee) => {
+      if (!employee.joiningDate) return earliest
+      const joinMonthStart = new Date(employee.joiningDate)
+      joinMonthStart.setDate(1)
+      joinMonthStart.setHours(0, 0, 0, 0)
+      if (!earliest || joinMonthStart < earliest) return joinMonthStart
+      return earliest
+    }, null as Date | null) ?? new Date(start.getFullYear(), start.getMonth(), 1)
+
+    const carryAttendanceRecords = employeeIds.length
+      ? await prisma.attendances.findMany({
+          where: {
+            userId: { in: employeeIds },
+            date: { gte: simulationStart, lte: end },
+          },
+          select: {
+            userId: true,
+            date: true,
+            status: true,
+          },
+        })
+      : []
+
+    const attendanceByEmployee = new Map<string, Array<{ date: Date; status: AttendanceStatus }>>()
+    for (const record of carryAttendanceRecords) {
+      const list = attendanceByEmployee.get(record.userId) ?? []
+      list.push({ date: record.date, status: record.status })
+      attendanceByEmployee.set(record.userId, list)
+    }
+
+    const isWorkingDay = (date: Date) => !isAttendanceNonWorkingCalendarDay(date, holidayDates)
+    const rangeStartMonthKey = getMonthKey(start)
+    const rangeEndMonthKey = getMonthKey(end)
+    const simulationEnd = new Date(end.getFullYear(), end.getMonth(), 1)
+    const monthKeys = getMonthKeysBetween(start, end)
 
     const employeeSalaries = employeeIds.length
       ? await prisma.employeeSalary.findMany({
@@ -238,7 +266,7 @@ export async function GET(request: NextRequest) {
               User: employee,
               isSundayHoliday: true,
             } as any)
-          } else if (!isAttendancePublicHoliday(dateOnly)) {
+          } else if (!isAttendancePublicHoliday(dateOnly, holidayDates)) {
             // Skip creating Absent records on public holidays (non-Sunday)
             allRecords.push({
               id: `absent-${employee.id}-${isoDate}`,
@@ -297,7 +325,7 @@ export async function GET(request: NextRequest) {
       const monthKey = getMonthKey(attendance.date)
       const salaryAmount = salaryMap.get(`${attendance.userId}-${monthKey}`) ?? 0
       const isSundayHoliday = (attendance as any).isSundayHoliday === true
-      const isHoliday = isSundayHoliday || isAttendancePublicHoliday(attendance.date)
+      const isHoliday = isSundayHoliday || isAttendancePublicHoliday(attendance.date, holidayDates)
       if (isHoliday) continue
 
       let dayWeight = 0
@@ -311,7 +339,7 @@ export async function GET(request: NextRequest) {
 
       let monthWorkingDays = monthlyWorkingDaysCache.get(monthKey)
       if (!monthWorkingDays) {
-        monthWorkingDays = getWorkingDaysInMonth(monthKey)
+        monthWorkingDays = getWorkingDaysInMonth(monthKey, holidayDates)
         monthlyWorkingDaysCache.set(monthKey, monthWorkingDays)
       }
       if (monthWorkingDays <= 0) continue
@@ -321,42 +349,42 @@ export async function GET(request: NextRequest) {
       summary.payableAmount += perDayPay * dayWeight
     }
 
-    // 1 paid leave per calendar month: first working-day absence in that month is paid
-    const absentDaysByEmployeeMonth = new Map<string, number>()
-    for (const attendance of allRecords) {
-      if (attendance.status !== AttendanceStatus.Absent) continue
-      if ((attendance as any).isSundayHoliday === true) continue
-      if (isAttendancePublicHoliday(attendance.date)) continue
-      const mk = getMonthKey(attendance.date)
-      const compositeKey = `${attendance.userId}::${mk}`
-      absentDaysByEmployeeMonth.set(
-        compositeKey,
-        (absentDaysByEmployeeMonth.get(compositeKey) ?? 0) + 1
+    // Paid leave with carry-forward: 1/month, unused (max 1) rolls to next month
+    for (const employee of allEmployees) {
+      const employeeJoinMonthKey = getEmployeePaidLeaveStartMonthKey(employee.joiningDate)
+      const employeeAttendance = attendanceByEmployee.get(employee.id) ?? []
+      const absentDaysByMonth = buildAbsentDaysByMonth(
+        employeeAttendance,
+        isWorkingDay,
+        AttendanceStatus.Absent
       )
-    }
 
-    for (const [compositeKey, absentCount] of absentDaysByEmployeeMonth) {
-      const sep = compositeKey.indexOf('::')
-      if (sep === -1) continue
-      const uid = compositeKey.slice(0, sep)
-      const monthKey = compositeKey.slice(sep + 2)
-      const plDays = Math.min(absentCount, 1)
-      if (plDays <= 0) continue
+      const simulationMonths = getMonthKeysBetween(simulationStart, simulationEnd).filter((monthKey) => {
+        if (employeeJoinMonthKey && compareMonthKeys(monthKey, employeeJoinMonthKey) < 0) return false
+        return true
+      })
 
-      const summary = payrollSummary.get(uid)
+      const { paidLeaveByMonth } = applyPaidLeaveCarryForward(simulationMonths, absentDaysByMonth)
+      const summary = payrollSummary.get(employee.id)
       if (!summary) continue
 
-      const salaryAmount = salaryMap.get(`${uid}-${monthKey}`) ?? 0
-      let monthWorkingDays = monthlyWorkingDaysCache.get(monthKey)
-      if (!monthWorkingDays) {
-        monthWorkingDays = getWorkingDaysInMonth(monthKey)
-        monthlyWorkingDaysCache.set(monthKey, monthWorkingDays)
-      }
-      if (monthWorkingDays <= 0) continue
+      for (const [monthKey, plDays] of paidLeaveByMonth) {
+        if (compareMonthKeys(monthKey, rangeStartMonthKey) < 0) continue
+        if (compareMonthKeys(monthKey, rangeEndMonthKey) > 0) continue
+        if (plDays <= 0) continue
 
-      const perDayPay = salaryAmount / monthWorkingDays
-      summary.presentDays += plDays
-      summary.payableAmount += perDayPay * plDays
+        const salaryAmount = salaryMap.get(`${employee.id}-${monthKey}`) ?? 0
+        let monthWorkingDays = monthlyWorkingDaysCache.get(monthKey)
+        if (!monthWorkingDays) {
+          monthWorkingDays = getWorkingDaysInMonth(monthKey, holidayDates)
+          monthlyWorkingDaysCache.set(monthKey, monthWorkingDays)
+        }
+        if (monthWorkingDays <= 0) continue
+
+        const perDayPay = salaryAmount / monthWorkingDays
+        summary.presentDays += plDays
+        summary.payableAmount += perDayPay * plDays
+      }
     }
 
     // Generate Excel workbook with styling (Absent = red, Sunday Holiday = orange)

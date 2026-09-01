@@ -1,3 +1,6 @@
+/** All attendance day boundaries and office hours use India Standard Time. */
+export const ATTENDANCE_TIMEZONE = 'Asia/Kolkata'
+
 // Attendance Configuration Constants
 export const ATTENDANCE_CONFIG = {
   // Office Hours
@@ -39,28 +42,52 @@ export const ATTENDANCE_CONFIG = {
   } as const,
 } as const
 
+export function getISTDateKey(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: ATTENDANCE_TIMEZONE })
+}
+
+export function dateAtISTWallClock(dateKey: string, hour: number, minute: number, second = 0): Date {
+  const hh = String(hour).padStart(2, '0')
+  const mm = String(minute).padStart(2, '0')
+  const ss = String(second).padStart(2, '0')
+  return new Date(`${dateKey}T${hh}:${mm}:${ss}+05:30`)
+}
+
+/** Start of the calendar day containing `date`, in IST. */
+export function getISTDayStart(date: Date): Date {
+  return dateAtISTWallClock(getISTDateKey(date), 0, 0, 0)
+}
+
 export function getOfficeStartTime(date: Date): Date {
-  const start = new Date(date)
-  start.setHours(ATTENDANCE_CONFIG.OFFICE_START_HOUR, ATTENDANCE_CONFIG.OFFICE_START_MINUTE, 0, 0)
-  return start
+  return dateAtISTWallClock(
+    getISTDateKey(date),
+    ATTENDANCE_CONFIG.OFFICE_START_HOUR,
+    ATTENDANCE_CONFIG.OFFICE_START_MINUTE
+  )
 }
 
 export function getOfficeEndTime(date: Date): Date {
-  const end = new Date(date)
-  end.setHours(ATTENDANCE_CONFIG.OFFICE_END_HOUR, ATTENDANCE_CONFIG.OFFICE_END_MINUTE, 0, 0)
-  return end
+  return dateAtISTWallClock(
+    getISTDateKey(date),
+    ATTENDANCE_CONFIG.OFFICE_END_HOUR,
+    ATTENDANCE_CONFIG.OFFICE_END_MINUTE
+  )
 }
 
 export function getLunchStartTime(date: Date): Date {
-  const lunch = new Date(date)
-  lunch.setHours(ATTENDANCE_CONFIG.LUNCH_START_HOUR, ATTENDANCE_CONFIG.LUNCH_START_MINUTE, 0, 0)
-  return lunch
+  return dateAtISTWallClock(
+    getISTDateKey(date),
+    ATTENDANCE_CONFIG.LUNCH_START_HOUR,
+    ATTENDANCE_CONFIG.LUNCH_START_MINUTE
+  )
 }
 
 export function getLunchEndTime(date: Date): Date {
-  const lunch = new Date(date)
-  lunch.setHours(ATTENDANCE_CONFIG.LUNCH_END_HOUR, ATTENDANCE_CONFIG.LUNCH_END_MINUTE, 0, 0)
-  return lunch
+  return dateAtISTWallClock(
+    getISTDateKey(date),
+    ATTENDANCE_CONFIG.LUNCH_END_HOUR,
+    ATTENDANCE_CONFIG.LUNCH_END_MINUTE
+  )
 }
 
 export function isLate(checkInTime: Date, officeStartTime: Date): boolean {
@@ -69,14 +96,49 @@ export function isLate(checkInTime: Date, officeStartTime: Date): boolean {
 }
 
 export function getHalfDayThresholdTime(date: Date): Date {
-  const threshold = new Date(date)
-  threshold.setHours(ATTENDANCE_CONFIG.HALF_DAY_HOUR, ATTENDANCE_CONFIG.HALF_DAY_MINUTE, 0, 0)
-  return threshold
+  return dateAtISTWallClock(
+    getISTDateKey(date),
+    ATTENDANCE_CONFIG.HALF_DAY_HOUR,
+    ATTENDANCE_CONFIG.HALF_DAY_MINUTE
+  )
 }
 
 export function getAbsentThresholdTime(date: Date): Date {
-  const threshold = new Date(date)
-  threshold.setHours(ATTENDANCE_CONFIG.ABSENT_HOUR, ATTENDANCE_CONFIG.ABSENT_MINUTE, 0, 0)
-  return threshold
+  return dateAtISTWallClock(
+    getISTDateKey(date),
+    ATTENDANCE_CONFIG.ABSENT_HOUR,
+    ATTENDANCE_CONFIG.ABSENT_MINUTE
+  )
+}
+
+/** Parse `HH:mm` on the IST calendar day of `referenceDate`. */
+export function parseISTTimeOnDate(referenceDate: Date, timeHHmm: string): Date {
+  const [hour, minute] = timeHHmm.split(':').map(Number)
+  return dateAtISTWallClock(getISTDateKey(referenceDate), hour, minute)
+}
+
+/** Format check-in/out for UI (IST, 12-hour clock). */
+export function formatAttendanceTime(time: string | Date | null | undefined): string {
+  if (!time) return '-'
+  return new Date(time).toLocaleTimeString('en-IN', {
+    timeZone: ATTENDANCE_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+}
+
+/** `HH:mm` in IST for datetime-local / time inputs. */
+export function formatAttendanceTimeInputValue(time: string | Date | null | undefined): string {
+  if (!time) return ''
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: ATTENDANCE_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(time))
+  const hour = parts.find((p) => p.type === 'hour')?.value ?? '00'
+  const minute = parts.find((p) => p.type === 'minute')?.value ?? '00'
+  return `${hour}:${minute}`
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,7 +14,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { DatePicker } from '@/components/ui/date-picker'
-import { markAllAttendanceForDay } from '@/app/actions/attendance-actions'
+import { markAllAttendanceForDay, editAttendanceByAdmin } from '@/app/actions/attendance-actions'
+import {
+  addAttendanceHoliday,
+  removeAttendanceHoliday,
+  type AttendanceHolidayItem,
+} from '@/app/actions/attendance-holiday-actions'
 import { AttendanceMode } from '@prisma/client'
 import { 
   Users, 
@@ -31,10 +36,14 @@ import {
   XCircle,
   Calendar as CalendarIcon,
   CheckSquare,
-  Activity
+  Activity,
+  Pencil,
+  Trash2,
+  Plus
 } from 'lucide-react'
 import { format, subMonths } from 'date-fns'
-import { formatDateLocal } from '@/lib/utils'
+import { formatDateLocal, parseDateLocal } from '@/lib/utils'
+import { formatAttendanceTime, formatAttendanceTimeInputValue } from '@/lib/attendance-config'
 import { getAttendanceDisplayStatus, type AttendanceLogDisplayStatus } from '@/lib/attendance-holidays'
 import { WFHActivityMonitor } from './wfh-activity-monitor'
 
@@ -70,6 +79,7 @@ export function SuperAdminAttendancePanel() {
   const { data: session } = useSession()
   const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null)
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLog[]>([])
+  const [rawAttendanceLogs, setRawAttendanceLogs] = useState<AttendanceLog[]>([])
   const [hourlyData, setHourlyData] = useState<OfficeHourlyData[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -111,6 +121,9 @@ export function SuperAdminAttendancePanel() {
       payableDays: number
       paidLeaveDays: number
       unpaidAbsentDays: number
+      carriedLeaveBalance: number
+      monthlySalary: number
+      workingDaysInRange: number
       payAmount: number
     }>
   } | null>(null)
@@ -131,6 +144,28 @@ export function SuperAdminAttendancePanel() {
   })
 
   const [employees, setEmployees] = useState<Array<{ id: string; name: string }>>([])
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingLog, setEditingLog] = useState<AttendanceLog | null>(null)
+  const [editCreateUserId, setEditCreateUserId] = useState('')
+  const [editCreateDate, setEditCreateDate] = useState<Date | null>(new Date())
+  const [editLoginTime, setEditLoginTime] = useState('')
+  const [editLogoutTime, setEditLogoutTime] = useState('')
+  const [editMode, setEditMode] = useState<AttendanceMode>(AttendanceMode.OFFICE)
+  const [editRemark, setEditRemark] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const [holidays, setHolidays] = useState<AttendanceHolidayItem[]>([])
+  const [holidaysLoading, setHolidaysLoading] = useState(true)
+  const [newHolidayDate, setNewHolidayDate] = useState<Date | null>(null)
+  const [newHolidayName, setNewHolidayName] = useState('')
+  const [holidaySaving, setHolidaySaving] = useState(false)
+  const [holidayError, setHolidayError] = useState<string | null>(null)
+  const [holidayFetchError, setHolidayFetchError] = useState<string | null>(null)
+  const [removingHolidayId, setRemovingHolidayId] = useState<string | null>(null)
+
+  const holidayDateKeys = useMemo(() => new Set(holidays.map((h) => h.date)), [holidays])
 
   // Fetch global stats
   const fetchGlobalStats = useCallback(async () => {
@@ -192,21 +227,13 @@ export function SuperAdminAttendancePanel() {
         editedBy: att.editedBy || null,
         editedAt: att.editedAt || null,
       }))
-      
-      // Filter by attendance type
-      let filteredLogs = logs
-      if (attendanceType !== 'all') {
-        filteredLogs = logs.filter(
-          (l) => getAttendanceDisplayStatus(l.status, String(l.date)) === attendanceType
-        )
-      }
-      
-      setAttendanceLogs(filteredLogs)
+
+      setRawAttendanceLogs(logs)
       setTotalPages(data.pagination?.totalPages || 1)
     } catch (err) {
       console.error('Failed to fetch attendance logs:', err)
     }
-  }, [selectedEmployee, dateRange, attendanceType, page])
+  }, [selectedEmployee, dateRange, page])
 
   // Fetch hourly data
   const fetchHourlyData = useCallback(async () => {
@@ -248,6 +275,40 @@ export function SuperAdminAttendancePanel() {
     }
   }, [])
 
+  const fetchHolidays = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setHolidaysLoading(true)
+    }
+    setHolidayFetchError(null)
+    try {
+      const res = await fetch('/api/attendance/holidays')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to load holidays')
+      }
+      const data = await res.json()
+      setHolidays(data.holidays || [])
+    } catch (err) {
+      console.error('Failed to fetch holidays:', err)
+      setHolidayFetchError(err instanceof Error ? err.message : 'Failed to load holidays')
+      setHolidays([])
+    } finally {
+      setHolidaysLoading(false)
+    }
+  }, [])
+
+  const filteredAttendanceLogs = useMemo(() => {
+    if (attendanceType === 'all') return rawAttendanceLogs
+    return rawAttendanceLogs.filter(
+      (log) =>
+        getAttendanceDisplayStatus(log.status, String(log.date), holidayDateKeys) === attendanceType
+    )
+  }, [rawAttendanceLogs, attendanceType, holidayDateKeys])
+
+  useEffect(() => {
+    setAttendanceLogs(filteredAttendanceLogs)
+  }, [filteredAttendanceLogs])
+
   useEffect(() => {
     fetchGlobalStats()
     fetchAttendanceLogs()
@@ -256,6 +317,10 @@ export function SuperAdminAttendancePanel() {
     setLoading(false)
   }, [fetchGlobalStats, fetchAttendanceLogs, fetchHourlyData, fetchUsers])
 
+  useEffect(() => {
+    fetchHolidays()
+  }, [fetchHolidays])
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1)
@@ -263,7 +328,113 @@ export function SuperAdminAttendancePanel() {
 
   const formatTime = (time: string | null | undefined) => {
     if (!time) return '-'
-    return new Date(time).toLocaleString()
+    return formatAttendanceTime(time)
+  }
+
+  const openEditDialog = (log: AttendanceLog) => {
+    setEditingLog(log)
+    setEditLoginTime(formatAttendanceTimeInputValue(log.loginTime))
+    setEditLogoutTime(formatAttendanceTimeInputValue(log.logoutTime))
+    setEditMode(
+      log.mode === AttendanceMode.WFH || log.mode === AttendanceMode.LEAVE
+        ? (log.mode as AttendanceMode)
+        : AttendanceMode.OFFICE
+    )
+    setEditRemark('')
+    setEditError(null)
+    setEditDialogOpen(true)
+  }
+
+  const openCreateAttendanceDialog = () => {
+    setEditingLog(null)
+    setEditCreateUserId(selectedEmployee !== 'all' ? selectedEmployee : employees[0]?.id ?? '')
+    setEditCreateDate(new Date())
+    setEditLoginTime('10:00')
+    setEditLogoutTime('')
+    setEditMode(AttendanceMode.OFFICE)
+    setEditRemark('Admin correction')
+    setEditError(null)
+    setEditDialogOpen(true)
+  }
+
+  const handleSaveAttendanceEdit = async () => {
+    if (!editLoginTime) {
+      setEditError('Check-in time is required')
+      return
+    }
+    if (!editingLog && (!editCreateUserId || !editCreateDate)) {
+      setEditError('Employee and date are required')
+      return
+    }
+
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      await editAttendanceByAdmin(
+        editingLog
+          ? {
+              attendanceId: editingLog.id,
+              loginTime: editLoginTime,
+              logoutTime: editLogoutTime || null,
+              mode: editMode,
+              remark: editRemark || undefined,
+            }
+          : {
+              userId: editCreateUserId,
+              date: formatDateLocal(editCreateDate!),
+              loginTime: editLoginTime,
+              logoutTime: editLogoutTime || null,
+              mode: editMode,
+              remark: editRemark || undefined,
+            }
+      )
+      setEditDialogOpen(false)
+      setEditingLog(null)
+      await fetchAttendanceLogs()
+      await fetchGlobalStats()
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Failed to save attendance')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const handleAddHoliday = async () => {
+    if (!newHolidayDate) {
+      setHolidayError('Please select a date')
+      return
+    }
+
+    setHolidaySaving(true)
+    setHolidayError(null)
+    try {
+      await addAttendanceHoliday({
+        date: formatDateLocal(newHolidayDate),
+        name: newHolidayName || undefined,
+      })
+      setNewHolidayDate(null)
+      setNewHolidayName('')
+      await fetchHolidays({ silent: true })
+      await fetchAttendanceLogs()
+    } catch (err) {
+      setHolidayError(err instanceof Error ? err.message : 'Failed to add holiday')
+    } finally {
+      setHolidaySaving(false)
+    }
+  }
+
+  const handleRemoveHoliday = async (id: string) => {
+    setRemovingHolidayId(id)
+    setHolidayError(null)
+    try {
+      await removeAttendanceHoliday(id)
+      await fetchHolidays({ silent: true })
+      await fetchAttendanceLogs()
+    } catch (err) {
+      setHolidayError(err instanceof Error ? err.message : 'Failed to remove holiday')
+    } finally {
+      setRemovingHolidayId(null)
+    }
   }
 
   const getStatusBadge = (display: AttendanceLogDisplayStatus) => {
@@ -581,6 +752,104 @@ export function SuperAdminAttendancePanel() {
         </CardContent>
       </Card>
 
+      {/* Holiday Calendar */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5" />
+            Holiday Calendar
+          </CardTitle>
+          <CardDescription>
+            Add or remove company holidays. Sundays are always non-working days. Holidays affect attendance display and payroll.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+              <Label>Holiday date</Label>
+              <DatePicker
+                date={newHolidayDate}
+                onSelect={setNewHolidayDate}
+                placeholder="Select date"
+              />
+            </div>
+            <div>
+              <Label htmlFor="holiday-name">Holiday name (optional)</Label>
+              <Input
+                id="holiday-name"
+                value={newHolidayName}
+                onChange={(e) => setNewHolidayName(e.target.value)}
+                placeholder="e.g. Diwali"
+              />
+            </div>
+            <div>
+              <Button onClick={handleAddHoliday} disabled={holidaySaving || !newHolidayDate}>
+                {holidaySaving ? (
+                  'Adding...'
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Holiday
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+          {holidayFetchError && (
+            <p className="text-sm text-destructive">{holidayFetchError}</p>
+          )}
+          {holidayError && (
+            <p className="text-sm text-destructive">{holidayError}</p>
+          )}
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="w-[80px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {holidaysLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
+                      Loading holidays...
+                    </TableCell>
+                  </TableRow>
+                ) : holidays.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
+                      No holidays added yet
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  holidays.map((holiday) => (
+                    <TableRow key={holiday.id}>
+                      <TableCell className="font-medium">
+                        {format(parseDateLocal(holiday.date), 'MMM dd, yyyy')}
+                      </TableCell>
+                      <TableCell>{holiday.name || 'Public Holiday'}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveHoliday(holiday.id)}
+                          disabled={removingHolidayId === holiday.id}
+                          title="Remove holiday"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Advanced Filters */}
       <Card>
         <CardHeader>
@@ -709,7 +978,7 @@ export function SuperAdminAttendancePanel() {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            Range: {payrollSummary?.startDate || '-'} to {payrollSummary?.endDate || '-'} · Payable days include half-days (0.5) and up to 1 paid leave per calendar month in the range.
+            Range: {payrollSummary?.startDate || '-'} to {payrollSummary?.endDate || '-'} · Pay is pro-rated from monthly salary. Today and future days are excluded until attendance is recorded. Each employee gets 1 paid leave per month; if unused, up to 1 day carries forward.
           </p>
           {!payrollSummaryLoading && payrollSummary && (
             <div className="rounded-md border overflow-x-auto">
@@ -717,16 +986,19 @@ export function SuperAdminAttendancePanel() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Employee</TableHead>
+                    <TableHead className="text-right">Working days</TableHead>
                     <TableHead className="text-right">Payable days</TableHead>
                     <TableHead className="text-right">Paid leave</TableHead>
+                    <TableHead className="text-right">Leave carry</TableHead>
                     <TableHead className="text-right">Absent (unpaid)</TableHead>
+                    <TableHead className="text-right">Monthly salary (₹)</TableHead>
                     <TableHead className="text-right">Pay amount (₹)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {payrollSummary.employees.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                         No employees in this filter
                       </TableCell>
                     </TableRow>
@@ -734,9 +1006,16 @@ export function SuperAdminAttendancePanel() {
                     payrollSummary.employees.map((row) => (
                       <TableRow key={row.userId}>
                         <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.workingDaysInRange}</TableCell>
                         <TableCell className="text-right tabular-nums">{row.payableDays.toFixed(2)}</TableCell>
                         <TableCell className="text-right tabular-nums">{row.paidLeaveDays.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.carriedLeaveBalance.toFixed(2)}</TableCell>
                         <TableCell className="text-right tabular-nums">{row.unpaidAbsentDays.toFixed(2)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {row.monthlySalary > 0
+                            ? `₹${row.monthlySalary.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : '—'}
+                        </TableCell>
                         <TableCell className="text-right font-semibold tabular-nums text-green-700">
                           ₹{row.payAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </TableCell>
@@ -749,13 +1028,24 @@ export function SuperAdminAttendancePanel() {
                     <TableRow className="bg-muted/50 font-medium">
                       <TableCell>Total ({payrollSummary.employees.length})</TableCell>
                       <TableCell className="text-right tabular-nums">
+                        {payrollSummary.employees.reduce((s, r) => s + r.workingDaysInRange, 0)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
                         {payrollSummary.employees.reduce((s, r) => s + r.payableDays, 0).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {payrollSummary.employees.reduce((s, r) => s + r.paidLeaveDays, 0).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
+                        {payrollSummary.employees.reduce((s, r) => s + r.carriedLeaveBalance, 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
                         {payrollSummary.employees.reduce((s, r) => s + r.unpaidAbsentDays, 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        ₹{payrollSummary.employees
+                          .reduce((s, r) => s + r.monthlySalary, 0)
+                          .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-green-700">
                         ₹
@@ -784,6 +1074,10 @@ export function SuperAdminAttendancePanel() {
               <CardDescription>Complete audit trail of all attendance records</CardDescription>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={openCreateAttendanceDialog}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Add / Fix Record
+              </Button>
               <Button variant="default" size="sm" onClick={() => setMarkAllDialogOpen(true)}>
                 <CheckSquare className="w-4 h-4 mr-2" />
                 Mark All Attendance
@@ -812,12 +1106,13 @@ export function SuperAdminAttendancePanel() {
                 <TableHead>IP Address</TableHead>
                 <TableHead>Device</TableHead>
                 <TableHead>Edited</TableHead>
+                <TableHead className="w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {attendanceLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                     No attendance logs found
                   </TableCell>
                 </TableRow>
@@ -829,7 +1124,7 @@ export function SuperAdminAttendancePanel() {
                     <TableCell>{formatTime(log.loginTime)}</TableCell>
                     <TableCell>{formatTime(log.logoutTime)}</TableCell>
                     <TableCell>
-                      {getStatusBadge(getAttendanceDisplayStatus(log.status, String(log.date)))}
+                      {getStatusBadge(getAttendanceDisplayStatus(log.status, String(log.date), holidayDateKeys))}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{log.mode}</Badge>
@@ -849,6 +1144,16 @@ export function SuperAdminAttendancePanel() {
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDialog(log)}
+                        title="Edit check-in, check-out, or WFH/Office mode"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -882,6 +1187,117 @@ export function SuperAdminAttendancePanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit attendance dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        setEditDialogOpen(open)
+        if (!open) {
+          setEditingLog(null)
+          setEditError(null)
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingLog ? 'Edit attendance' : 'Add attendance record'}
+            </DialogTitle>
+            <DialogDescription>
+              Times use India Standard Time (IST). You can correct WFH/Office if an employee chose the wrong mode. Set yesterday&apos;s check-out first if they forgot to clock out.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {editingLog ? (
+              <>
+                <div>
+                  <Label>Employee</Label>
+                  <p className="text-sm font-medium">{editingLog.userName}</p>
+                </div>
+                <div>
+                  <Label>Date</Label>
+                  <p className="text-sm font-medium">{format(new Date(editingLog.date), 'MMM dd, yyyy')}</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <Label>Employee</Label>
+                  <Select value={editCreateUserId} onValueChange={setEditCreateUserId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id}>
+                          {emp.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Date</Label>
+                  <DatePicker date={editCreateDate} onSelect={setEditCreateDate} />
+                </div>
+              </>
+            )}
+            <div>
+              <Label>Attendance mode</Label>
+              <Select
+                value={editMode}
+                onValueChange={(value) => setEditMode(value as AttendanceMode)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={AttendanceMode.OFFICE}>Office</SelectItem>
+                  <SelectItem value={AttendanceMode.WFH}>WFH</SelectItem>
+                  <SelectItem value={AttendanceMode.LEAVE}>Leave</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-login-time">Check-in time</Label>
+              <Input
+                id="edit-login-time"
+                type="time"
+                value={editLoginTime}
+                onChange={(e) => setEditLoginTime(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-logout-time">Check-out time (optional)</Label>
+              <Input
+                id="edit-logout-time"
+                type="time"
+                value={editLogoutTime}
+                onChange={(e) => setEditLogoutTime(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-remark">Remark (optional)</Label>
+              <Textarea
+                id="edit-remark"
+                value={editRemark}
+                onChange={(e) => setEditRemark(e.target.value)}
+                placeholder="e.g. Forgot to clock out — corrected by admin"
+                rows={2}
+              />
+            </div>
+            {editError && (
+              <p className="text-sm text-destructive">{editError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={editSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveAttendanceEdit} disabled={editSaving}>
+              {editSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Payroll Export Dialog */}
       <Dialog open={payrollDialogOpen} onOpenChange={(open) => {

@@ -26,6 +26,8 @@ import { useSession } from 'next-auth/react'
 import { canManageTasks, canApproveTasks } from '@/lib/rbac'
 import { UserRole } from '@prisma/client'
 import { useRouter } from 'next/navigation'
+import { format } from 'date-fns'
+import { parseDateLocal } from '@/lib/utils'
 
 // Lazy load recharts to reduce initial bundle size
 const RechartsChart = dynamic(
@@ -287,6 +289,17 @@ export function EmployeeDetailDrawer({
 
   if (!employee) return null
 
+  const joiningDateValue =
+    details?.employee?.joiningDate ?? employee.joiningDate ?? null
+  const formattedJoiningDate = joiningDateValue
+    ? format(
+        /^\d{4}-\d{2}-\d{2}/.test(String(joiningDateValue))
+          ? parseDateLocal(String(joiningDateValue).slice(0, 10))
+          : new Date(joiningDateValue),
+        'MMM dd, yyyy'
+      )
+    : 'Not set'
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
@@ -308,6 +321,9 @@ export function EmployeeDetailDrawer({
               </p>
               <p className="text-sm text-muted-foreground">
                 Employee ID: {details?.employee?.employeeCode || employee.employeeCode || '---'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Joined on: {formattedJoiningDate}
               </p>
             </div>
             <div className="flex gap-2">
