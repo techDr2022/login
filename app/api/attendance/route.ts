@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode, AttendanceStatus } from '@prisma/client'
 import { parseDateLocal, formatDateLocal } from '@/lib/utils'
+import { parseAttendanceDateKey, getISTDateKey } from '@/lib/attendance-config'
 import { isAttendancePublicHoliday, getAttendanceHolidayDateKeys } from '@/lib/attendance-holidays'
 
 export async function GET(request: NextRequest) {
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       where.date = {}
       if (startDate) {
         try {
-          const start = parseDateLocal(startDate)
+          const start = parseAttendanceDateKey(startDate)
           if (isNaN(start.getTime())) {
             return NextResponse.json({ error: 'Invalid start date' }, { status: 400 })
           }
@@ -44,12 +45,10 @@ export async function GET(request: NextRequest) {
       }
       if (endDate) {
         try {
-          const end = parseDateLocal(endDate)
+          const end = parseAttendanceDateKey(endDate)
           if (isNaN(end.getTime())) {
             return NextResponse.json({ error: 'Invalid end date' }, { status: 400 })
           }
-          // Set to end of day (23:59:59.999)
-          end.setHours(23, 59, 59, 999)
           where.date.lte = end
         } catch (error) {
           return NextResponse.json({ error: 'Invalid end date format' }, { status: 400 })
@@ -106,17 +105,15 @@ export async function GET(request: NextRequest) {
     // Only if date range is provided and not too large (to avoid performance issues)
     if (session.user.role === UserRole.SUPER_ADMIN && startDate && endDate) {
       try {
-        const start = parseDateLocal(startDate)
+        const start = parseAttendanceDateKey(startDate)
         if (isNaN(start.getTime())) {
           throw new Error('Invalid start date')
         }
         
-        const end = parseDateLocal(endDate)
+        const end = parseAttendanceDateKey(endDate)
         if (isNaN(end.getTime())) {
           throw new Error('Invalid end date')
         }
-        // Set to end of day (23:59:59.999)
-        end.setHours(23, 59, 59, 999)
 
         // Limit date range to 3 months to avoid performance issues
         const maxDays = 90
@@ -127,7 +124,7 @@ export async function GET(request: NextRequest) {
         } else {
           const holidayDates = await getAttendanceHolidayDateKeys()
           const attendanceMap = new Map(
-            attendances.map((a) => [`${a.userId}-${formatDateLocal(a.date)}`, a])
+            attendances.map((a) => [`${a.userId}-${getISTDateKey(a.date)}`, a])
           )
 
           // Get all existing attendances for the date range in one query
@@ -146,7 +143,7 @@ export async function GET(request: NextRequest) {
           })
 
           const existingMap = new Set(
-            existingAttendances.map((a) => `${a.userId}-${formatDateLocal(a.date)}`)
+            existingAttendances.map((a) => `${a.userId}-${getISTDateKey(a.date)}`)
           )
 
           // 1. Auto-generate Present records for super admins (they are always present)
@@ -248,12 +245,10 @@ export async function GET(request: NextRequest) {
     if (startDate || endDate) {
       summaryWhere.date = {}
       if (startDate) {
-        summaryWhere.date.gte = parseDateLocal(startDate)
+        summaryWhere.date.gte = parseAttendanceDateKey(startDate)
       }
       if (endDate) {
-        const end = parseDateLocal(endDate)
-        end.setHours(23, 59, 59, 999)
-        summaryWhere.date.lte = end
+        summaryWhere.date.lte = parseAttendanceDateKey(endDate)
       }
     }
 

@@ -25,6 +25,7 @@ import { format } from 'date-fns'
 import { clockIn, clockOut } from '@/app/actions/attendance-actions'
 import { AttendanceMode } from '@prisma/client'
 import { formatDateLocal } from '@/lib/utils'
+import { getISTDateKey } from '@/lib/attendance-config'
 import { useWFHActivity } from '@/lib/hooks/use-wfh-activity'
 import { useRouter } from 'next/navigation'
 
@@ -75,9 +76,7 @@ export function EmployeeAttendancePanel() {
 
   const fetchTodayAttendance = useCallback(async (forceRefresh = false) => {
     try {
-      const todayDate = new Date()
-      todayDate.setHours(0, 0, 0, 0)
-      const today = formatDateLocal(todayDate)
+      const today = getISTDateKey(new Date())
       // Always add cache-busting for attendance status to avoid stale clock in/out UI.
       const cacheBuster = `&_t=${Date.now()}`
       const res = await fetch(`/api/attendance?userId=${session?.user?.id}&startDate=${today}&endDate=${today}${cacheBuster}`, {
@@ -208,6 +207,16 @@ export function EmployeeAttendancePanel() {
       // Immediately update state from the result if available
       // This ensures UI updates immediately without waiting for server fetch
       if (result && result.loginTime) {
+        const resultDateKey = getISTDateKey(new Date(result.date))
+        const todayKey = getISTDateKey(new Date())
+
+        if (resultDateKey !== todayKey) {
+          // Ignore stale responses (e.g. yesterday's record returned by old date logic).
+          await fetchTodayAttendance(true)
+          alert('Clock-in did not complete. Please try again.')
+          return
+        }
+
         // Parse date correctly - handle both ISO string and date string
         const dateStr = result.date.includes('T') 
           ? result.date.split('T')[0] 

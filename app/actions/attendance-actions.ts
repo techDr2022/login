@@ -12,7 +12,10 @@ import {
   getOfficeStartTime,
   getOfficeEndTime,
   getLunchStartTime,
+  getAttendanceDateForDB,
   getISTDayStart,
+  getISTDateKey,
+  parseAttendanceDateKey,
   parseISTTimeOnDate,
   isLate as checkIsLate,
   getHalfDayThresholdTime,
@@ -20,16 +23,27 @@ import {
 } from '@/lib/attendance-config'
 import { sendWhatsAppNotification, formatAttendanceNotificationMessage, getAttendanceNotificationTemplateVariables } from '@/lib/whatsapp'
 import { revalidatePath } from 'next/cache'
-import { parseDateLocal } from '@/lib/utils'
 
 async function findTodaysAttendance(userId: string, reference: Date) {
-  const today = getISTDayStart(reference)
-  return prisma.attendances.findFirst({
+  const todayKey = getISTDateKey(reference)
+  const today = getAttendanceDateForDB(reference)
+  // Include previous UTC day to catch legacy rows stored via getISTDayStart.
+  const windowStart = new Date(today)
+  windowStart.setUTCDate(windowStart.getUTCDate() - 1)
+
+  const candidates = await prisma.attendances.findMany({
     where: {
       userId,
-      date: today,
+      date: { gte: windowStart, lte: today },
     },
+    orderBy: { loginTime: 'desc' },
   })
+
+  const todaysRecords = candidates.filter((record) => getISTDateKey(record.date) === todayKey)
+  const openSession = todaysRecords.find((record) => record.loginTime && !record.logoutTime)
+  if (openSession) return openSession
+
+  return todaysRecords[0] ?? null
 }
 
 function recalculateAttendanceFields(
@@ -157,9 +171,8 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
   }
 
   const now = new Date()
-  const today = getISTDayStart(now)
+  const today = getAttendanceDateForDB(now)
 
-  // Resolve today's row by IST day window to avoid timezone key mismatches.
   const existing = await findTodaysAttendance(session.user.id, now)
 
   // Cast mode to AttendanceMode enum
@@ -303,7 +316,12 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
 
   // If already completed attendance for today, keep it immutable.
   // Do not reopen the same day by clearing logoutTime.
-  if (existing && existing.loginTime && existing.logoutTime) {
+  if (
+    existing &&
+    existing.loginTime &&
+    existing.logoutTime &&
+    getISTDateKey(existing.date) === getISTDateKey(now)
+  ) {
     return {
       id: existing.id,
       userId: existing.userId,
@@ -327,12 +345,12 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
   let lateSignInMinutes: number | null = null
 
   // Expected login time: 10:00 AM
-  const expectedLoginTime = getOfficeStartTime(today)
+  const expectedLoginTime = getOfficeStartTime(now)
 
   // Calculate early/late sign in minutes
   if (attendanceMode === AttendanceMode.OFFICE) {
-    const halfDayThreshold = getHalfDayThresholdTime(today)
-    const absentThreshold = getAbsentThresholdTime(today)
+    const halfDayThreshold = getHalfDayThresholdTime(now)
+    const absentThreshold = getAbsentThresholdTime(now)
     
     // Check if clocking in after 2:00 PM (Absent)
     if (now >= absentThreshold) {
@@ -539,7 +557,7 @@ export async function clockOut() {
   }
 
   const now = new Date()
-  const today = getISTDayStart(now)
+  const today = getAttendanceDateForDB(now)
 
   let attendance = await findTodaysAttendance(session.user.id, now)
 
@@ -590,9 +608,7 @@ export async function clockOut() {
     }
   }
 
-  // Expected logout time: 7:00 PM
-  const expectedLogoutTime = new Date(today)
-  expectedLogoutTime.setHours(ATTENDANCE_CONFIG.OFFICE_END_HOUR, ATTENDANCE_CONFIG.OFFICE_END_MINUTE, 0, 0)
+  const expectedLogoutTime = getOfficeEndTime(now)
 
   // Calculate early/late logout minutes
   let earlyLogoutMinutes: number | null = null
@@ -621,9 +637,8 @@ export async function clockOut() {
   
   // Subtract lunch break only if user worked through the lunch period
   if (attendance.mode === AttendanceMode.OFFICE) {
-    const lunchStartTime = new Date(today)
-    lunchStartTime.setHours(ATTENDANCE_CONFIG.LUNCH_START_HOUR, ATTENDANCE_CONFIG.LUNCH_START_MINUTE, 0, 0)
-    
+    const lunchStartTime = getLunchStartTime(now)
+
     // Only subtract lunch break if user clocked out after lunch start time
     // (meaning they worked through or past the lunch period)
     if (now >= lunchStartTime) {
@@ -809,16 +824,7 @@ export async function startLunchBreak() {
   }
 
   const now = new Date()
-  const today = getISTDayStart(now)
-
-  const attendance = await prisma.attendances.findUnique({
-    where: {
-      userId_date: {
-        userId: session.user.id,
-        date: today,
-      },
-    },
-  })
+  const attendance = await findTodaysAttendance(session.user.id, now)
 
   if (!attendance || !attendance.loginTime) {
     throw new Error('Please clock in first')
@@ -857,16 +863,7 @@ export async function endLunchBreak() {
   }
 
   const now = new Date()
-  const today = getISTDayStart(now)
-
-  const attendance = await prisma.attendances.findUnique({
-    where: {
-      userId_date: {
-        userId: session.user.id,
-        date: today,
-      },
-    },
-  })
+  const attendance = await findTodaysAttendance(session.user.id, now)
 
   if (!attendance || !attendance.loginTime) {
     throw new Error('Please clock in first')
@@ -909,16 +906,7 @@ export async function pingWFHActivity() {
   }
 
   const now = new Date()
-  const today = getISTDayStart(now)
-
-  const attendance = await prisma.attendances.findUnique({
-    where: {
-      userId_date: {
-        userId: session.user.id,
-        date: today,
-      },
-    },
-  })
+  const attendance = await findTodaysAttendance(session.user.id, now)
 
   if (!attendance || attendance.mode !== AttendanceMode.WFH || !attendance.loginTime) {
     throw new Error('WFH attendance not found or not in WFH mode')
@@ -953,7 +941,7 @@ export async function markAllAttendanceForDay(date: Date, mode: AttendanceMode =
     throw new Error('Only super admin can mark all attendance')
   }
 
-  const targetDate = getISTDayStart(new Date(date))
+  const targetDate = getAttendanceDateForDB(new Date(date))
 
   // Get all active employees
   const employees = await prisma.user.findMany({
@@ -1079,7 +1067,7 @@ export async function editAttendanceByAdmin(input: {
     if (!input.userId || !input.date) {
       throw new Error('Attendance record not found. Provide userId and date to create one.')
     }
-    const dayStart = getISTDayStart(parseDateLocal(input.date))
+    const dayStart = parseAttendanceDateKey(input.date)
     record = await prisma.attendances.findUnique({
       where: {
         userId_date: {

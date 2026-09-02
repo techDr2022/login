@@ -58,6 +58,19 @@ export function getISTDayStart(date: Date): Date {
   return dateAtISTWallClock(getISTDateKey(date), 0, 0, 0)
 }
 
+/**
+ * PostgreSQL DATE value for an IST calendar day.
+ * Stored as UTC midnight of the YYYY-MM-DD key so queries match regardless of server TZ.
+ */
+export function getAttendanceDateForDB(date: Date): Date {
+  return new Date(`${getISTDateKey(date)}T00:00:00.000Z`)
+}
+
+/** Parse YYYY-MM-DD as the attendance DATE column value (UTC midnight). */
+export function parseAttendanceDateKey(dateKey: string): Date {
+  return new Date(`${dateKey}T00:00:00.000Z`)
+}
+
 export function getOfficeStartTime(date: Date): Date {
   return dateAtISTWallClock(
     getISTDateKey(date),

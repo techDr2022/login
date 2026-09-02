@@ -5,8 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode } from '@prisma/client'
-import { ATTENDANCE_CONFIG } from '@/lib/attendance-config'
-import { parseDateLocal, formatDateLocal } from '@/lib/utils'
+import { ATTENDANCE_CONFIG, getAttendanceDateForDB, parseAttendanceDateKey, getISTDateKey } from '@/lib/attendance-config'
 
 /**
  * GET /api/attendance/wfh-activity
@@ -29,17 +28,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const today = getAttendanceDateForDB(new Date())
 
     // Get today's attendance
-    const todayAttendance = await prisma.attendances.findUnique({
+    const todayAttendance = await prisma.attendances.findFirst({
       where: {
-        userId_date: {
-          userId,
-          date: today,
-        },
+        userId,
+        date: today,
+        loginTime: { not: null },
       },
+      orderBy: { loginTime: 'desc' },
       select: {
         id: true,
         mode: true,
@@ -54,9 +52,8 @@ export async function GET(request: NextRequest) {
     // If date range provided, get historical data
     let historicalData: any[] = []
     if (startDate && endDate) {
-      const start = parseDateLocal(startDate)
-      const end = parseDateLocal(endDate)
-      end.setHours(23, 59, 59, 999)
+      const start = parseAttendanceDateKey(startDate)
+      const end = parseAttendanceDateKey(endDate)
 
       historicalData = await prisma.attendances.findMany({
         where: {
@@ -180,7 +177,7 @@ export async function GET(request: NextRequest) {
       },
       historical: historicalData.map(record => ({
         ...record,
-        date: formatDateLocal(record.date),
+        date: getISTDateKey(record.date),
         loginTime: record.loginTime?.toISOString() ?? null,
         logoutTime: record.logoutTime?.toISOString() ?? null,
         lastActivityTime: record.lastActivityTime?.toISOString() ?? null,
