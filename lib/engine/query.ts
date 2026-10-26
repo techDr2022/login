@@ -51,6 +51,107 @@ export async function myEngineTasks(userId: string) {
   })
 }
 
+const ROW_CAP = 1200
+
+export type DayBucket = 'today' | 'overdue' | 'upcoming' | 'undated'
+
+export type DayTask = {
+  id: string
+  title: string
+  status: string
+  dueDate: string | null
+  priority: string
+  noinputflag: boolean
+  clientName: string | null
+  team: string | null
+  section: string | null
+  istimelock: boolean
+  bucket: DayBucket
+}
+
+export type DayList = {
+  tasks: DayTask[]
+  truncated: boolean
+}
+
+type DaySqlRow = {
+  id: string
+  title: string
+  status: string
+  dueDate: Date | null
+  priority: string
+  noinputflag: boolean
+  clientName: string | null
+  istimelock: boolean | null
+  section: string | null
+  team: string | null
+}
+
+export async function myDayTasks(userId: string): Promise<DayList> {
+  const todayKey = getISTDateKey(new Date())
+  const rows = await prisma.$queryRaw<DaySqlRow[]>`
+    SELECT
+      t.id,
+      t.title,
+      t.status::text AS status,
+      t."dueDate",
+      t.priority::text AS priority,
+      t.noinputflag,
+      c.name AS "clientName",
+      w.istimelock,
+      w.section,
+      tm.name AS team
+    FROM "Task" t
+    LEFT JOIN "Client" c ON c.id = t."clientId"
+    LEFT JOIN "Worktemplate" w ON w.id = t.templateid
+    LEFT JOIN "Team" tm ON tm.id = w.teamid
+    WHERE t.templateid IS NOT NULL
+      AND t.status::text NOT IN ('Done', 'Cancelled', 'Approved', 'Rejected')
+      AND (
+        t."assignedToId" = ${userId}
+        OR (
+          t."assignedToId" IS NULL
+          AND t.templateid IN (
+            SELECT a.templateid FROM "Worktemplateassignee" a WHERE a.userid = ${userId}
+          )
+        )
+      )
+    ORDER BY t."dueDate" ASC NULLS LAST
+    LIMIT 1200
+  `
+  const tasks: DayTask[] = []
+  const undated: DayTask[] = []
+  for (const row of rows) {
+    const istimelock = !!row.istimelock
+    let bucket: DayBucket
+    if (!row.dueDate) bucket = 'undated'
+    else {
+      const key = getISTDateKey(row.dueDate)
+      if (key === todayKey) bucket = 'today'
+      else if (key > todayKey) bucket = 'upcoming'
+      else if (istimelock) continue
+      else bucket = 'overdue'
+    }
+    const task: DayTask = {
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      dueDate: row.dueDate ? row.dueDate.toISOString() : null,
+      priority: row.priority,
+      noinputflag: row.noinputflag,
+      clientName: row.clientName,
+      team: row.team,
+      section: row.section,
+      istimelock,
+      bucket,
+    }
+    if (bucket === 'undated') undated.push(task)
+    else tasks.push(task)
+  }
+  undated.sort((left, right) => left.title.localeCompare(right.title))
+  return { tasks: [...tasks, ...undated], truncated: rows.length === ROW_CAP }
+}
+
 function sameWork(
   left: { clientId: string | null; projectid: string | null; periodkey: string | null },
   right: { clientId: string | null; projectid: string | null; periodkey: string | null }

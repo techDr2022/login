@@ -5,15 +5,26 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { updateEngineStatus } from '@/app/actions/engine-actions'
 import { actionLabel } from '@/lib/engine/rules'
+import { cn } from '@/lib/utils'
+
+function shortAction(from: string, to: string) {
+  if (to === 'InReview') return 'Review'
+  if (to === 'WaitingOnInput') return 'Waiting'
+  if (to === 'Cancelled') return 'Cancel'
+  if (to === 'ToDo' && from === 'InReview') return 'Changes'
+  return actionLabel(from, to)
+}
 
 export function EngineStatusButtons({
   taskId,
   status,
   actions,
+  compact = false,
 }: {
   taskId: string
   status: string
   actions: string[]
+  compact?: boolean
 }) {
   const router = useRouter()
   const [pending, setPending] = useState('')
@@ -44,13 +55,20 @@ export function EngineStatusButtons({
 
   if (!actions.length) return null
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className={cn('flex flex-wrap gap-2', compact && 'shrink-0 flex-nowrap gap-1')}>
       {actions.map((to) => (
-        <Button key={to} size="sm" variant={to === 'Done' ? 'default' : 'outline'} disabled={!!pending} onClick={() => run(to)}>
-          {pending === to ? 'Saving' : actionLabel(status, to)}
+        <Button
+          key={to}
+          size="sm"
+          variant={to === 'Done' ? 'default' : 'outline'}
+          className={compact ? 'h-7 px-2 text-xs' : undefined}
+          disabled={!!pending}
+          onClick={() => run(to)}
+        >
+          {pending === to ? 'Saving' : compact ? shortAction(status, to) : actionLabel(status, to)}
         </Button>
       ))}
-      {error && <p className="w-full text-sm text-destructive">{error}</p>}
+      {error && <p className="w-full text-xs text-destructive">{error}</p>}
     </div>
   )
 }

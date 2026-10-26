@@ -30,6 +30,7 @@ import { useTaskNotifications } from '@/components/tasks/task-notifications'
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
+  '/my-day': 'My Day',
   '/tasks': 'Tasks',
   '/clients': 'Clients',
   '/client-requests': 'Client requests',
