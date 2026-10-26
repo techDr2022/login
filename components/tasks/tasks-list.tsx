@@ -2,14 +2,11 @@
 
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Search, Trash2, Edit, CheckSquare2 } from 'lucide-react'
 import { createTask, updateTask, deleteTask, updateTaskStatus, deleteTasks } from '@/app/actions/task-actions'
 import { getAllTaskTemplates } from '@/app/actions/task-template-actions'
@@ -21,8 +18,35 @@ import { useRouter } from 'next/navigation'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
+import { cn } from '@/lib/utils'
 
 const CLOSED_STATUSES = new Set(['Approved', 'Done', 'Cancelled', 'Rejected'])
+
+const STATUS_TEXT: Record<string, string> = {
+  Pending: 'Pending',
+  InProgress: 'In progress',
+  Review: 'Review',
+  Approved: 'Done',
+  Rejected: 'Rejected',
+  Locked: 'Locked',
+  ToDo: 'To do',
+  WaitingOnInput: 'Waiting',
+  InReview: 'In review',
+  Done: 'Done',
+  Cancelled: 'Cancelled',
+}
+
+const dueFormat = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  day: 'numeric',
+  month: 'short',
+})
+
+function dueLabel(value: string | undefined, dueToday: boolean) {
+  if (!value) return '—'
+  if (dueToday) return 'Today'
+  return dueFormat.format(new Date(value))
+}
 
 function isOpenDueToday(task: { dueDate?: string; status: string }) {
   if (!task.dueDate || CLOSED_STATUSES.has(task.status)) return false
@@ -163,7 +187,7 @@ export function TasksList() {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '10',
+        limit: '20',
         ...(search && { search }),
         ...(statusFilter && { status: statusFilter }),
         ...(priorityFilter && { priority: priorityFilter }),
@@ -379,48 +403,7 @@ export function TasksList() {
     setError('')
   }
 
-  const getStatusBadgeVariant = useCallback((status: string) => {
-    switch (status) {
-      case 'Approved':
-        return 'outline'
-      case 'Rejected':
-        return 'outline'
-      case 'Review':
-        return 'secondary'
-      default:
-        return 'outline'
-    }
-  }, [])
-
-  const getPriorityBadgeVariant = useCallback((priority: string) => {
-    switch (priority) {
-      case 'Urgent':
-        return 'destructive'
-      case 'High':
-        return 'default'
-      default:
-        return 'secondary'
-    }
-  }, [])
-
-  const getPriorityBadgeClassName = useCallback((priority: string) => {
-    switch (priority) {
-      case 'Urgent':
-        return 'bg-red-100 text-red-800 border-red-200 hover:bg-red-200'
-      case 'High':
-        return 'bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200'
-      case 'Medium':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200'
-      case 'Low':
-        return 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200'
-      default:
-        return ''
-    }
-  }, [])
-
-  // Memoize filtered tasks count
   const allSelected = useMemo(() => tasks.length > 0 && selectedTasks.size === tasks.length, [tasks.length, selectedTasks.size])
-  const someSelected = useMemo(() => selectedTasks.size > 0 && selectedTasks.size < tasks.length, [selectedTasks.size, tasks.length])
 
   if (loading && tasks.length === 0) {
     return (
@@ -755,238 +738,148 @@ export function TasksList() {
           </Dialog>
       </div>
 
-      <Card className="rounded-xl border shadow-sm">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
+      {tasks.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No tasks found.</p>
+      ) : (
+        <ul className="divide-y rounded-lg border bg-card">
+          {canManage && (
+            <li className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={handleSelectAll}
+                aria-label="Select all tasks"
+              />
+              Select all
+            </li>
+          )}
+          {tasks.map((task) => {
+            const dueToday = isOpenDueToday(task)
+            const meta = [
+              task.assignedTo?.name || 'Unassigned',
+              canManage && task.assignedBy?.name ? `by ${task.assignedBy.name}` : '',
+              task.client?.name,
+              STATUS_TEXT[task.status] || task.status,
+              task.priority === 'High' || task.priority === 'Urgent' ? task.priority : '',
+            ].filter(Boolean).join(' · ')
+            return (
+              <li
+                key={task.id}
+                className={cn('flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1.5 text-sm', dueToday && 'bg-amber-50')}
+              >
                 {canManage && (
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={handleSelectAll}
-                      aria-label="Select all tasks"
-                    />
-                  </TableHead>
+                  <Checkbox
+                    checked={selectedTasks.has(task.id)}
+                    onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
+                    aria-label={`Select task ${task.title}`}
+                  />
                 )}
-                <TableHead>Title</TableHead>
-                <TableHead>Assigned To</TableHead>
-                {canManage && <TableHead>Assigned By</TableHead>}
-                <TableHead>Client</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Assigned At</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tasks.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={canManage ? 9 : 7} className="h-24 text-center">
-                    <div className="flex flex-col items-center justify-center py-8">
-                      <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                      <p className="text-sm font-medium text-muted-foreground">No tasks found</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Get started by creating a new task
-                      </p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                tasks.map((task) => {
-                  const dueToday = isOpenDueToday(task)
-                  return (
-                  <TableRow 
-                    key={task.id} 
-                    className={dueToday ? 'cursor-pointer bg-amber-50 transition-colors hover:bg-amber-100' : 'cursor-pointer transition-colors hover:bg-muted/50'} 
-                    onClick={() => router.push(`/tasks/${task.id}`)}
-                  >
-                    {canManage && (
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedTasks.has(task.id)}
-                          onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
-                          aria-label={`Select task ${task.title}`}
-                        />
-                      </TableCell>
-                    )}
-                    <TableCell className="font-medium">{task.title}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {task.assignedTo?.name || 'Unassigned'}
-                    </TableCell>
-                    {canManage && (
-                      <TableCell className="text-muted-foreground">
-                        {task.assignedBy?.name || '-'}
-                      </TableCell>
-                    )}
-                    <TableCell className="text-muted-foreground">{task.client?.name || '-'}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={getPriorityBadgeVariant(task.priority)}
-                        className={getPriorityBadgeClassName(task.priority)}
-                      >
-                        {task.priority}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={getStatusBadgeVariant(task.status)}
-                        className={
-                          task.status === 'Approved'
-                            ? 'bg-green-100 text-green-800 border-green-200'
-                            : task.status === 'Rejected'
-                            ? 'bg-red-100 text-red-800 border-red-200'
-                            : ''
-                        }
-                      >
-                        {task.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {task.createdAt ? (
-                        <div className="flex flex-col">
-                          <span>{new Date(task.createdAt).toLocaleDateString()}</span>
-                          <span className="text-xs">{new Date(task.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      ) : (
-                        '-'
+                <time className={cn('w-14 shrink-0 tabular-nums text-muted-foreground', dueToday && 'font-medium text-amber-800')}>
+                  {dueLabel(task.dueDate, dueToday)}
+                </time>
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
+                  onClick={() => router.push(`/tasks/${task.id}`)}
+                >
+                  <span className="truncate font-medium">{task.title}</span>
+                  <span className="hidden truncate text-xs text-muted-foreground sm:inline">{meta}</span>
+                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  {!canManage && task.assignedToId === session?.user?.id && (
+                    <>
+                      {task.status === 'Pending' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={isQuickUpdating === task.id}
+                          onClick={async () => {
+                            setIsQuickUpdating(task.id)
+                            try {
+                              await updateTaskStatus(task.id, { status: 'InProgress' })
+                              await fetchTasks()
+                              router.refresh()
+                            } catch (err: any) {
+                              setError(err.message || 'Failed to update task status')
+                            } finally {
+                              setIsQuickUpdating(null)
+                            }
+                          }}
+                        >
+                          {isQuickUpdating === task.id ? 'Saving' : 'Start'}
+                        </Button>
                       )}
-                    </TableCell>
-                    <TableCell className={dueToday ? 'text-amber-900' : 'text-muted-foreground'}>
-                      {task.dueDate ? (
-                        <div className="flex flex-col">
-                          <span className={dueToday ? 'font-medium' : undefined}>{new Date(task.dueDate).toLocaleDateString()}</span>
-                          {dueToday ? <span className="text-xs font-medium text-amber-700">Finish before the day ends</span> : null}
-                        </div>
-                      ) : (
-                        '-'
+                      {task.status === 'InProgress' && (
+                        <Button
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={isQuickUpdating === task.id}
+                          onClick={async () => {
+                            setIsQuickUpdating(task.id)
+                            try {
+                              await updateTaskStatus(task.id, { status: 'Approved' })
+                              await fetchTasks()
+                              router.refresh()
+                            } catch (err: any) {
+                              setError(err.message || 'Failed to update task status')
+                            } finally {
+                              setIsQuickUpdating(null)
+                            }
+                          }}
+                        >
+                          {isQuickUpdating === task.id ? 'Saving' : 'Done'}
+                        </Button>
                       )}
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {/* Employee quick actions for tasks assigned to them */}
-                        {!canManage && task.assignedToId === session?.user?.id && (
-                          <>
-                            {task.status === 'Pending' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={isQuickUpdating === task.id}
-                                onClick={async () => {
-                                  setIsQuickUpdating(task.id)
-                                  try {
-                                    await updateTaskStatus(task.id, { status: 'InProgress' })
-                                    // Immediately refresh tasks without waiting
-                                    await fetchTasks()
-                                    router.refresh()
-                                  } catch (err: any) {
-                                    setError(err.message || 'Failed to update task status')
-                                  } finally {
-                                    setIsQuickUpdating(null)
-                                  }
-                                }}
-                                className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
-                              >
-                                {isQuickUpdating === task.id ? 'Updating...' : 'Start'}
-                              </Button>
-                            )}
-                            {task.status === 'InProgress' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={isQuickUpdating === task.id}
-                                onClick={async () => {
-                                  setIsQuickUpdating(task.id)
-                                  try {
-                                    await updateTaskStatus(task.id, { status: 'Approved' })
-                                    // Immediately refresh tasks without waiting
-                                    await fetchTasks()
-                                    router.refresh()
-                                  } catch (err: any) {
-                                    setError(err.message || 'Failed to update task status')
-                                  } finally {
-                                    setIsQuickUpdating(null)
-                                  }
-                                }}
-                                className="bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
-                              >
-                                {isQuickUpdating === task.id ? 'Updating...' : 'Mark Complete'}
-                              </Button>
-                            )}
-                            {/* Hide Update Status button for employees when task is Approved or Rejected */}
-                            {task.status !== 'Approved' && task.status !== 'Rejected' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleStatusUpdate(task)}
-                              >
-                                Update Status
-                              </Button>
-                            )}
-                          </>
-                        )}
-                        {/* Creator can fix a task they made by mistake */}
-                        {!canManage && task.assignedBy?.id === session?.user?.id && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleEdit(task)
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={isDeleting === task.id}
-                              onClick={() => handleDelete(task.id)}
-                              title="Delete task"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </>
-                        )}
-                        {/* Admin actions */}
-                        {canManage && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleStatusUpdate(task)}
-                            >
-                              Update Status
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(task)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={isDeleting === task.id}
-                              onClick={() => handleDelete(task.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                      {task.status !== 'Approved' && task.status !== 'Rejected' && (
+                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => handleStatusUpdate(task)}>
+                          Status
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {!canManage && task.assignedBy?.id === session?.user?.id && (
+                    <>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(task)} title="Edit task">
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={isDeleting === task.id}
+                        onClick={() => handleDelete(task.id)}
+                        title="Delete task"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </>
+                  )}
+                  {canManage && (
+                    <>
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => handleStatusUpdate(task)}>
+                        Status
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(task)} title="Edit task">
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={isDeleting === task.id}
+                        onClick={() => handleDelete(task.id)}
+                        title="Delete task"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
 
       {/* Status Update Dialog */}
       <Dialog open={statusDialogOpen} onOpenChange={(open) => {
