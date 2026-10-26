@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@prisma/client'
 import { formatDateLocal, parseDateLocal } from '@/lib/utils'
-import { getAttendanceHolidayDateKeys } from '@/lib/attendance-holidays'
+import { getAttendanceHolidayDateKeys } from '@/lib/attendance-holiday-db'
 import { getMonthKey, getMonthKeysBetween } from '@/lib/payroll-paid-leave'
 import {
   computeEmployeePayroll,

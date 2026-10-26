@@ -6,7 +6,7 @@ import { NextRequest } from 'next/server'
  */
 export function isCronRequestAuthorized(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET?.trim()
-  if (!cronSecret) return true
+  if (!cronSecret) return false
 
   if (request.nextUrl.searchParams.get('secret') === cronSecret) return true
 

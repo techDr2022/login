@@ -20,6 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { CheckCircle2, Copy, AlertCircle } from 'lucide-react'
 import { UserRole } from '@prisma/client'
 import { formatDateLocal } from '@/lib/utils'
+import { EMPLOYEE_DEPARTMENTS } from '@/lib/employee-departments'
 
 interface Employee {
   id: string
@@ -27,6 +28,7 @@ interface Employee {
   email: string
   payslipEmail?: string | null
   jobTitle?: string | null
+  department?: string | null
   role: string
   isActive: boolean
   createdAt: string
@@ -53,6 +55,7 @@ export function AddEmployeeDialog({
     email: '',
     payslipEmail: '',
     jobTitle: '',
+    department: '',
     role: 'EMPLOYEE' as UserRole,
     password: '',
     confirmPassword: '',
@@ -73,6 +76,7 @@ export function AddEmployeeDialog({
         email: employee.email,
         payslipEmail: employee.payslipEmail || '',
         jobTitle: employee.jobTitle || '',
+        department: employee.department || '',
         role: employee.role as UserRole,
         password: '',
         confirmPassword: '',
@@ -95,6 +99,7 @@ export function AddEmployeeDialog({
       email: '',
       payslipEmail: '',
       jobTitle: '',
+      department: '',
       role: 'EMPLOYEE',
       password: '',
       confirmPassword: '',
@@ -124,7 +129,13 @@ export function AddEmployeeDialog({
     setError('')
 
     // Validation
-    if (!formData.name || !formData.email || !formData.jobTitle || !formData.role) {
+    if (
+      !formData.name ||
+      !formData.email ||
+      !formData.jobTitle ||
+      !formData.department ||
+      !formData.role
+    ) {
       setError('Please fill in all required fields')
       return
     }
@@ -154,6 +165,7 @@ export function AddEmployeeDialog({
           email: formData.email,
           payslipEmail: formData.payslipEmail || null,
           jobTitle: formData.jobTitle,
+          department: formData.department,
           role: formData.role,
           joiningDate: formData.joiningDate,
           adminNotes: formData.adminNotes || null,
@@ -183,6 +195,7 @@ export function AddEmployeeDialog({
             email: formData.email,
             payslipEmail: formData.payslipEmail || null,
             jobTitle: formData.jobTitle,
+            department: formData.department,
             role: formData.role,
             password: formData.password,
             joiningDate: formData.joiningDate,
@@ -333,6 +346,28 @@ export function AddEmployeeDialog({
             />
           </div>
 
+          <div>
+            <Label htmlFor="department">
+              Department <span className="text-destructive">*</span>
+            </Label>
+            <Select
+              value={formData.department}
+              onValueChange={(department) => setFormData({ ...formData, department })}
+              required
+            >
+              <SelectTrigger id="department" className="rounded-xl">
+                <SelectValue placeholder="Select department" />
+              </SelectTrigger>
+              <SelectContent>
+                {EMPLOYEE_DEPARTMENTS.map((department) => (
+                  <SelectItem key={department} value={department}>
+                    {department}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="role">
@@ -378,7 +413,7 @@ export function AddEmployeeDialog({
               className="rounded-xl"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Used for WhatsApp notifications when tasks are assigned
+              Used for WhatsApp attendance reminders
             </p>
           </div>
 

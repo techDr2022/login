@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { LayoutWrapper } from '@/components/layout-wrapper'
+import { EngineOverview } from '@/components/engine/engine-overview'
 import { UserRole } from '@prisma/client'
 import dynamicImport from 'next/dynamic'
 
@@ -49,8 +50,13 @@ export default async function DashboardPage() {
 
   return (
     <LayoutWrapper>
-      {role === UserRole.SUPER_ADMIN && <SuperAdminDashboard />}
-      {role === UserRole.EMPLOYEE && <EmployeeDashboard />}
+      <div className="-m-6 min-h-[calc(100vh-4rem)] bg-slate-50 p-4 pb-48 sm:p-6 sm:pb-48">
+        {(role === UserRole.SUPER_ADMIN || role === UserRole.COORDINATOR) && (
+          <EngineOverview isAdmin={role === UserRole.SUPER_ADMIN} />
+        )}
+        {role === UserRole.SUPER_ADMIN && <SuperAdminDashboard />}
+        {(role === UserRole.EMPLOYEE || role === UserRole.COORDINATOR) && <EmployeeDashboard />}
+      </div>
     </LayoutWrapper>
   )
 }

@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { UserRole, TaskStatus } from '@prisma/client'
+import { Prisma, UserRole, TaskStatus } from '@prisma/client'
 import { buildEmployeeCodeMap } from '@/lib/employee-code'
+import { isEmployeeDepartment } from '@/lib/employee-departments'
 
 // GET /api/admin/employees - Get all employees with performance metrics
 export async function GET(request: NextRequest) {
@@ -22,12 +23,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // 'active' | 'inactive' | 'all'
     const role = searchParams.get('role') // filter by role
+    const department = searchParams.get('department')
 
-    const where: any = {
-      // Exclude SUPER_ADMIN from employee list (they're not employees)
+    const where: Prisma.UserWhereInput = {
       role: {
-        not: UserRole.SUPER_ADMIN
-      }
+        notIn: [UserRole.SUPER_ADMIN, UserRole.CLIENT],
+      },
     }
     
     if (status === 'active') {
@@ -38,8 +39,14 @@ export async function GET(request: NextRequest) {
 
     // If role filter is specified, filter by that role
     // Note: The UI doesn't allow selecting SUPER_ADMIN, so this is safe
-    if (role && role !== 'all') {
+    if (role && role !== 'all' && role !== UserRole.CLIENT) {
       where.role = role as UserRole
+    }
+    if (department && department !== 'all') {
+      if (!isEmployeeDepartment(department)) {
+        return NextResponse.json({ error: 'Invalid department' }, { status: 400 })
+      }
+      where.department = department
     }
 
     // Debug logging
@@ -55,6 +62,7 @@ export async function GET(request: NextRequest) {
         email: true,
         payslipEmail: true,
         jobTitle: true,
+        department: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -148,6 +156,7 @@ export async function GET(request: NextRequest) {
           email: employee.email,
           payslipEmail: employee.payslipEmail,
           jobTitle: employee.jobTitle,
+          department: employee.department,
           role: employee.role,
           isActive: employee.isActive,
           createdAt: createdAtStr,
@@ -191,6 +200,7 @@ export async function GET(request: NextRequest) {
           email: employee.email,
           payslipEmail: employee.payslipEmail,
           jobTitle: employee.jobTitle,
+          department: employee.department,
           role: employee.role,
           isActive: employee.isActive,
           createdAt: createdAtStr,
@@ -235,7 +245,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, email, payslipEmail, jobTitle, role, joiningDate, password, adminNotes, phoneNumber } = body
+    const {
+      name,
+      email,
+      payslipEmail,
+      jobTitle,
+      department,
+      role,
+      joiningDate,
+      password,
+      adminNotes,
+      phoneNumber,
+    } = body
 
     const trimmedName = String(name || '').trim()
     const trimmedEmail = String(email || '').trim().toLowerCase()
@@ -244,9 +265,16 @@ export async function POST(request: NextRequest) {
       : ''
     const trimmedJobTitle = String(jobTitle || '').trim()
 
-    if (!trimmedName || !trimmedEmail || !trimmedJobTitle || !role || !password) {
+    if (
+      !trimmedName ||
+      !trimmedEmail ||
+      !trimmedJobTitle ||
+      !isEmployeeDepartment(department) ||
+      !role ||
+      !password
+    ) {
       return NextResponse.json(
-        { error: 'Name, personal email, designation, role and password are required' },
+        { error: 'Name, personal email, designation, department, role and password are required' },
         { status: 400 }
       )
     }
@@ -278,6 +306,7 @@ export async function POST(request: NextRequest) {
         email: trimmedEmail,
         payslipEmail: trimmedPayslipEmail || null,
         jobTitle: trimmedJobTitle,
+        department,
         passwordHash,
         role: role as UserRole,
         joiningDate: joiningDate ? new Date(joiningDate) : new Date(),
@@ -290,6 +319,7 @@ export async function POST(request: NextRequest) {
         email: true,
         payslipEmail: true,
         jobTitle: true,
+        department: true,
         role: true,
         isActive: true,
         createdAt: true,

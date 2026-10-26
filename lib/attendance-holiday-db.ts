@@ -1,29 +1,13 @@
 import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { getISTDateKey, getISTDayStart } from '@/lib/attendance-config'
+import {
+  ATTENDANCE_DEFAULT_HOLIDAYS,
+  ATTENDANCE_PUBLIC_HOLIDAY_DATES,
+} from '@/lib/attendance-holidays'
 import { parseDateLocal } from '@/lib/utils'
 
-/** Default company holidays (date + name). Synced into attendance_holidays on load. */
-export const ATTENDANCE_DEFAULT_HOLIDAYS: Array<{ date: string; name: string }> = [
-  { date: '2025-01-14', name: 'Public Holiday' },
-  { date: '2025-01-26', name: 'Republic Day' },
-  { date: '2025-03-04', name: 'Public Holiday' },
-  { date: '2025-03-26', name: 'Public Holiday' },
-  { date: '2025-03-30', name: 'Public Holiday' },
-  { date: '2025-03-31', name: 'Public Holiday' },
-  { date: '2025-06-07', name: 'Public Holiday' },
-  { date: '2025-08-09', name: 'Ganesh Chaturthi' },
-  { date: '2025-08-15', name: 'Independence Day' },
-  { date: '2025-10-20', name: 'Public Holiday' },
-  { date: '2025-11-08', name: 'Public Holiday' },
-  { date: '2025-12-25', name: 'Christmas' },
-  { date: '2026-08-15', name: 'Independence Day' },
-  { date: '2026-08-28', name: 'Rakhi Festival' },
-]
-
-export const ATTENDANCE_PUBLIC_HOLIDAY_DATES: string[] = ATTENDANCE_DEFAULT_HOLIDAYS.map(
-  (holiday) => holiday.date
-)
+export { ATTENDANCE_DEFAULT_HOLIDAYS, ATTENDANCE_PUBLIC_HOLIDAY_DATES }
 
 export interface AttendanceHolidayRow {
   id: string
@@ -177,5 +161,31 @@ export async function seedDefaultAttendanceHolidaysIfEmpty(): Promise<void> {
       name: holiday.name,
       createdBy: null,
     })
+  }
+}
+
+let holidayCache: { dates: Set<string>; loadedAt: number } | null = null
+const HOLIDAY_CACHE_TTL_MS = 30_000
+
+export function invalidateAttendanceHolidayCache(): void {
+  holidayCache = null
+}
+
+export async function getAttendanceHolidayDateKeys(): Promise<Set<string>> {
+  const now = Date.now()
+  if (holidayCache && now - holidayCache.loadedAt < HOLIDAY_CACHE_TTL_MS) {
+    return holidayCache.dates
+  }
+
+  try {
+    await seedDefaultAttendanceHolidaysIfEmpty()
+    const rows = await listAttendanceHolidayRows()
+    const dates = new Set(rows.map((row) => getISTDateKey(row.date)))
+    holidayCache = { dates, loadedAt: now }
+    return dates
+  } catch {
+    const dates = new Set(ATTENDANCE_PUBLIC_HOLIDAY_DATES)
+    holidayCache = { dates, loadedAt: now }
+    return dates
   }
 }

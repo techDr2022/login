@@ -1,372 +1,205 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getSuperAdminDashboardData } from '@/lib/dashboard-queries'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import { Users, CheckSquare2, Clock, AlertCircle, Briefcase, ArrowRight, Calendar, TrendingUp, Plus } from 'lucide-react'
+import { Users, CheckSquare2, Clock, AlertCircle, Briefcase, Calendar, TrendingUp, UserPlus, ClipboardList } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { TaskStatusTimeline } from './task-status-timeline'
+import {
+  EmptyState,
+  Panel,
+  QuickLink,
+  StatCard,
+  StatusBadge,
+  TaskLinkRow,
+  WelcomeBanner,
+  timeGreeting,
+} from './dashboard-ui'
+
+const ATTENDANCE_BAR: Record<string, string> = {
+  Present: 'bg-emerald-500',
+  Absent: 'bg-rose-500',
+  HalfDay: 'bg-orange-500',
+  Late: 'bg-amber-400',
+}
+
+function taskMeta(task: {
+  Client?: { name: string } | null
+  User_Task_assignedToIdToUser?: { name: string | null } | null
+  dueDate?: Date | string | null
+}) {
+  return [
+    task.Client?.name,
+    task.User_Task_assignedToIdToUser?.name
+      ? `With ${task.User_Task_assignedToIdToUser.name}`
+      : 'Unassigned',
+    task.dueDate ? `Due ${format(new Date(task.dueDate), 'MMM d, h:mm a')}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
 
 export async function SuperAdminDashboard() {
   const session = await getServerSession(authOptions)
   const data = await getSuperAdminDashboardData(session?.user?.id)
+  const todayLabel = format(new Date(), 'EEEE, MMM d')
+  const attendanceTotal = data.teamAttendance.reduce((sum, item) => sum + item._count.status, 0)
+  const workloadMax = Math.max(1, ...data.clientWorkload.map((client) => client._count.Task))
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
-      <div>
-        <p className="text-sm text-muted-foreground">Super Admin Dashboard</p>
-        <h1 className="text-2xl font-semibold">Overview of your organization</h1>
+      <WelcomeBanner
+        kicker={`${timeGreeting()} · ${todayLabel}`}
+        title="Here's how the team is doing"
+        subtitle="Who is in today, what is due, and which reviews are still waiting."
+      >
+        <QuickLink href="/tasks" icon={ClipboardList}>
+          Tasks
+        </QuickLink>
+        <QuickLink href="/clients/new" icon={UserPlus}>
+          Add client
+        </QuickLink>
+        <QuickLink href="/attendance" icon={Clock}>
+          Attendance
+        </QuickLink>
+        <QuickLink href="/employees" icon={Users}>
+          Team
+        </QuickLink>
+      </WelcomeBanner>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard label="Logged in today" value={data.loggedInToday} hint="People already in" icon={Users} tone="emerald" />
+        <StatCard label="Completed today" value={data.tasksCompletedToday} hint="Tasks approved" icon={TrendingUp} tone="sky" />
+        <StatCard label="Late logins" value={data.lateLogins} hint="Office arrivals" icon={Clock} tone="amber" />
+        <StatCard label="Needs review" value={data.pendingApprovals} hint="Waiting on you" icon={AlertCircle} tone="orange" />
+        <StatCard label="Clients" value={data.totalClients} hint="Active accounts" icon={Briefcase} tone="violet" />
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Logged In Today</CardTitle>
-            <Users className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.loggedInToday}</div>
-            <p className="text-xs text-muted-foreground mt-1">Active users</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Tasks Completed</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{data.tasksCompletedToday}</div>
-            <p className="text-xs text-muted-foreground mt-1">Completed today</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Late Logins</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{data.lateLogins}</div>
-            <p className="text-xs text-muted-foreground mt-1">Requires attention</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Approvals</CardTitle>
-            <AlertCircle className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{data.pendingApprovals}</div>
-            <p className="text-xs text-muted-foreground mt-1">Awaiting review</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Clients</CardTitle>
-            <Briefcase className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{data.totalClients}</div>
-            <p className="text-xs text-muted-foreground mt-1">All clients</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Today's Tasks */}
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Today&apos;s Tasks</CardTitle>
-                <CardDescription className="text-sm">Tasks due today</CardDescription>
-              </div>
-              <Calendar className="h-5 w-5 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {data.todaysTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-sm text-muted-foreground">No tasks due today</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Assigned To</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.todaysTasks.map((task: any) => (
-                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
-                        <TableCell>
-                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
-                            {task.title}
-                          </Link>
-                          {task.Client && (
-                            <p className="text-xs text-muted-foreground">{task.Client.name}</p>
-                          )}
-                          {task.dueDate && (
-                            <p className="text-xs text-muted-foreground">
-                              Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{task.status}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="pt-2">
-                  <Link href="/tasks">
-                    <Button variant="ghost" className="w-full rounded-xl">
-                      View All Tasks
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Tasks */}
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Recent Tasks</CardTitle>
-                <CardDescription className="text-sm">Tasks assigned by admin</CardDescription>
-              </div>
-              <CheckSquare2 className="h-5 w-5 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {data.recentTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-sm text-muted-foreground">No recent tasks</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Assigned To</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.recentTasks.map((task) => (
-                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
-                        <TableCell>
-                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
-                            {task.title}
-                          </Link>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{task.status}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="pt-2">
-                  <Link href="/tasks">
-                    <Button variant="ghost" className="w-full rounded-xl">
-                      View All Tasks
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Team Attendance Overview */}
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Team Attendance</CardTitle>
-                <CardDescription className="text-sm">Today&apos;s attendance overview</CardDescription>
-              </div>
-              <Users className="h-5 w-5 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {data.teamAttendance.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-sm text-muted-foreground">No attendance data</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {data.teamAttendance.map((item) => (
-                  <div key={item.status} className="flex items-center justify-between p-3 rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <div className={`h-2 w-2 rounded-full ${
-                        item.status === 'Present' ? 'bg-green-500' : 
-                        item.status === 'Absent' ? 'bg-red-500' :
-                        item.status === 'HalfDay' ? 'bg-orange-500' : 'bg-yellow-500'
-                      }`} />
-                      <span className="font-medium">{item.status}</span>
-                    </div>
-                    <Badge variant="secondary" className="text-sm">
-                      {item._count.status}
-                    </Badge>
-                  </div>
-                ))}
-                <Separator />
-                <Link href="/attendance">
-                  <Button variant="ghost" className="w-full rounded-xl">
-                    View All Attendance
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Assigned by Me */}
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Assigned by Me</CardTitle>
-                <CardDescription className="text-sm">Tasks I assigned to others</CardDescription>
-              </div>
-              <CheckSquare2 className="h-5 w-5 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {data.assignedByMeTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-sm text-muted-foreground">No tasks assigned by you</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Assigned To</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.assignedByMeTasks.map((task) => (
-                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
-                        <TableCell>
-                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
-                            {task.title}
-                          </Link>
-                          {task.Client && (
-                            <p className="text-xs text-muted-foreground">{task.Client.name}</p>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {task.User_Task_assignedToIdToUser?.name || 'Unassigned'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{task.status}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="pt-2">
-                  <Link href="/tasks?assignedByMe=true">
-                    <Button variant="ghost" className="w-full rounded-xl">
-                      View All Tasks
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Client Workload */}
-      <Card className="rounded-xl border shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg">Client Workload</CardTitle>
-              <CardDescription className="text-sm">Overview of client tasks</CardDescription>
-            </div>
-            <Briefcase className="h-5 w-5 text-muted-foreground" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {data.clientWorkload.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <Briefcase className="h-12 w-12 text-muted-foreground/50 mb-4" />
-              <p className="text-sm text-muted-foreground">No client data available</p>
-            </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel
+          title="Due today"
+          description={data.todaysTasks.length ? 'Finish these before the day ends' : 'Nothing left that is due today'}
+          icon={Calendar}
+          href="/tasks"
+          actionLabel="Open tasks"
+          tone={data.todaysTasks.length ? 'warning' : 'default'}
+        >
+          {data.todaysTasks.length === 0 ? (
+            <EmptyState icon={Calendar} title="Nothing due today" hint="The day is clear. New work will show up here." />
           ) : (
-            <div className="space-y-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Client Name</TableHead>
-                    <TableHead>Tasks</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.clientWorkload.map((client) => (
-                    <TableRow key={client.id} className="cursor-pointer hover:bg-muted/50">
-                      <TableCell>
-                        <Link href={`/clients/${client.id}`} className="font-medium hover:underline">
-                          {client.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{client._count.Task}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <div className="pt-2">
-                <Link href="/clients">
-                  <Button variant="ghost" className="w-full rounded-xl">
-                    View All Clients
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
+            <div className="space-y-2">
+              {data.todaysTasks.map((task) => (
+                <TaskLinkRow
+                  key={task.id}
+                  href={`/tasks/${task.id}`}
+                  tone="warning"
+                  title={task.title}
+                  meta={taskMeta(task)}
+                  badges={<StatusBadge value={task.status} />}
+                />
+              ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </Panel>
 
-      {/* Task Status Timeline */}
+        <Panel title="Latest work" description="Tasks added most recently" icon={CheckSquare2} href="/tasks" actionLabel="Open tasks">
+          {data.recentTasks.length === 0 ? (
+            <EmptyState icon={CheckSquare2} title="No recent tasks" hint="Assigned work will land here." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {data.recentTasks.map((task) => (
+                <TaskLinkRow
+                  key={task.id}
+                  href={`/tasks/${task.id}`}
+                  title={task.title}
+                  meta={taskMeta(task)}
+                  badges={<StatusBadge value={task.status} />}
+                />
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        <Panel title="Who is in" description="Today's attendance at a glance" icon={Users} href="/attendance" actionLabel="Open attendance">
+          {data.teamAttendance.length === 0 ? (
+            <EmptyState icon={Users} title="No check-ins yet" hint="Attendance updates as the team clocks in." />
+          ) : (
+            <div className="space-y-3 px-2 py-1">
+              {data.teamAttendance.map((item) => {
+                const count = item._count.status
+                const width = attendanceTotal ? Math.max(8, Math.round((count / attendanceTotal) * 100)) : 0
+                return (
+                  <div key={item.status} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <StatusBadge value={item.status} />
+                      <span className="text-sm font-medium tabular-nums">{count}</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className={`h-full rounded-full ${ATTENDANCE_BAR[item.status] || 'bg-slate-400'}`}
+                        style={{ width: `${width}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Panel>
+
+        <Panel
+          title="Assigned by you"
+          description="Work you handed to the team"
+          icon={CheckSquare2}
+          href="/tasks?assignedByMe=true"
+          actionLabel="See everything you assigned"
+        >
+          {data.assignedByMeTasks.length === 0 ? (
+            <EmptyState icon={CheckSquare2} title="You have not assigned anything yet" hint="Tasks you create for others will show up here." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {data.assignedByMeTasks.map((task) => (
+                <TaskLinkRow
+                  key={task.id}
+                  href={`/tasks/${task.id}`}
+                  title={task.title}
+                  meta={taskMeta(task)}
+                  badges={<StatusBadge value={task.status} />}
+                />
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      <Panel title="Client workload" description="Where the current work is sitting" icon={Briefcase} href="/clients" actionLabel="Open clients">
+        {data.clientWorkload.length === 0 ? (
+          <EmptyState icon={Briefcase} title="No clients yet" hint="Add a client to start tracking their work." />
+        ) : (
+          <div className="grid gap-1 sm:grid-cols-2">
+            {data.clientWorkload.map((client) => (
+              <Link
+                key={client.id}
+                href={`/clients/${client.id}`}
+                className="rounded-xl px-3 py-2.5 transition hover:bg-slate-50"
+              >
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate font-medium">{client.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{client._count.Task} tasks</span>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-violet-500"
+                    style={{ width: `${Math.max(6, (client._count.Task / workloadMax) * 100)}%` }}
+                  />
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </Panel>
+
       <TaskStatusTimeline />
     </div>
   )
 }
-

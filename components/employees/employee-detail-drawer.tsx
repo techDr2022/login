@@ -12,10 +12,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Edit, Trash2, TrendingUp, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
+import { Edit, Trash2, CheckCircle2 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -71,6 +71,7 @@ interface Employee {
   email: string
   payslipEmail?: string | null
   jobTitle?: string | null
+  department?: string | null
   role: string
   isActive: boolean
   createdAt: string
@@ -318,6 +319,9 @@ export function EmployeeDetailDrawer({
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 {details?.employee?.jobTitle || employee.jobTitle || 'Designation not set'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Department: {details?.employee?.department || employee.department || 'Unassigned'}
               </p>
               <p className="text-sm text-muted-foreground">
                 Employee ID: {details?.employee?.employeeCode || employee.employeeCode || '---'}

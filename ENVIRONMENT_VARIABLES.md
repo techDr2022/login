@@ -260,12 +260,12 @@ npx prisma migrate dev
 
 ## Optional: WhatsApp Notifications
 
-These variables are **optional**. If not set, WhatsApp notifications for task assignments will be disabled.
+These variables are **optional**. If not set, WhatsApp notifications will be disabled.
 
 ### When to use WhatsApp notifications:
-- Want to notify employees immediately when tasks are assigned
-- Need real-time task assignment notifications
-- Employees prefer WhatsApp over email
+- Attendance clock-in and clock-out alerts
+- Attendance reminders and payment reminders
+- Invoice messages
 
 ### WhatsApp Variables:
 
@@ -277,7 +277,7 @@ TWILIO_AUTH_TOKEN="your-twilio-auth-token"
 TWILIO_WHATSAPP_FROM="+1234567890"  # Your Twilio WhatsApp number (without whatsapp: prefix)
 
 # Optional: For production, use WhatsApp Message Templates (recommended)
-TWILIO_WHATSAPP_TEMPLATE_SID="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Content Template SID for task notifications
+TWILIO_WHATSAPP_TEMPLATE_SID="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Default Content Template SID
 TWILIO_USE_TEMPLATE="true"  # Set to "true" to use templates instead of freeform messages
 
 # Optional: Attendance-specific templates (for clock in/out notifications)
@@ -364,7 +364,7 @@ WHATSAPP_PROVIDER="none"
 - This means freeform messages can't be sent (24h window expired)
 - **Solution:** Set up a WhatsApp Message Template:
   1. Go to Twilio Console → Messaging → Content Templates
-  2. Create a template for task notifications
+  2. Create a template for the notification
   3. Get the Template SID (starts with `HX...`)
   4. Set `TWILIO_WHATSAPP_TEMPLATE_SID="your-template-sid"`
   5. Set `TWILIO_USE_TEMPLATE="true"`
@@ -377,7 +377,7 @@ WHATSAPP_PROVIDER="none"
 
 ### Attendance Notifications (Clock In/Out):
 
-The system sends WhatsApp notifications to super admins when employees clock in or clock out. These notifications can use separate templates from task notifications.
+The system sends WhatsApp notifications to super admins when employees clock in or clock out. These notifications use their own templates.
 
 **Environment Variables for Attendance:**
 ```env

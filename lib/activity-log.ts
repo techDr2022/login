@@ -6,7 +6,8 @@ export async function logActivity(
   action: string,
   entityType: string,
   entityId: string,
-  description?: string
+  description?: string,
+  change?: { oldvalue?: string | null; newvalue?: string | null }
 ) {
   try {
     await prisma.activity_logs.create({
@@ -16,6 +17,8 @@ export async function logActivity(
         action,
         entityType,
         entityId,
+        oldvalue: change?.oldvalue ?? null,
+        newvalue: change?.newvalue ?? description ?? null,
       },
     })
   } catch (error) {

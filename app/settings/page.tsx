@@ -10,6 +10,7 @@ import { NotificationsSettings } from '@/components/settings/notifications-setti
 import { PhoneNumberForm } from '@/components/settings/phone-number-form'
 import { SubscriptionSettings } from '@/components/settings/subscription-settings'
 import { ProfileForm } from '@/components/settings/profile-form'
+import { AdminEngineCard } from '@/components/engine/admin-engine-card'
 import { prisma } from '@/lib/prisma'
 
 export default async function SettingsPage() {
@@ -21,16 +22,24 @@ export default async function SettingsPage() {
   const user = session.user
   
   // Fetch user profile details from database
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      name: true,
-      email: true,
-      jobTitle: true,
-      phoneNumber: true,
-      joiningDate: true,
-    },
-  })
+  const [dbUser, engineFlag, boardToken] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        name: true,
+        email: true,
+        jobTitle: true,
+        phoneNumber: true,
+        joiningDate: true,
+      },
+    }),
+    user.role === 'SUPER_ADMIN'
+      ? prisma.appsetting.findUnique({ where: { id: 'NEW_ENGINE_ENABLED' } })
+      : Promise.resolve(null),
+    user.role === 'SUPER_ADMIN'
+      ? prisma.appsetting.findUnique({ where: { id: 'PUBLIC_BOARD_TOKEN' } })
+      : Promise.resolve(null),
+  ])
 
   return (
     <LayoutWrapper>
@@ -75,6 +84,15 @@ export default async function SettingsPage() {
         </Card>
 
         <SubscriptionSettings />
+
+        {user.role === 'SUPER_ADMIN' && (
+          <Card className="p-6">
+            <AdminEngineCard
+              enabled={engineFlag?.value === 'true'}
+              boardPath={boardToken ? `${process.env.NEXTAUTH_URL || ''}/board/${boardToken.value}` : 'Token missing'}
+            />
+          </Card>
+        )}
       </div>
     </LayoutWrapper>
   )

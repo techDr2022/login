@@ -74,8 +74,8 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
     throw new Error('Only super admins can view invoices')
   }
 
-  // Fetch all clients so the invoices tab can show and manage invoice data for every client.
-  // Note: We cast this query to `any` because the local Prisma TS types can lag behind schema/migrations in some setups.
+  // Paused clients stay off the invoices list. The cast covers Prisma types that lag the schema.
+  const where = { status: { not: 'PAUSED' as const } }
   const baseSelect = {
     id: true,
     name: true,
@@ -116,6 +116,7 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
   let clients: any[]
   try {
     clients = (await prisma.client.findMany({
+      where,
       select: {
         ...baseSelect,
         adsBudget: true,
@@ -128,6 +129,7 @@ export async function getClientInvoices(): Promise<ClientInvoice[]> {
     }
 
     clients = (await prisma.client.findMany({
+      where,
       select: baseSelect as any,
       orderBy: orderBy as any,
     } as any)) as any[]

@@ -19,9 +19,13 @@ import {
   X,
   ChevronLeft,
   Palette,
+  Repeat,
   Receipt,
   Video,
   Inbox,
+  CalendarClock,
+  Hourglass,
+  Link2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react'
@@ -38,6 +42,9 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/designer', label: 'Designer Workspace', icon: Palette },
   { href: '/tasks', label: 'Tasks', icon: CheckSquare },
+  { href: '/my-day', label: 'My Day', icon: CalendarClock },
+  { href: '/waiting', label: 'Waiting on Me', icon: Hourglass },
+  { href: '/blocked', label: "I'm Waiting On", icon: Link2 },
   { href: '/clients', label: 'Clients', icon: Users },
   { href: '/client-requests', label: 'Client requests', icon: Inbox },
   { href: '/employees', label: 'Employees', icon: UserCog, roles: [UserRole.SUPER_ADMIN] },
@@ -46,6 +53,7 @@ const navItems: NavItem[] = [
   { href: '/invoices', label: 'Invoices', icon: Receipt, roles: [UserRole.SUPER_ADMIN] },
   { href: '/videos', label: 'Videos', icon: Video, roles: [UserRole.SUPER_ADMIN] },
   { href: '/reports', label: 'Reports', icon: BarChart3, roles: [UserRole.SUPER_ADMIN] },
+  { href: '/automation', label: 'Automation', icon: Repeat, roles: [UserRole.SUPER_ADMIN, UserRole.MANAGER] },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 

@@ -25,7 +25,7 @@ import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import { generateInitialTasksForClient } from './client-actions'
 
-// Helper to check authorization for managing clients (update/delete - SUPER_ADMIN only)
+// Helper to check authorization for managing clients (staff only)
 async function checkAuth() {
   const session = await getServerSession(authOptions)
   if (!session) throw new Error('Unauthorized')
@@ -35,7 +35,7 @@ async function checkAuth() {
   return session
 }
 
-// Helper to check authorization for onboarding operations (create/update onboarding - SUPER_ADMIN and EMPLOYEE)
+// Helper to check authorization for onboarding operations (staff only)
 async function checkOnboardingAuth() {
   const session = await getServerSession(authOptions)
   if (!session) throw new Error('Unauthorized')

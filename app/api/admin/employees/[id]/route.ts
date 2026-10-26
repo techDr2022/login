@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole, TaskStatus } from '@prisma/client'
 import { buildEmployeeCodeMap } from '@/lib/employee-code'
+import { isEmployeeDepartment } from '@/lib/employee-departments'
 
 // GET /api/admin/employees/[id] - Get employee details with performance data
 export async function GET(
@@ -32,6 +33,7 @@ export async function GET(
         email: true,
         payslipEmail: true,
         jobTitle: true,
+        department: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -171,7 +173,18 @@ export async function PUT(
 
     const { id } = await context.params
     const body = await request.json()
-    const { name, email, payslipEmail, jobTitle, role, isActive, joiningDate, adminNotes, phoneNumber } = body
+    const {
+      name,
+      email,
+      payslipEmail,
+      jobTitle,
+      department,
+      role,
+      isActive,
+      joiningDate,
+      adminNotes,
+      phoneNumber,
+    } = body
     const trimmedEmail = email !== undefined ? String(email).trim().toLowerCase() : undefined
     const trimmedPayslipEmail =
       payslipEmail !== undefined
@@ -210,6 +223,12 @@ export async function PUT(
       }
       updateData.jobTitle = trimmedJobTitle
     }
+    if (department !== undefined) {
+      if (!isEmployeeDepartment(department)) {
+        return NextResponse.json({ error: 'A valid department is required' }, { status: 400 })
+      }
+      updateData.department = department
+    }
     if (role !== undefined) updateData.role = role as UserRole
     if (isActive !== undefined) updateData.isActive = isActive
     if (joiningDate !== undefined)
@@ -226,6 +245,7 @@ export async function PUT(
         email: true,
         payslipEmail: true,
         jobTitle: true,
+        department: true,
         role: true,
         isActive: true,
         createdAt: true,

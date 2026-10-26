@@ -1,0 +1,4140 @@
+{
+  "app": "EXISTING app – amend, do not rebuild",
+  "teams": [
+    "Management",
+    "Coordination",
+    "Marketing",
+    "Website",
+    "Design & Video"
+  ],
+  "people": [
+    {
+      "name": "Abhista",
+      "team": "Management",
+      "role": "Admin",
+      "main_work": "Monitors everything; approves plans, audits, payments; receives escalations",
+      "escalates_to": ""
+    },
+    {
+      "name": "Raviteja",
+      "team": "Management",
+      "role": "Admin",
+      "main_work": "Monitors everything; approves plans, audits, payments; receives escalations",
+      "escalates_to": ""
+    },
+    {
+      "name": "Shaheena",
+      "team": "Coordination",
+      "role": "Coordinator",
+      "main_work": "Coordinator + Content Writer + Account Manager (assumed)",
+      "escalates_to": "Abhista, Raviteja"
+    },
+    {
+      "name": "Gouthami",
+      "team": "Marketing",
+      "role": "Member",
+      "main_work": "GMB, social, ads, reports, onboarding",
+      "escalates_to": "Shaheena"
+    },
+    {
+      "name": "Ayesha",
+      "team": "Marketing",
+      "role": "Member",
+      "main_work": "GMB, social, ads, reports, onboarding",
+      "escalates_to": "Shaheena"
+    },
+    {
+      "name": "Raghu",
+      "team": "Website",
+      "role": "Member",
+      "main_work": "Website developer",
+      "escalates_to": "Shaheena"
+    },
+    {
+      "name": "Dileep",
+      "team": "Design & Video",
+      "role": "Member",
+      "main_work": "Video shoots, edits, thumbnails",
+      "escalates_to": "Shaheena"
+    },
+    {
+      "name": "Rohit",
+      "team": "Design & Video",
+      "role": "Member",
+      "main_work": "Posters, video edits, thumbnails",
+      "escalates_to": "Shaheena"
+    },
+    {
+      "name": "Bhavya",
+      "team": "Design & Video",
+      "role": "Member",
+      "main_work": "Posters, animated videos (assumed)",
+      "escalates_to": "Shaheena"
+    },
+    {
+      "name": "Chaithanya",
+      "team": "Design & Video",
+      "role": "Member",
+      "main_work": "Posters, animated videos, ad creatives",
+      "escalates_to": "Shaheena"
+    }
+  ],
+  "task_templates": [
+    {
+      "id": "SHA-S1",
+      "title": "Client communication on WhatsApp groups",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Coordination",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Several times daily",
+      "repeat": "Daily",
+      "time_or_day": "10 AM / 2 PM / 5 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Client",
+      "input_needed": "Client messages & requests",
+      "hand_off_to": "Relevant team member",
+      "done_when": "All client messages answered same day",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Shaheena's board",
+      "notes": "Single owner – Marketing duplicate removed"
+    },
+    {
+      "id": "SHA-S2",
+      "title": "Assign tasks to team",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Coordination",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "New request from client or Admins (Abhista, Raviteja)",
+      "repeat": "Daily",
+      "time_or_day": "10:00–11:00 AM",
+      "depends_on": {
+        "ids": [
+          "SHA-S1"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Assigned person",
+      "done_when": "Every request has owner & due date",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Shaheena's board",
+      "notes": "Single owner – Marketing duplicate removed"
+    },
+    {
+      "id": "SHA-S7",
+      "title": "Coordinate with team & escalate delayed work",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Coordination",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "4:00 PM",
+      "depends_on": {
+        "ids": [
+          "SHA-S2"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Admins (Abhista, Raviteja)",
+      "done_when": "Overdue tasks escalated",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Shaheena's board",
+      "notes": "Suggest rule: escalate if overdue by 1 day"
+    },
+    {
+      "id": "SHA-S5",
+      "title": "Track videos",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Coordination",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Design & Video Team",
+      "input_needed": "Video status",
+      "hand_off_to": "",
+      "done_when": "Video tracker updated",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Shaheena's board",
+      "notes": "Single owner – Marketing duplicate removed"
+    },
+    {
+      "id": "SHA-S6",
+      "title": "Check client profiles if needed",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Coordination",
+      "trigger_type": "On Event",
+      "starts_when": "Request or issue on a profile",
+      "repeat": "On event",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Profile checked & issue logged",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Shaheena's board",
+      "notes": ""
+    },
+    {
+      "id": "SHA-S3",
+      "title": "Write website content (service pages, doctor profile)",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Dependent",
+      "starts_when": "New client onboarded",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "MKT-M19"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha) + Client",
+      "input_needed": "Client details (M19), doctor's resume, services list",
+      "hand_off_to": "Raghu (Developer)",
+      "done_when": "Content approved & sent to Raghu (W2)",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Shaheena's board",
+      "notes": ""
+    },
+    {
+      "id": "SHA-S4",
+      "title": "Write social media content (captions & post copy)",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Dependent",
+      "starts_when": "Monthly plan & client inputs ready",
+      "repeat": "Monthly",
+      "time_or_day": "By 10th",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "MKT-X2"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha)",
+      "input_needed": "Client's offers/events for next month (X2)",
+      "hand_off_to": "Design & Video Team + Marketing (Gouthami & Ayesha)",
+      "done_when": "Next month's copy with Design team",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Shaheena's board",
+      "notes": "Needed so designs are ready by 15th"
+    },
+    {
+      "id": "SHA-S8",
+      "title": "New ideas & creative concepts",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Marketing (Gouthami & Ayesha) + Design & Video Team",
+      "done_when": "Ideas shared in team review",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Shaheena's board",
+      "notes": ""
+    },
+    {
+      "id": "SHA-S9",
+      "title": "Backup for video editing, poster design & social media work",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Backup (Joker)",
+      "trigger_type": "Dependent",
+      "starts_when": "Someone absent or overloaded",
+      "repeat": "On event",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Admins (Abhista, Raviteja)",
+      "input_needed": "Task handed over",
+      "hand_off_to": "",
+      "done_when": "Backup task completed",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Shaheena's board",
+      "notes": "Admins (Abhista, Raviteja) assigns; log so it's not counted against her main work"
+    },
+    {
+      "id": "SHA-C1",
+      "title": "Write blogs for client websites",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Raghu (Developer)",
+      "done_when": "Blog sent to Raghu (his W9)",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": true,
+      "source": "Added – other boards",
+      "notes": "Frequency assumed weekly"
+    },
+    {
+      "id": "SHA-C2",
+      "title": "Write off-page SEO articles",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Raghu (Developer)",
+      "done_when": "Article sent to Raghu (his S2)",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Added – other boards",
+      "notes": "Frequency assumed weekly"
+    },
+    {
+      "id": "SHA-C3",
+      "title": "Write LinkedIn articles",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "Article sent to Marketing (their M7)",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Added – other boards",
+      "notes": "Frequency assumed weekly"
+    },
+    {
+      "id": "SHA-C4",
+      "title": "Write GMB liners",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every month",
+      "repeat": "Monthly",
+      "time_or_day": "By 28th",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "Liners ready before Marketing's 1st deadline",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Added – other boards",
+      "notes": "Shaheena writes, Marketing posts (MKT-M10)"
+    },
+    {
+      "id": "SHA-C5",
+      "title": "Write case studies from client pictures",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Dependent",
+      "starts_when": "Marketing collects case study pics (Thursday)",
+      "repeat": "Weekly",
+      "time_or_day": "Friday",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "MKT-A3"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha)",
+      "input_needed": "Case study pictures & details",
+      "hand_off_to": "Marketing (Gouthami & Ayesha) + Raghu (Developer)",
+      "done_when": "Case study written",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Added – other boards",
+      "notes": ""
+    },
+    {
+      "id": "SHA-C6",
+      "title": "Content for website updates",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Dependent",
+      "starts_when": "Update request received",
+      "repeat": "On event",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha) / Client",
+      "input_needed": "Update details",
+      "hand_off_to": "Raghu (Developer)",
+      "done_when": "Content sent to Raghu (his M1)",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Added – other boards",
+      "notes": ""
+    },
+    {
+      "id": "SHA-X1",
+      "title": "Write video scripts for shoots",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Dependent",
+      "starts_when": "Shoot scheduled by Marketing (M16)",
+      "repeat": "Per shoot",
+      "time_or_day": "2 days before shoot",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "MKT-M16"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha)",
+      "input_needed": "Shoot date & topic",
+      "hand_off_to": "Design & Video Team",
+      "done_when": "Script approved",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Shoots go smoother with a ready script"
+    },
+    {
+      "id": "SHA-X2",
+      "title": "Get client approval on content before handing over",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Dependent",
+      "starts_when": "Content draft ready",
+      "repeat": "Per piece",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "SHA-S3",
+          "SHA-S4"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Client",
+      "input_needed": "Approval",
+      "hand_off_to": "Raghu (Developer) / Design & Video Team",
+      "done_when": "Approved content handed over",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Avoids rework after design/development"
+    },
+    {
+      "id": "SHA-X3",
+      "title": "Doctor review of medical claims in content",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Dependent",
+      "starts_when": "Content has treatment or health claims",
+      "repeat": "Per piece",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Client",
+      "input_needed": "Doctor's sign-off",
+      "hand_off_to": "",
+      "done_when": "No unverified health claims",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "SHA-X4",
+      "title": "SEO keyword check for website content & blogs",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Before sending content",
+      "repeat": "Per piece",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Target keywords included",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Use Marketing's keyword ranking list (M11)"
+    },
+    {
+      "id": "SHA-X5",
+      "title": "Proofread all content",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Before handover",
+      "repeat": "Per piece",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "No spelling/grammar errors",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "SHA-X6",
+      "title": "Maintain content library per client (tone, services, past posts)",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "After each delivery",
+      "repeat": "Ongoing",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Library up to date",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "SHA-X7",
+      "title": "Reels / content trend research",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Content Writing",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Marketing (Gouthami & Ayesha) + Design & Video Team",
+      "done_when": "Trends shared with S8 ideas",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "SHA-X8",
+      "title": "End-of-day status update to Admins (Abhista, Raviteja)",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Coordination",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "6:00 PM",
+      "depends_on": {
+        "ids": [
+          "SHA-S7"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Admins (Abhista, Raviteja)",
+      "done_when": "Pending & escalated items shared",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "SHA-AM1",
+      "title": "Send website preview to client & collect changes",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Website Projects",
+      "trigger_type": "Dependent",
+      "starts_when": "Raghu's internal audit passed (RAG-W5)",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "RAG-W5"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Raghu (Developer) + Client",
+      "input_needed": "Preview link; client's changes",
+      "hand_off_to": "Raghu",
+      "done_when": "Client's change list or approval sent to Raghu",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Added – master",
+      "notes": "Shaheena acts as Account Manager (assumed)"
+    },
+    {
+      "id": "SHA-AM2",
+      "title": "Get domain confirmation from client",
+      "team": "Coordination",
+      "default_assignees": [
+        "Shaheena"
+      ],
+      "section": "Website Projects",
+      "trigger_type": "Dependent",
+      "starts_when": "Client approves website (RAG-W6)",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "RAG-W6"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Raghu (Developer) + Client",
+      "input_needed": "Domain name & access",
+      "hand_off_to": "Raghu",
+      "done_when": "Domain confirmed & access shared with Raghu",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Added – master",
+      "notes": "Shaheena acts as Account Manager (assumed)"
+    },
+    {
+      "id": "MKT-DS1",
+      "title": "Check Marketing requests & reply to ads / GMB / social queries",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "10:00 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "10:00–11:00 AM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Requests assigned to the right person",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-DS2",
+      "title": "Send reminders & check message alerts",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "11:00 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "11:00–11:30 AM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Reminders sent",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-DS3",
+      "title": "Review responses",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "11:30 AM every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "11:30 AM–12:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Responses reviewed",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-DS4",
+      "title": "Follow up on team's work, get approval & update client",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "2:00 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "2:00–2:30 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Clients updated",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-DS5",
+      "title": "Follow up on given creatives & get changes done",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "2:30 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "2:30–4:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Changes closed",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-DS6",
+      "title": "Coordinate with team for work",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "4:00 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "4:00–4:30 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Team aligned for tomorrow",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-DS7",
+      "title": "Plan for tomorrow & take approval",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Dependent",
+      "starts_when": "6:00 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "6:00–6:30 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Admins (Abhista, Raviteja)",
+      "input_needed": "Approval of plan",
+      "hand_off_to": "",
+      "done_when": "Plan approved",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M19",
+      "title": "Take onboarding details from new client",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Dependent",
+      "starts_when": "Admins (Abhista, Raviteja) confirms new client signed",
+      "repeat": "Per new client",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Admins (Abhista, Raviteja) / Client",
+      "input_needed": "Signed client, business details, photos, logins (GMB, socials)",
+      "hand_off_to": "Raghu (Developer), Shaheena (Content Writer), Design & Video Team",
+      "done_when": "Onboarding sheet complete & shared",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": "This is Raghu's W1 input"
+    },
+    {
+      "id": "MKT-M13",
+      "title": "Review reminders to clients",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every Monday",
+      "repeat": "Weekly",
+      "time_or_day": "Monday",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Reminder sent to all clients",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-A1",
+      "title": "Ask clients for photos",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every Tuesday",
+      "repeat": "Weekly",
+      "time_or_day": "Tuesday",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Design & Video Team",
+      "done_when": "Photos received & shared with Design team",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Added – main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-A2",
+      "title": "Performance review calls with clients",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every Wednesday",
+      "repeat": "Weekly",
+      "time_or_day": "Wednesday",
+      "depends_on": {
+        "ids": [
+          "MKT-M20"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Calls done",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Added – main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-A3",
+      "title": "Ask clients for case study pictures",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every Thursday",
+      "repeat": "Weekly",
+      "time_or_day": "Thursday",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Shaheena (Content Writer)",
+      "done_when": "Pictures received",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Added – main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-A4",
+      "title": "Client communication reminders",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every Saturday",
+      "repeat": "Weekly",
+      "time_or_day": "Saturday",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Pending items reminded",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Added – main board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M3",
+      "title": "Upload creatives & videos with alt text",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Dependent",
+      "starts_when": "Approved creative/video received",
+      "repeat": "Per post",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M14"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "DV-V3",
+          "DV-P1"
+        ],
+        "mode": "any"
+      },
+      "input_from": "Design & Video Team + Client",
+      "input_needed": "Final creatives/videos (Design team) + client approval",
+      "hand_off_to": "",
+      "done_when": "Posted with alt text",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M4",
+      "title": "Track social media accounts",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Growth & engagement logged",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M7",
+      "title": "Post LinkedIn articles",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Dependent",
+      "starts_when": "Shaheena delivers article",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-C3"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Shaheena (Content Writer)",
+      "input_needed": "Article content",
+      "hand_off_to": "",
+      "done_when": "Article published",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Marketing board",
+      "notes": "Frequency assumed weekly"
+    },
+    {
+      "id": "MKT-M14",
+      "title": "Schedule monthly posts & videos (after client confirmation)",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Dependent",
+      "starts_when": "Designs ready (15th) & client confirms (20th)",
+      "repeat": "Monthly",
+      "time_or_day": "By 25th",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "DV-P1"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Design & Video Team + Client",
+      "input_needed": "Next month's designs; client approval",
+      "hand_off_to": "",
+      "done_when": "All next-month posts scheduled",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": true,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M16",
+      "title": "Schedule shoots",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Dependent",
+      "starts_when": "Client confirms date",
+      "repeat": "As needed",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Client",
+      "input_needed": "Shoot date & availability",
+      "hand_off_to": "Design & Video Team",
+      "done_when": "Shoot booked & video team informed",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M6",
+      "title": "Send updated links to developer for website",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "After M3 / new content goes live",
+      "repeat": "As needed",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M3"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Raghu (Developer)",
+      "done_when": "Raghu has links",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": "Feeds Raghu's M1 (website updates)"
+    },
+    {
+      "id": "MKT-M8",
+      "title": "GMB, Facebook, YouTube, Instagram & LinkedIn profile optimisation",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "GMB",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Weekly / when ranking drops",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M11"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Profiles optimised",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Marketing board",
+      "notes": "Frequency assumed weekly"
+    },
+    {
+      "id": "MKT-M10",
+      "title": "Prepare GMB liners (post captions)",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "GMB",
+      "trigger_type": "Dependent",
+      "starts_when": "Shaheena delivers liners",
+      "repeat": "Monthly",
+      "time_or_day": "By 1st",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-C4"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Shaheena",
+      "input_needed": "Liners text if Shaheena writes them",
+      "hand_off_to": "",
+      "done_when": "Liners schedule complete",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": "Shaheena writes (SHA-C4), Marketing posts"
+    },
+    {
+      "id": "MKT-M11",
+      "title": "Check profile ranking for keywords",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "GMB",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Rankings logged, low performers flagged",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M15",
+      "title": "Monitor GMB",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "GMB",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "All GMBs checked",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M18",
+      "title": "Reply to GMB queries",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "GMB",
+      "trigger_type": "On Event",
+      "starts_when": "New query on GMB",
+      "repeat": "On event",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M15"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Replied same day",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M17",
+      "title": "Escalate negative reviews",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "GMB",
+      "trigger_type": "On Event",
+      "starts_when": "Negative review found",
+      "repeat": "On event",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M15"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Admins (Abhista, Raviteja) / Client",
+      "done_when": "Escalated within the day",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M5",
+      "title": "Run Meta Ads & Google Ads",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Ads",
+      "trigger_type": "Dependent",
+      "starts_when": "Ad creatives & budget approved",
+      "repeat": "Weekly (Friday review)",
+      "time_or_day": "Friday",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "DV-C1"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Design & Video Team + Client",
+      "input_needed": "Ad creatives; client budget approval",
+      "hand_off_to": "",
+      "done_when": "Campaigns live & monitored",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M20",
+      "title": "Track performance & send to client",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Reports",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "Before Wednesday calls",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "RAG-M4",
+          "RAG-A4"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Raghu (Developer)",
+      "input_needed": "Website & appointment reports",
+      "hand_off_to": "Client",
+      "done_when": "Report sent to client",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": ""
+    },
+    {
+      "id": "MKT-M12",
+      "title": "Monthly reports of everything",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Reports",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Monthly",
+      "repeat": "Monthly",
+      "time_or_day": "By 8th",
+      "depends_on": {
+        "ids": [
+          "MKT-M20"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "RAG-M4",
+          "RAG-A4"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Raghu (Developer) + Design & Video Team",
+      "input_needed": "Website, ads, social & GMB data",
+      "hand_off_to": "Client",
+      "done_when": "All client reports sent",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Marketing board",
+      "notes": "Main board: reports due on 8th"
+    },
+    {
+      "id": "MKT-X1",
+      "title": "Send monthly content brief to Design & Video team",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "After client strategy input",
+      "repeat": "Monthly",
+      "time_or_day": "By 10th",
+      "depends_on": {
+        "ids": [
+          "MKT-X2"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Design & Video Team",
+      "done_when": "Brief shared so designs are ready by 15th",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Designers can't start next month without this"
+    },
+    {
+      "id": "MKT-X2",
+      "title": "Monthly content planning check-in with client (offers, events, new services)",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every month",
+      "repeat": "Monthly",
+      "time_or_day": "By 5th",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Client inputs noted",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X3",
+      "title": "Chase pending post approvals",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "3 days after posts sent (20th)",
+      "repeat": "Monthly",
+      "time_or_day": "23rd",
+      "depends_on": {
+        "ids": [
+          "MKT-M14"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Client",
+      "input_needed": "Approval",
+      "hand_off_to": "",
+      "done_when": "All clients approved",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X4",
+      "title": "Follow up on pending payments",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Admins (Abhista, Raviteja)",
+      "done_when": "Pending list updated & shared with Admins (Abhista, Raviteja)",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Was on your weekly goals"
+    },
+    {
+      "id": "MKT-X5",
+      "title": "Contract renewal reminders",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "30 days before renewal date",
+      "repeat": "Monthly check",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Admins (Abhista, Raviteja)",
+      "done_when": "Renewals flagged to Admins (Abhista, Raviteja)",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X6",
+      "title": "Client satisfaction check",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Client Communication",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every quarter",
+      "repeat": "Quarterly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Feedback logged & issues raised",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X7",
+      "title": "Health awareness days & festival calendar for posts",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every month",
+      "repeat": "Monthly",
+      "time_or_day": "By 5th",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Design & Video Team",
+      "done_when": "Key days added to next month's plan",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "e.g. World Heart Day, Diabetes Day – useful for clinic clients"
+    },
+    {
+      "id": "MKT-X8",
+      "title": "Reply to comments & DMs on all client pages",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "No comment/DM left unanswered",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X9",
+      "title": "Medical content compliance check before posting",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Before every upload",
+      "repeat": "Per post",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "No banned claims, patient photos have consent",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Ad platforms and medical guidelines restrict health claims and testimonials"
+    },
+    {
+      "id": "MKT-X10",
+      "title": "Store approved creatives & logins in shared drive",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Social Media & Content",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "After upload / onboarding",
+      "repeat": "Per post",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M3"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Files & access saved",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X11",
+      "title": "Post weekly GMB updates & photos",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "GMB",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M10"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Each GMB has a fresh post",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X12",
+      "title": "Reply to all Google reviews (positive & negative)",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "GMB",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "11:30 AM–12:00 PM",
+      "depends_on": {
+        "ids": [
+          "MKT-M15"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "All new reviews answered",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X13",
+      "title": "Update GMB hours, holidays & services",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "GMB",
+      "trigger_type": "On Event",
+      "starts_when": "Client informs change / holiday",
+      "repeat": "On event",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Client",
+      "input_needed": "New timings or services",
+      "hand_off_to": "",
+      "done_when": "GMB info correct",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X14",
+      "title": "Daily ad spend & performance check",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Ads",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M5"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Spend on track, poor ads paused",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X15",
+      "title": "Send ad leads to client / clinic",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Ads",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M5"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Client",
+      "done_when": "All leads forwarded same day",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Leads go cold fast for clinics"
+    },
+    {
+      "id": "MKT-X16",
+      "title": "Monthly ad budget approval & creative refresh",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Ads",
+      "trigger_type": "Dependent",
+      "starts_when": "Start of month",
+      "repeat": "Monthly",
+      "time_or_day": "By 1st",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Client + Design & Video Team",
+      "input_needed": "Budget approval; new ad creatives",
+      "hand_off_to": "",
+      "done_when": "Budget & creatives approved",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X17",
+      "title": "Track follower growth vs 20% target",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Reports",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M4"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Growth % logged per client",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X18",
+      "title": "Flag low-performing clients with action plan",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Reports",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "After weekly ranking & growth check",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "MKT-M11"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Admins (Abhista, Raviteja)",
+      "done_when": "Action plan shared with Admins (Abhista, Raviteja)",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X19",
+      "title": "Competitor tracking",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Reports",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every month",
+      "repeat": "Monthly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Competitor notes added to report",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "MKT-X20",
+      "title": "Weekly internal team review",
+      "team": "Marketing",
+      "default_assignees": [
+        "Gouthami",
+        "Ayesha"
+      ],
+      "section": "Reports",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every Saturday",
+      "repeat": "Weekly",
+      "time_or_day": "Saturday",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Admins (Abhista, Raviteja)",
+      "done_when": "Pending work reviewed with all teams",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "RAG-D1",
+      "title": "Note down new tasks or requests",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "10:00 AM every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "10:00–10:30 AM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-S2"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Shaheena (Coordinator)",
+      "input_needed": "New client requests for website",
+      "hand_off_to": "",
+      "done_when": "All requests logged as tasks",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-D2",
+      "title": "Complete requests",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "10:30 AM every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "10:30 AM–12:00 PM",
+      "depends_on": {
+        "ids": [
+          "RAG-D1"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Today's requests closed or updated",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-D3",
+      "title": "Google Reserve – update appointment booking",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "12:00 PM every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "12:00–1:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Bookings synced on Google",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-D4",
+      "title": "Regular works (builds / maintenance / SEO)",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "2:00 PM every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "2:00–4:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-D5",
+      "title": "Recheck pending edits",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "4:00 PM every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "4:00–5:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "No edits left pending",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-D6",
+      "title": "Regular works (builds / maintenance / SEO)",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "5:00 PM every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "5:00–6:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-D7",
+      "title": "Plan for tomorrow & take approval",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Dependent",
+      "starts_when": "6:00 PM every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "6:00–6:30 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Admins (Abhista, Raviteja)",
+      "input_needed": "Approval of tomorrow's plan",
+      "hand_off_to": "",
+      "done_when": "Plan approved",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-W1",
+      "title": "Collect website details – name, client type, location, phone, photos, social links, GMB",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "New Website Build",
+      "trigger_type": "Dependent",
+      "starts_when": "Shaheena (Coordinator) onboards new client & shares details",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "MKT-M19"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Shaheena (Coordinator)",
+      "input_needed": "Client details, photos, social links, GMB access",
+      "hand_off_to": "",
+      "done_when": "All details received",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": "Client type: Doctor (speciality) / Clinic / Hospital"
+    },
+    {
+      "id": "RAG-W2",
+      "title": "Get service content & doctor's resume",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "New Website Build",
+      "trigger_type": "Dependent",
+      "starts_when": "Shaheena delivers content",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-W1"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-S3"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Shaheena (Content Writer) + Shaheena (Coordinator)",
+      "input_needed": "Service content (Shaheena); doctor's resume & special requirements (Shaheena (Coordinator) from client)",
+      "hand_off_to": "",
+      "done_when": "Content complete",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-W3",
+      "title": "Website layout & service images",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "New Website Build",
+      "trigger_type": "Dependent",
+      "starts_when": "Design team delivers service images",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-W2"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "DV-C3"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Design & Video Team",
+      "input_needed": "Service images",
+      "hand_off_to": "",
+      "done_when": "Layout ready",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-W4",
+      "title": "Development – design, code, meta titles, schema, disclaimer, privacy policy, AEO/GEO/SEO, on-page SEO",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "New Website Build",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "W3 done",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-W3"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Site built on preview link",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-W5",
+      "title": "Internal audit of preview link → edits → updated link",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "New Website Build",
+      "trigger_type": "Dependent",
+      "starts_when": "Preview link shared for audit",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-W4"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Admins (Abhista, Raviteja)",
+      "input_needed": "Audit feedback on preview",
+      "hand_off_to": "",
+      "done_when": "Internal audit passed",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Website board",
+      "notes": "Confirm who does the internal audit"
+    },
+    {
+      "id": "RAG-W6",
+      "title": "Client review → changes → update",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "New Website Build",
+      "trigger_type": "Dependent",
+      "starts_when": "Shaheena (Coordinator) sends preview to client",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-W5"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-AM1"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Shaheena (Coordinator)",
+      "input_needed": "Client's change list & approval",
+      "hand_off_to": "Shaheena (Coordinator)",
+      "done_when": "Client approval received",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-W7",
+      "title": "Domain confirmation → make website live",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "New Website Build",
+      "trigger_type": "Dependent",
+      "starts_when": "Shaheena (Coordinator) confirms domain with client",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-W6"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-AM2"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Shaheena (Coordinator)",
+      "input_needed": "Domain name & access confirmed by client",
+      "hand_off_to": "Shaheena (Coordinator)",
+      "done_when": "Website live on domain",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Website board",
+      "notes": "Hand off: inform Shaheena (Coordinator) site is live"
+    },
+    {
+      "id": "RAG-W8",
+      "title": "Google indexing, Search Console & performance analysis",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "New Website Build",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "W7 done",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-W7"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Indexed & Search Console verified",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-W9",
+      "title": "Publish blogs on a regular basis",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "New Website Build",
+      "trigger_type": "Dependent",
+      "starts_when": "Shaheena delivers blog",
+      "repeat": "Ongoing",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-W8"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-C1"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Shaheena (Content Writer)",
+      "input_needed": "Blog content",
+      "hand_off_to": "",
+      "done_when": "Blog published",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-M1",
+      "title": "Update videos, photos & blogs on website",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Website Maintenance",
+      "trigger_type": "Dependent",
+      "starts_when": "Update received from client or internal team",
+      "repeat": "On request",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-C6",
+          "DV-C4",
+          "MKT-M6"
+        ],
+        "mode": "any"
+      },
+      "input_from": "Shaheena (Coordinator) / Shaheena (Content Writer) / Design & Video Team",
+      "input_needed": "Files or content to update",
+      "hand_off_to": "",
+      "done_when": "Update live on site",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": "Client updates come via Shaheena (Coordinator)"
+    },
+    {
+      "id": "RAG-M2",
+      "title": "Website monitoring – 3 clients",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Website Maintenance",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "All 3 sites checked, issues logged",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-M3",
+      "title": "Check performance & make changes if needed",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Website Maintenance",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Issue found in M2 or weekly check",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-M2"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Changes done or none needed",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Website board",
+      "notes": "Frequency assumed weekly"
+    },
+    {
+      "id": "RAG-M4",
+      "title": "Website performance report",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Website Maintenance",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-M3"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Shaheena (Coordinator)",
+      "done_when": "Report shared with Account Manager",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-A2",
+      "title": "Check online payments",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Appointment Booking",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Payments matched with bookings",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Website board",
+      "notes": "Frequency assumed daily"
+    },
+    {
+      "id": "RAG-A3",
+      "title": "Improvements to booking system",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Appointment Booking",
+      "trigger_type": "Dependent",
+      "starts_when": "Issue or request raised",
+      "repeat": "On request",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Shaheena (Coordinator) / Client",
+      "input_needed": "Problem or improvement request",
+      "hand_off_to": "",
+      "done_when": "Change deployed",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Website board",
+      "notes": ""
+    },
+    {
+      "id": "RAG-A4",
+      "title": "Appointment report to client & doctor",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Appointment Booking",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-A2"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Shaheena (Coordinator)",
+      "done_when": "Report sent",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": true,
+      "source": "Website board",
+      "notes": "Frequency assumed weekly"
+    },
+    {
+      "id": "RAG-S1",
+      "title": "Off-page SEO – link building",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Off-Page SEO",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Every week",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "RAG-W8"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Links logged",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Website board",
+      "notes": "Frequency assumed weekly"
+    },
+    {
+      "id": "RAG-S2",
+      "title": "Off-page SEO – publish blogs & articles on external sites",
+      "team": "Website",
+      "default_assignees": [
+        "Raghu"
+      ],
+      "section": "Off-Page SEO",
+      "trigger_type": "Dependent",
+      "starts_when": "Shaheena delivers article",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-C2"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Shaheena (Content Writer)",
+      "input_needed": "Articles / blog content",
+      "hand_off_to": "",
+      "done_when": "Articles published",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Website board",
+      "notes": "Frequency assumed weekly"
+    },
+    {
+      "id": "DV-D1",
+      "title": "Task revisions & additional tasks",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "10:00 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "10:00–10:30 AM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Revisions from yesterday closed",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "DV-D2",
+      "title": "Emergency work, rework or edits",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "10:30 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "10:30–11:00 AM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Urgent items done",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "DV-D3",
+      "title": "New / allotted tasks",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "11:00 AM every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "11:00 AM–1:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Progress updated in tracker",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "DV-D4",
+      "title": "Continue new / allotted tasks",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "2:00 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "2:00–4:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Progress updated in tracker",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "DV-D5",
+      "title": "Works & revisions",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "4:00 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "4:00–6:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Revisions sent",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "DV-D6",
+      "title": "Plan for tomorrow & take approval",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Daily Schedule",
+      "trigger_type": "Dependent",
+      "starts_when": "6:00 every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "6:00–6:30 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Admins (Abhista, Raviteja)",
+      "input_needed": "Approval of plan",
+      "hand_off_to": "",
+      "done_when": "Plan approved",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Main board",
+      "notes": ""
+    },
+    {
+      "id": "DV-V1",
+      "title": "Outdoor video shoot",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep"
+      ],
+      "section": "Video",
+      "trigger_type": "Dependent",
+      "starts_when": "Shoot scheduled by Marketing",
+      "repeat": "Per shoot",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "MKT-M16",
+          "SHA-X1"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha) + Shaheena",
+      "input_needed": "Shoot date & location (Marketing); script (Shaheena)",
+      "hand_off_to": "",
+      "done_when": "Footage shot & backed up",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Design board",
+      "notes": ""
+    },
+    {
+      "id": "DV-V2",
+      "title": "In-house video shoot",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep"
+      ],
+      "section": "Video",
+      "trigger_type": "Dependent",
+      "starts_when": "Shoot scheduled by Marketing",
+      "repeat": "Per shoot",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "MKT-M16",
+          "SHA-X1"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha) + Shaheena",
+      "input_needed": "Shoot date (Marketing); script (Shaheena)",
+      "hand_off_to": "",
+      "done_when": "Footage shot & backed up",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Design board",
+      "notes": ""
+    },
+    {
+      "id": "DV-V3",
+      "title": "Video edit & thumbnail",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit"
+      ],
+      "section": "Video",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Footage ready after shoot",
+      "repeat": "Per video",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "DV-V1",
+          "DV-V2"
+        ],
+        "mode": "any"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "Edited video & thumbnail sent for approval",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Design board",
+      "notes": "Board shows Dileep & Rohit – confirm split"
+    },
+    {
+      "id": "DV-P1",
+      "title": "Poster design",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Poster & Animation",
+      "trigger_type": "Dependent",
+      "starts_when": "Content brief & captions received",
+      "repeat": "Monthly + on request",
+      "time_or_day": "By 15th",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "MKT-X1",
+          "SHA-S4"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha) + Shaheena",
+      "input_needed": "Monthly brief (Marketing, by 10th); captions (Shaheena)",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "Designs ready for client",
+      "priority": "High",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Design board",
+      "notes": ""
+    },
+    {
+      "id": "DV-P2",
+      "title": "Animated videos",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Poster & Animation",
+      "trigger_type": "Dependent",
+      "starts_when": "Brief & copy received",
+      "repeat": "On request",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha) + Shaheena",
+      "input_needed": "Brief & script/copy",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "Animation sent for approval",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": true,
+      "source": "Design board",
+      "notes": "Assumed – confirm Bhavya"
+    },
+    {
+      "id": "DV-E1",
+      "title": "Make client edits & resubmit",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Client Edits",
+      "trigger_type": "Dependent",
+      "starts_when": "Client sends changes",
+      "repeat": "On event",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "DV-V3",
+          "DV-P1",
+          "DV-P2"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Shaheena / Marketing (Gouthami & Ayesha)",
+      "input_needed": "Client's change list",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "Revised file submitted",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Design board",
+      "notes": "Changes come via coordinator, not directly from client"
+    },
+    {
+      "id": "DV-C1",
+      "title": "Ad creatives for Meta & Google Ads",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Chaithanya"
+      ],
+      "section": "Poster & Animation",
+      "trigger_type": "Dependent",
+      "starts_when": "Ad request from Marketing",
+      "repeat": "Monthly + on request",
+      "time_or_day": "By 1st",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha)",
+      "input_needed": "Offer, budget, ad format",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "Ad creatives approved",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Added – other boards",
+      "notes": "Main board had 'Ad post → Chaitanya'"
+    },
+    {
+      "id": "DV-C2",
+      "title": "GMB post creatives & photos",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Rohit",
+        "Bhavya"
+      ],
+      "section": "Poster & Animation",
+      "trigger_type": "Dependent",
+      "starts_when": "GMB liners ready",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "SHA-C4"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha) / Shaheena",
+      "input_needed": "GMB liners",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "Creatives sent for GMB posts",
+      "priority": "Medium",
+      "per_client": true,
+      "needs_confirmation": false,
+      "source": "Added – other boards",
+      "notes": ""
+    },
+    {
+      "id": "DV-C3",
+      "title": "Service images for new websites",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Rohit",
+        "Bhavya"
+      ],
+      "section": "Poster & Animation",
+      "trigger_type": "Dependent",
+      "starts_when": "Raghu requests images",
+      "repeat": "Per new website",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Raghu",
+      "input_needed": "Image list & sizes",
+      "hand_off_to": "Raghu",
+      "done_when": "Images sent to Raghu",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Added – other boards",
+      "notes": "If Raghu does these himself, delete"
+    },
+    {
+      "id": "DV-C4",
+      "title": "Videos & photos for website updates",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep"
+      ],
+      "section": "Video",
+      "trigger_type": "Dependent",
+      "starts_when": "Raghu or Marketing requests",
+      "repeat": "On event",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Raghu / Marketing (Gouthami & Ayesha)",
+      "input_needed": "What's needed",
+      "hand_off_to": "Raghu",
+      "done_when": "Files sent to Raghu",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Added – other boards",
+      "notes": ""
+    },
+    {
+      "id": "DV-C5",
+      "title": "Update video tracker",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit"
+      ],
+      "section": "Video",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "Every working day",
+      "repeat": "Daily (Mon–Sat)",
+      "time_or_day": "6:00 PM",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Tracker shows latest status",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Added – other boards",
+      "notes": "Marketing & Shaheena track videos from this"
+    },
+    {
+      "id": "DV-C6",
+      "title": "Edit client photos received on Tuesdays",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Rohit",
+        "Bhavya"
+      ],
+      "section": "Poster & Animation",
+      "trigger_type": "Dependent",
+      "starts_when": "Marketing shares client photos",
+      "repeat": "Weekly",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [
+          "MKT-A1"
+        ],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha)",
+      "input_needed": "Client photos",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "Photos edited & ready to use",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Added – other boards",
+      "notes": ""
+    },
+    {
+      "id": "DV-X1",
+      "title": "Patient consent forms before filming",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep"
+      ],
+      "section": "Video",
+      "trigger_type": "Dependent",
+      "starts_when": "Before every shoot with patients",
+      "repeat": "Per shoot",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Client / Marketing (Gouthami & Ayesha)",
+      "input_needed": "Signed consent",
+      "hand_off_to": "",
+      "done_when": "Consent on file",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Medical videos showing patients need written consent"
+    },
+    {
+      "id": "DV-X2",
+      "title": "Equipment check & shot list day before shoot",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep"
+      ],
+      "section": "Video",
+      "trigger_type": "Auto (Scheduled)",
+      "starts_when": "1 day before each shoot",
+      "repeat": "Per shoot",
+      "time_or_day": "Day before",
+      "depends_on": {
+        "ids": [
+          "DV-V1",
+          "DV-V2"
+        ],
+        "mode": "any"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Shaheena",
+      "input_needed": "Script",
+      "hand_off_to": "",
+      "done_when": "Batteries, cards, lights ready; shot list made",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "DV-X3",
+      "title": "Back up raw footage & files to shared drive",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep"
+      ],
+      "section": "Video",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Same day as shoot",
+      "repeat": "Per shoot",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "DV-V1",
+          "DV-V2"
+        ],
+        "mode": "any"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Footage in drive with client name & date",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "DV-X4",
+      "title": "Brand kit per client (logo, colours, fonts, templates)",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Poster & Animation",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "New client onboarded",
+      "repeat": "Per new client",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "Marketing (Gouthami & Ayesha)",
+      "input_needed": "Logo & brand details",
+      "hand_off_to": "",
+      "done_when": "Brand kit in shared drive",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "DV-X5",
+      "title": "Internal quality check before sending to client",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Client Edits",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Before every submission",
+      "repeat": "Per piece",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "DV-V3",
+          "DV-P1",
+          "DV-P2"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Checked for spelling, logo, phone no., sizes",
+      "priority": "High",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "DV-X6",
+      "title": "Export in every platform size (Reels 9:16, YouTube 16:9, posts 1:1/4:5)",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit"
+      ],
+      "section": "Video",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "After approval",
+      "repeat": "Per video",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "DV-V3"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Marketing (Gouthami & Ayesha)",
+      "done_when": "All sizes delivered",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "DV-X7",
+      "title": "Use only royalty-free / licensed music",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Chaithanya"
+      ],
+      "section": "Video",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "During edit",
+      "repeat": "Per video",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Music source noted",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Avoids copyright strikes on client pages"
+    },
+    {
+      "id": "DV-X8",
+      "title": "Track revision rounds per piece",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit",
+        "Bhavya",
+        "Chaithanya"
+      ],
+      "section": "Client Edits",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "Each client edit",
+      "repeat": "Per piece",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "DV-E1"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "Admins (Abhista, Raviteja)",
+      "done_when": "Rounds logged; flag if over 2",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": ""
+    },
+    {
+      "id": "DV-X9",
+      "title": "Turnaround target: edit within 2 days of shoot",
+      "team": "Design & Video",
+      "default_assignees": [
+        "Dileep",
+        "Rohit"
+      ],
+      "section": "Video",
+      "trigger_type": "Self-Trigger",
+      "starts_when": "After shoot",
+      "repeat": "Per video",
+      "time_or_day": "",
+      "depends_on": {
+        "ids": [
+          "DV-V3"
+        ],
+        "mode": "all"
+      },
+      "waiting_on_cross_team": {
+        "ids": [],
+        "mode": "all"
+      },
+      "input_from": "",
+      "input_needed": "",
+      "hand_off_to": "",
+      "done_when": "Delivered on time",
+      "priority": "Medium",
+      "per_client": false,
+      "needs_confirmation": false,
+      "source": "Suggested",
+      "notes": "Set your own target"
+    }
+  ],
+  "merged_and_removed": [
+    {
+      "id": "MKT-M1",
+      "title": "Check clients' WhatsApp groups for queries",
+      "covered_by": "SHA-S1",
+      "reason": "Client WhatsApp communication owned by Shaheena"
+    },
+    {
+      "id": "MKT-M2",
+      "title": "Coordinate work to be done",
+      "covered_by": "SHA-S2",
+      "reason": "Task assigning owned by Shaheena"
+    },
+    {
+      "id": "MKT-M9",
+      "title": "Track videos",
+      "covered_by": "SHA-S5 + DV-C5",
+      "reason": "Design team updates the video tracker, Shaheena monitors it"
+    },
+    {
+      "id": "RAG-A1",
+      "title": "Update appointment booking system on Google",
+      "covered_by": "RAG-D3",
+      "reason": "Duplicate of Raghu's daily Google Reserve slot"
+    }
+  ],
+  "settings": {
+    "working_days": [
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat"
+    ],
+    "day_start": "10:00",
+    "day_end": "18:30",
+    "scheduler_time": "09:30",
+    "timezone": "Asia/Kolkata",
+    "admins": [
+      "Abhista",
+      "Raviteja"
+    ],
+    "public_board": {
+      "enabled": true,
+      "login_required": false,
+      "read_only": true,
+      "url": "/board/<secret-token>",
+      "token_regenerable_by_admins": true,
+      "refresh_seconds": 60,
+      "noindex": true,
+      "hidden_fields": [
+        "payments",
+        "client phone numbers",
+        "logins",
+        "comments",
+        "attachments"
+      ]
+    },
+    "deferred_after_launch": [
+      "WhatsApp notifications",
+      "weekly digest email",
+      "webhooks for on-event tasks"
+    ]
+  }
+}

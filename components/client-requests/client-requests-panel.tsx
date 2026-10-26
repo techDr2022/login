@@ -36,13 +36,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
-import { Plus, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, ListPlus } from 'lucide-react'
 import {
   createClientRequest,
   deleteClientRequest,
   getClientRequests,
   updateClientRequest,
 } from '@/app/actions/client-request-actions'
+import { convertClientRequestToTask } from '@/app/actions/portal-actions'
 import { format } from 'date-fns'
 import { useSession } from 'next-auth/react'
 
@@ -177,10 +178,12 @@ export function ClientRequestsPanel({
         ])
         const cJson = await cRes.json()
         const uJson = await uRes.json()
-        const clientList = (cJson.clients || []).map((c: { id: string; name: string }) => ({
-          id: c.id,
-          name: c.name,
-        }))
+        const clientList = (cJson.clients || [])
+          .filter((c: { status?: string }) => c.status !== 'PAUSED')
+          .map((c: { id: string; name: string }) => ({
+            id: c.id,
+            name: c.name,
+          }))
         const userList = (uJson.users || []).map((u: { id: string; name: string }) => ({
           id: u.id,
           name: u.name,
@@ -218,6 +221,24 @@ export function ClientRequestsPanel({
       return hay.includes(q)
     })
   }, [rows, search, statusFilter])
+
+  const clientOptions = useMemo(() => {
+    if (!form.clientId || clients.some((c) => c.id === form.clientId)) return clients
+    const current = rows.find((r) => r.clientId === form.clientId)?.Client
+    if (!current) return clients
+    return [...clients, { id: current.id, name: current.name }]
+  }, [clients, form.clientId, rows])
+
+  const makeTask = (id: string) => {
+    startTransition(async () => {
+      try {
+        const result = await convertClientRequestToTask(id)
+        window.location.href = `/tasks/${result.taskId}`
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'Could not create the task')
+      }
+    })
+  }
 
   const displayClient = (r: SerializedClientRequestRow) => {
     if (r.Client) {
@@ -306,7 +327,7 @@ export function ClientRequestsPanel({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">None</SelectItem>
-                      {clients.map((c) => (
+                      {clientOptions.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name}
                         </SelectItem>
@@ -561,6 +582,16 @@ export function ClientRequestsPanel({
                           : r.assignees.map((a) => a.name).join(', ')}
                       </TableCell>
                       <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="rounded-xl"
+                          title="Create task"
+                          disabled={!r.clientId || isPending}
+                          onClick={() => makeTask(r.id)}
+                        >
+                          <ListPlus className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"

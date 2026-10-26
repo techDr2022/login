@@ -22,6 +22,10 @@ export async function GET(request: NextRequest) {
     }
 
     // If role parameter is provided, filter by role
+    if (roleParam === UserRole.CLIENT) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     if (roleParam) {
       // Validate role parameter
       const validRoles = Object.values(UserRole)

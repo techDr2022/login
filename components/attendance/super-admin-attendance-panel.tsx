@@ -36,7 +36,6 @@ import {
   XCircle,
   Calendar as CalendarIcon,
   CheckSquare,
-  Activity,
   Pencil,
   Trash2,
   Plus
@@ -45,7 +44,6 @@ import { format, subMonths } from 'date-fns'
 import { formatDateLocal, parseDateLocal } from '@/lib/utils'
 import { formatAttendanceTime, formatAttendanceTimeInputValue } from '@/lib/attendance-config'
 import { getAttendanceDisplayStatus, type AttendanceLogDisplayStatus } from '@/lib/attendance-holidays'
-import { WFHActivityMonitor } from './wfh-activity-monitor'
 
 interface GlobalStats {
   totalEmployees: number
@@ -733,22 +731,6 @@ export function SuperAdminAttendancePanel() {
                 : 'N/A'}
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* WFH Activity Monitor */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            WFH Activity Monitoring
-          </CardTitle>
-          <CardDescription>
-            Monitor work-from-home employees&apos; activity and productivity
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <WFHActivityMonitor />
         </CardContent>
       </Card>
 

@@ -71,7 +71,7 @@ export function ClientsList() {
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set())
   const selectAllCheckboxRef = useRef<HTMLButtonElement>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('ACTIVE')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null)

@@ -48,8 +48,11 @@ export async function GET(request: NextRequest) {
 
       sendEvent({ type: 'connected', roomId, userId: session.user.id })
 
-      const pollInterval = setInterval(async () => {
-        if (isClosed) return
+      let polling = false
+      const pollInterval = setInterval(() => {
+        if (isClosed || polling) return
+        polling = true
+        void (async () => {
         try {
           const checkFrom = new Date(lastCheck.getTime() - 1000)
           const newMessages = await prisma.chatMessage.findMany({
@@ -82,7 +85,10 @@ export async function GET(request: NextRequest) {
           lastCheck = new Date()
         } catch (error) {
           console.error('Chat stream poll error:', error)
+        } finally {
+          polling = false
         }
+        })()
       }, 1500)
 
       const cleanup = () => {

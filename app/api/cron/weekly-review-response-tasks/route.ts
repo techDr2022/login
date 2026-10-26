@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto'
 import { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { isCronRequestAuthorized } from '@/lib/cron-auth'
+import { notifyTaskAssignment } from '@/lib/notification-service'
 
 const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000
 const TASK_TITLE = 'give review responses by EOD'
@@ -163,23 +164,37 @@ export async function GET(request: NextRequest) {
 
     const createdTasks = await Promise.all(
       usersToCreateFor.map(user =>
-        prisma.task.create({
-          data: {
-            id: randomUUID(),
-            title: TASK_TITLE,
-            description: 'Weekly review follow-up task. Share review responses by end of day.',
+        prisma.$transaction(async (tx) => {
+          const assignedAt = new Date()
+          const created = await tx.task.create({
+            data: {
+              id: randomUUID(),
+              title: TASK_TITLE,
+              description: 'Weekly review follow-up task. Share review responses by end of day.',
+              priority: 'High',
+              status: 'Pending',
+              assignedById: assignedBy.id,
+              assignedToId: user.id,
+              startDate: now,
+              dueDate: dueDateUtc,
+            },
+            select: {
+              id: true,
+              title: true,
+              assignedToId: true,
+            },
+          })
+          await notifyTaskAssignment(tx, {
+            taskId: created.id,
+            title: created.title,
+            actorId: assignedBy.id,
+            actorName: assignedBy.name,
+            nextAssigneeId: user.id,
+            nextAssigneeName: user.name,
             priority: 'High',
-            status: 'Pending',
-            assignedById: assignedBy.id,
-            assignedToId: user.id,
-            startDate: now,
-            dueDate: dueDateUtc,
-          },
-          select: {
-            id: true,
-            title: true,
-            assignedToId: true,
-          },
+            assignedAt,
+          })
+          return created
         })
       )
     )

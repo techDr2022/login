@@ -16,9 +16,16 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Invalid credentials')
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        })
+        const login = credentials.email.trim().toLowerCase()
+        let user
+        try {
+          user = login.includes('@')
+            ? await prisma.user.findUnique({ where: { email: login } })
+            : await prisma.user.findUnique({ where: { username: login } })
+        } catch (error) {
+          console.error('Login lookup failed', error)
+          throw new Error('Invalid credentials')
+        }
 
         if (!user || !user.isActive) {
           throw new Error('Invalid credentials')

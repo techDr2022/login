@@ -1,13 +1,27 @@
 import { parseDateLocal } from '@/lib/utils'
-import {
-  listAttendanceHolidayRows,
-  seedDefaultAttendanceHolidaysIfEmpty,
-  ATTENDANCE_PUBLIC_HOLIDAY_DATES,
-  ATTENDANCE_DEFAULT_HOLIDAYS,
-} from '@/lib/attendance-holiday-db'
-import { getISTDateKey } from '@/lib/attendance-config'
+import { ATTENDANCE_TIMEZONE, getISTDateKey } from '@/lib/attendance-config'
 
-export { ATTENDANCE_PUBLIC_HOLIDAY_DATES, ATTENDANCE_DEFAULT_HOLIDAYS }
+/** Default company holidays (date + name). Safe to import from client components. */
+export const ATTENDANCE_DEFAULT_HOLIDAYS: Array<{ date: string; name: string }> = [
+  { date: '2025-01-14', name: 'Public Holiday' },
+  { date: '2025-01-26', name: 'Republic Day' },
+  { date: '2025-03-04', name: 'Public Holiday' },
+  { date: '2025-03-26', name: 'Public Holiday' },
+  { date: '2025-03-30', name: 'Public Holiday' },
+  { date: '2025-03-31', name: 'Public Holiday' },
+  { date: '2025-06-07', name: 'Public Holiday' },
+  { date: '2025-08-09', name: 'Ganesh Chaturthi' },
+  { date: '2025-08-15', name: 'Independence Day' },
+  { date: '2025-10-20', name: 'Public Holiday' },
+  { date: '2025-11-08', name: 'Public Holiday' },
+  { date: '2025-12-25', name: 'Christmas' },
+  { date: '2026-08-15', name: 'Independence Day' },
+  { date: '2026-08-28', name: 'Rakhi Festival' },
+]
+
+export const ATTENDANCE_PUBLIC_HOLIDAY_DATES: string[] = ATTENDANCE_DEFAULT_HOLIDAYS.map(
+  (holiday) => holiday.date
+)
 
 export type AttendanceLogDisplayStatus = 'Present' | 'Absent' | 'Holiday'
 
@@ -32,38 +46,12 @@ export function getAttendanceDisplayStatus(
   return 'Present'
 }
 
-let holidayCache: { dates: Set<string>; loadedAt: number } | null = null
-const HOLIDAY_CACHE_TTL_MS = 30_000
-
-export function invalidateAttendanceHolidayCache(): void {
-  holidayCache = null
-}
-
-async function seedDefaultHolidaysIfEmpty(): Promise<void> {
-  await seedDefaultAttendanceHolidaysIfEmpty()
-}
-
-export async function getAttendanceHolidayDateKeys(): Promise<Set<string>> {
-  const now = Date.now()
-  if (holidayCache && now - holidayCache.loadedAt < HOLIDAY_CACHE_TTL_MS) {
-    return holidayCache.dates
-  }
-
-  try {
-    await seedDefaultHolidaysIfEmpty()
-    const rows = await listAttendanceHolidayRows()
-    const dates = new Set(rows.map((row) => getISTDateKey(row.date)))
-    holidayCache = { dates, loadedAt: now }
-    return dates
-  } catch {
-    const dates = new Set(ATTENDANCE_PUBLIC_HOLIDAY_DATES)
-    holidayCache = { dates, loadedAt: now }
-    return dates
-  }
-}
-
 export function isAttendanceSunday(date: Date): boolean {
-  return date.getDay() === 0
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: ATTENDANCE_TIMEZONE,
+    weekday: 'short',
+  }).format(date)
+  return weekday === 'Sun'
 }
 
 export function isAttendancePublicHoliday(

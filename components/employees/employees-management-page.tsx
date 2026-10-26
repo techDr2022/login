@@ -1,18 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { BestPerformersSection } from './best-performers-section'
 import { EmployeesTable } from './employees-table'
 import { AddEmployeeDialog } from './add-employee-dialog'
 import { EmployeeDetailDrawer } from './employee-detail-drawer'
-import { Search, Plus, Users, Filter } from 'lucide-react'
+import { Search, Plus } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { EMPLOYEE_DEPARTMENTS } from '@/lib/employee-departments'
 
 interface Employee {
   id: string
@@ -21,6 +21,7 @@ interface Employee {
   email: string
   payslipEmail?: string | null
   jobTitle?: string | null
+  department?: string | null
   role: string
   isActive: boolean
   createdAt: string
@@ -39,6 +40,7 @@ export function EmployeesManagementPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all')
   const [showTodayOnly, setShowTodayOnly] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -47,7 +49,7 @@ export function EmployeesManagementPage() {
 
   useEffect(() => {
     fetchEmployees()
-  }, [statusFilter, roleFilter])
+  }, [statusFilter, roleFilter, departmentFilter])
 
   useEffect(() => {
     // Filter employees based on search
@@ -58,7 +60,9 @@ export function EmployeesManagementPage() {
         (emp) =>
           emp.name.toLowerCase().includes(search.toLowerCase()) ||
           emp.email.toLowerCase().includes(search.toLowerCase()) ||
-          (emp.payslipEmail || '').toLowerCase().includes(search.toLowerCase())
+          (emp.payslipEmail || '').toLowerCase().includes(search.toLowerCase()) ||
+          (emp.jobTitle || '').toLowerCase().includes(search.toLowerCase()) ||
+          (emp.department || '').toLowerCase().includes(search.toLowerCase())
       )
     }
 
@@ -74,6 +78,9 @@ export function EmployeesManagementPage() {
       }
       if (roleFilter !== 'all') {
         params.append('role', roleFilter)
+      }
+      if (departmentFilter !== 'all') {
+        params.append('department', departmentFilter)
       }
 
       const res = await fetch(`/api/admin/employees?${params}`)
@@ -193,6 +200,19 @@ export function EmployeesManagementPage() {
                 <SelectItem value="all">All Roles</SelectItem>
                 <SelectItem value="MANAGER">Manager</SelectItem>
                 <SelectItem value="EMPLOYEE">Employee</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger className="w-[210px] rounded-xl">
+                <SelectValue placeholder="Department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                {EMPLOYEE_DEPARTMENTS.map((department) => (
+                  <SelectItem key={department} value={department}>
+                    {department}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <div className="flex items-center space-x-2">

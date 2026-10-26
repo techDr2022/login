@@ -1,8 +1,6 @@
-@import 'react-datepicker/dist/react-datepicker.css';
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+@import "react-datepicker/dist/react-datepicker.css";
 
 @layer base {
   :root {

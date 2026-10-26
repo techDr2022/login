@@ -10,8 +10,8 @@ import {
   isAttendanceSunday,
   isAttendancePublicHoliday,
   isAttendanceNonWorkingCalendarDay,
-  getAttendanceHolidayDateKeys,
 } from '@/lib/attendance-holidays'
+import { getAttendanceHolidayDateKeys } from '@/lib/attendance-holiday-db'
 import {
   applyPaidLeaveCarryForward,
   buildAbsentDaysByMonth,

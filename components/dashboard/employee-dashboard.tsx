@@ -1,18 +1,25 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { CheckSquare2, Clock, Calendar, TrendingUp, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { CheckSquare2, Clock, Calendar, TrendingUp, AlertCircle, CheckCircle2, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { TaskStatusTimeline } from './task-status-timeline'
 import { updateTaskStatus } from '@/app/actions/task-actions'
 import { formatDateLocal } from '@/lib/utils'
+import {
+  EmptyState,
+  Panel,
+  QuickLink,
+  StatCard,
+  StatusBadge,
+  TaskLinkRow,
+  WelcomeBanner,
+  timeGreeting,
+} from './dashboard-ui'
 
 interface Task {
   id: string
@@ -262,130 +269,94 @@ export function EmployeeDashboard() {
     }
   }
 
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case 'Urgent':
-        return <Badge className="bg-red-100 text-red-800 border-red-200">Urgent</Badge>
-      case 'High':
-        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">High</Badge>
-      case 'Medium':
-        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Medium</Badge>
-      case 'Low':
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Low</Badge>
-      default:
-        return <Badge variant="outline">{priority}</Badge>
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Approved':
-        return <Badge className="bg-green-100 text-green-800 border-green-200">Approved</Badge>
-      case 'Review':
-        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Review</Badge>
-      case 'InProgress':
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">In Progress</Badge>
-      case 'Pending':
-        return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Pending</Badge>
-      case 'Rejected':
-        return <Badge className="bg-red-100 text-red-800 border-red-200">Rejected</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
+  const firstName = session?.user?.name?.split(' ')[0] || 'there'
+  const todayLabel = format(new Date(), 'EEEE, MMM d')
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center space-y-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      <div className="space-y-6">
+        <div className="h-40 animate-pulse rounded-2xl bg-slate-200/70" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+          ))}
         </div>
       </div>
     )
   }
 
+  const renderPending = (task: Task, actions?: ReactNode) => (
+    <div className="rounded-xl border bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <Link href={`/tasks/${task.id}`} className="font-medium leading-snug hover:text-indigo-700">
+          {task.title}
+        </Link>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          <StatusBadge value={task.priority} />
+          <StatusBadge value={task.status} />
+        </div>
+      </div>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        {[
+          task.client?.name,
+          task.assignedBy?.name ? `From ${task.assignedBy.name}` : null,
+          task.assignedTo?.name ? `To ${task.assignedTo.name}` : null,
+          task.dueDate ? `Due ${format(new Date(task.dueDate), 'MMM d, h:mm a')}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || 'No extra details'}
+      </p>
+      {actions ? <div className="mt-3 flex flex-wrap gap-2">{actions}</div> : null}
+    </div>
+  )
+
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
-      <div>
-        <p className="text-sm text-muted-foreground">Employee Dashboard</p>
-        <h1 className="text-2xl font-semibold">Welcome back, {session?.user?.name || 'Employee'}</h1>
-      </div>
+      <WelcomeBanner
+        kicker={`${timeGreeting()} · ${todayLabel}`}
+        title={`Welcome back, ${firstName}`}
+        subtitle="What is due today, how your attendance looks, and which tasks are still open."
+      >
+        <QuickLink href="/attendance" icon={Clock}>
+          Attendance
+        </QuickLink>
+        <QuickLink href="/tasks" icon={CheckSquare2}>
+          My tasks
+        </QuickLink>
+        <QuickLink href="/chat" icon={MessageCircle}>
+          Team chat
+        </QuickLink>
+      </WelcomeBanner>
 
-      {/* Your Pending Tasks - Highlighted Section */}
       {(pendingTasks.length > 0 || pendingAssignedByMeTasks.length > 0) && (
-        <Card className="rounded-xl border-2 border-blue-500 shadow-lg bg-gradient-to-br from-blue-50 to-white">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-bold text-blue-900 flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-blue-600" />
-                  Your Pending Tasks
-                </CardTitle>
-                <CardDescription className="text-sm text-blue-700">
-                  {pendingTasks.length} task{pendingTasks.length !== 1 ? 's' : ''} assigned to you,&nbsp;
-                  {pendingAssignedByMeTasks.length} task{pendingAssignedByMeTasks.length !== 1 ? 's' : ''} assigned by you
-                </CardDescription>
-              </div>
-              <CheckSquare2 className="h-6 w-6 text-blue-600" />
+        <section className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+                <AlertCircle className="h-5 w-5 text-indigo-600" />
+                Still open
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {pendingTasks.length} assigned to you · {pendingAssignedByMeTasks.length} assigned by you
+              </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Pending tasks assigned to me */}
-              <div className="space-y-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-blue-900">Assigned to you</p>
-                  <span className="text-xs text-blue-700">
-                    {pendingTasks.length} pending
-                  </span>
-                </div>
-                {pendingTasks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending tasks assigned to you.</p>
-                ) : (
-                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                    {pendingTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex items-start justify-between gap-4 p-4 bg-white rounded-lg border border-blue-200 hover:border-blue-300 transition-colors"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="flex items-center gap-2">
-                              <Link
-                                href={`/tasks/${task.id}`}
-                                className="font-semibold text-gray-900 hover:text-blue-600 hover:underline"
-                              >
-                                {task.title}
-                              </Link>
-                              {getPriorityBadge(task.priority)}
-                            </div>
-                            <div className="shrink-0">
-                              {getStatusBadge(task.status)}
-                            </div>
-                          </div>
-                          {task.client && (
-                            <p className="text-sm text-muted-foreground mb-1">{task.client.name}</p>
-                          )}
-                          {(task.assignedBy || task.assignedTo) && (
-                            <p className="text-xs text-muted-foreground mb-1">
-                              {task.assignedBy && (
-                                <>Assigned by: <span className="font-medium">{task.assignedBy.name || 'Unknown'}</span></>
-                              )}
-                              {task.assignedBy && task.assignedTo && ' · '}
-                              {task.assignedTo && (
-                                <>Assigned to: <span className="font-medium">{task.assignedTo.name || 'Unknown'}</span></>
-                              )}
-                            </p>
-                          )}
-                          {task.dueDate && (
-                            <p className="text-xs text-muted-foreground mb-3">
-                              Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-2 shrink-0">
+          </div>
+          <div className="mt-4 grid gap-5 lg:grid-cols-2">
+            <div>
+              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Assigned to you
+              </p>
+              {pendingTasks.length === 0 ? (
+                <p className="rounded-xl bg-white/70 px-3 py-6 text-center text-sm text-muted-foreground">
+                  You are all caught up.
+                </p>
+              ) : (
+                <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
+                  {pendingTasks.map((task) => (
+                    <div key={task.id}>
+                      {renderPending(
+                        task,
+                        <>
                           {task.status === 'Pending' && (
                             <Button
                               onClick={() => handleStartTask(task.id)}
@@ -393,424 +364,183 @@ export function EmployeeDashboard() {
                               variant="outline"
                               size="sm"
                             >
-                              {startingTasks.has(task.id) ? (
-                                <>
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                                  Starting...
-                                </>
-                              ) : (
-                                <>
-                                  Start
-                                </>
-                              )}
+                              {startingTasks.has(task.id) ? 'Starting...' : 'Start'}
                             </Button>
                           )}
                           <Button
                             onClick={() => handleMarkComplete(task.id)}
                             disabled={completingTasks.has(task.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                             size="sm"
                           >
-                            {completingTasks.has(task.id) ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Completing...
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                Mark Complete
-                              </>
-                            )}
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            {completingTasks.has(task.id) ? 'Saving...' : 'Mark complete'}
                           </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Pending tasks assigned by me */}
-              <div className="space-y-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-blue-900">Assigned by you</p>
-                  <span className="text-xs text-blue-700">
-                    {pendingAssignedByMeTasks.length} pending
-                  </span>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                {pendingAssignedByMeTasks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending tasks assigned by you.</p>
-                ) : (
-                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                    {pendingAssignedByMeTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex flex-col p-4 bg-white rounded-lg border border-blue-200 hover:border-blue-300 transition-colors"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="flex items-center gap-2">
-                              <Link
-                                href={`/tasks/${task.id}`}
-                                className="font-semibold text-gray-900 hover:text-blue-600 hover:underline"
-                              >
-                                {task.title}
-                              </Link>
-                              {getPriorityBadge(task.priority)}
-                            </div>
-                            <div className="shrink-0">
-                              {getStatusBadge(task.status)}
-                            </div>
-                          </div>
-                          {task.client && (
-                            <p className="text-sm text-muted-foreground mb-1">{task.client.name}</p>
-                          )}
-                          {(task.assignedBy || task.assignedTo) && (
-                            <p className="text-xs text-muted-foreground mb-1">
-                              {task.assignedBy && (
-                                <>Assigned by: <span className="font-medium">{task.assignedBy.name || 'Unknown'}</span></>
-                              )}
-                              {task.assignedBy && task.assignedTo && ' · '}
-                              {task.assignedTo && (
-                                <>Assigned to: <span className="font-medium">{task.assignedTo.name || 'Unknown'}</span></>
-                              )}
-                            </p>
-                          )}
-                          {task.dueDate && (
-                            <p className="text-xs text-muted-foreground">
-                              Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
-                            </p>
-                          )}
-                        </div>
-                        {/* No action button here since these tasks are for others */}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="pt-4">
-              <Link href="/tasks">
-                <Button variant="outline" className="w-full rounded-xl border-blue-300 text-blue-700 hover:bg-blue-50">
-                  View All Tasks
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Today's Status</CardTitle>
-            <Clock className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {attendanceSummary?.todayStatus ? (
-                <Badge className={
-                  attendanceSummary.todayStatus === 'Present' ? 'bg-green-100 text-green-800 border-green-200' :
-                  attendanceSummary.todayStatus === 'Late' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                  'bg-red-100 text-red-800 border-red-200'
-                }>
-                  {attendanceSummary.todayStatus}
-                </Badge>
-              ) : (
-                <span className="text-muted-foreground">Not clocked in</span>
               )}
             </div>
-            {attendanceSummary?.todayMode && (
-              <p className="text-xs text-muted-foreground mt-1">Mode: {attendanceSummary.todayMode}</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">This Month - Present</CardTitle>
-            <CheckSquare2 className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{attendanceSummary?.thisMonthPresent || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Days present</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">This Month - Late</CardTitle>
-            <AlertCircle className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{attendanceSummary?.thisMonthLate || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Late arrivals</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">My Tasks</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{tasks.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Assigned to me</p>
-          </CardContent>
-        </Card>
+            <div>
+              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Assigned by you
+              </p>
+              {pendingAssignedByMeTasks.length === 0 ? (
+                <p className="rounded-xl bg-white/70 px-3 py-6 text-center text-sm text-muted-foreground">
+                  Nothing waiting on other people.
+                </p>
+              ) : (
+                <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
+                  {pendingAssignedByMeTasks.map((task) => (
+                    <div key={task.id}>{renderPending(task)}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <Link
+            href="/tasks"
+            className="mt-4 flex items-center justify-center rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50"
+          >
+            Open all tasks
+          </Link>
+        </section>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Today"
+          value={attendanceSummary?.todayStatus || 'Not in yet'}
+          hint={attendanceSummary?.todayMode ? `Working ${attendanceSummary.todayMode.toLowerCase()}` : 'Clock in when you start'}
+          icon={Clock}
+          tone={attendanceSummary?.todayStatus === 'Late' ? 'amber' : attendanceSummary?.todayStatus === 'Absent' ? 'rose' : 'emerald'}
+        />
+        <StatCard label="Present" value={attendanceSummary?.thisMonthPresent || 0} hint="Days this month" icon={CheckSquare2} tone="emerald" />
+        <StatCard label="Late" value={attendanceSummary?.thisMonthLate || 0} hint="Arrivals this month" icon={AlertCircle} tone="amber" />
+        <StatCard label="My tasks" value={tasks.length} hint="Latest assigned to you" icon={TrendingUp} tone="sky" />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Today's Tasks */}
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Today&apos;s Tasks</CardTitle>
-                <CardDescription className="text-sm">Tasks due today</CardDescription>
-              </div>
-              <Calendar className="h-5 w-5 text-muted-foreground" />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel
+          title="Due today"
+          description={todaysTasks.length ? 'Finish these before the day ends' : 'Nothing left that is due today'}
+          icon={Calendar}
+          href="/tasks"
+          actionLabel="Open tasks"
+          tone={todaysTasks.length ? 'warning' : 'default'}
+        >
+          {todaysTasks.length === 0 ? (
+            <EmptyState icon={Calendar} title="Nothing due today" hint="Enjoy the clear list, or pick up something from your queue." />
+          ) : (
+            <div className="space-y-2">
+              {todaysTasks.map((task) => (
+                <TaskLinkRow
+                  key={task.id}
+                  href={`/tasks/${task.id}`}
+                  tone="warning"
+                  title={task.title}
+                  meta={[task.client?.name, task.dueDate ? format(new Date(task.dueDate), 'h:mm a') : null].filter(Boolean).join(' · ')}
+                  badges={
+                    <>
+                      <StatusBadge value={task.status} />
+                      <StatusBadge value={task.priority} />
+                    </>
+                  }
+                />
+              ))}
             </div>
-          </CardHeader>
-          <CardContent>
-            {todaysTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-sm text-muted-foreground">No tasks due today</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Priority</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {todaysTasks.map((task) => (
-                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
-                        <TableCell>
-                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
-                            {task.title}
-                          </Link>
-                          {task.client && (
-                            <p className="text-xs text-muted-foreground">{task.client.name}</p>
-                          )}
-                          {task.dueDate && (
-                            <p className="text-xs text-muted-foreground">
-                              Due: {format(new Date(task.dueDate), 'MMM dd, hh:mm a')}
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(task.status)}</TableCell>
-                        <TableCell>{getPriorityBadge(task.priority)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="pt-2">
-                  <Link href="/tasks">
-                    <Button variant="ghost" className="w-full rounded-xl">
-                      View All Tasks
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </Panel>
 
-        {/* My Tasks */}
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">My Tasks</CardTitle>
-                <CardDescription className="text-sm">Tasks assigned to me</CardDescription>
-              </div>
-              <CheckSquare2 className="h-5 w-5 text-muted-foreground" />
+        <Panel title="Assigned to you" description="Your latest tasks" icon={CheckSquare2} href="/tasks" actionLabel="Open tasks">
+          {tasks.length === 0 ? (
+            <EmptyState icon={CheckSquare2} title="No tasks yet" hint="When someone assigns you work, it will show up here." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {tasks.map((task) => (
+                <TaskLinkRow
+                  key={task.id}
+                  href={`/tasks/${task.id}`}
+                  title={task.title}
+                  meta={task.client?.name}
+                  badges={
+                    <>
+                      <StatusBadge value={task.status} />
+                      <StatusBadge value={task.priority} />
+                    </>
+                  }
+                />
+              ))}
             </div>
-          </CardHeader>
-          <CardContent>
-            {tasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-sm text-muted-foreground">No tasks assigned</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Priority</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tasks.map((task) => (
-                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
-                        <TableCell>
-                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
-                            {task.title}
-                          </Link>
-                          {task.client && (
-                            <p className="text-xs text-muted-foreground">{task.client.name}</p>
-                          )}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(task.status)}</TableCell>
-                        <TableCell>{getPriorityBadge(task.priority)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="pt-2">
-                  <Link href="/tasks">
-                    <Button variant="ghost" className="w-full rounded-xl">
-                      View All Tasks
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </Panel>
 
-        {/* Assigned by Me */}
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Assigned by Me</CardTitle>
-                <CardDescription className="text-sm">Tasks I assigned to others</CardDescription>
-              </div>
-              <CheckSquare2 className="h-5 w-5 text-muted-foreground" />
+        <Panel
+          title="Assigned by you"
+          description="Work you handed to someone else"
+          icon={CheckSquare2}
+          href="/tasks?assignedByMe=true"
+          actionLabel="See everything you assigned"
+        >
+          {assignedByMeTasks.length === 0 ? (
+            <EmptyState icon={CheckSquare2} title="You have not assigned anything" hint="Tasks you create for others will show up here." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {assignedByMeTasks.map((task) => (
+                <TaskLinkRow
+                  key={task.id}
+                  href={`/tasks/${task.id}`}
+                  title={task.title}
+                  meta={task.client?.name}
+                  badges={
+                    <>
+                      <StatusBadge value={task.status} />
+                      <StatusBadge value={task.priority} />
+                    </>
+                  }
+                />
+              ))}
             </div>
-          </CardHeader>
-          <CardContent>
-            {assignedByMeTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckSquare2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-sm text-muted-foreground">No tasks assigned by you</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Priority</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {assignedByMeTasks.map((task) => (
-                      <TableRow key={task.id} className="cursor-pointer hover:bg-muted/50">
-                        <TableCell>
-                          <Link href={`/tasks/${task.id}`} className="font-medium hover:underline">
-                            {task.title}
-                          </Link>
-                          {task.client && (
-                            <p className="text-xs text-muted-foreground">{task.client.name}</p>
-                          )}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(task.status)}</TableCell>
-                        <TableCell>{getPriorityBadge(task.priority)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <div className="pt-2">
-                  <Link href="/tasks?assignedByMe=true">
-                    <Button variant="ghost" className="w-full rounded-xl">
-                      View All Tasks
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </Panel>
 
-        {/* Today's Attendance */}
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Today's Attendance</CardTitle>
-                <CardDescription className="text-sm">Your attendance for today</CardDescription>
+        <Panel title="Today's attendance" description="Your check-in for today" icon={Calendar} href="/attendance" actionLabel="Open attendance">
+          {!attendanceSummary?.loginTime ? (
+            <EmptyState icon={Clock} title="You have not clocked in" hint="Head to attendance when you are ready to start." />
+          ) : (
+            <dl className="space-y-2 px-2">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
+                <dt className="text-sm text-muted-foreground">Status</dt>
+                <dd><StatusBadge value={attendanceSummary.todayStatus} /></dd>
               </div>
-              <Calendar className="h-5 w-5 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!attendanceSummary?.loginTime ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-sm text-muted-foreground">Not clocked in today</p>
-                <Link href="/attendance" className="mt-4">
-                  <Button>Go to Attendance</Button>
-                </Link>
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
+                <dt className="text-sm text-muted-foreground">Mode</dt>
+                <dd className="text-sm font-medium">{attendanceSummary.todayMode || '—'}</dd>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Status:</span>
-                    <Badge className={
-                      attendanceSummary.todayStatus === 'Present' ? 'bg-green-100 text-green-800 border-green-200' :
-                      attendanceSummary.todayStatus === 'Late' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                      'bg-red-100 text-red-800 border-red-200'
-                    }>
-                      {attendanceSummary.todayStatus}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Mode:</span>
-                    <Badge variant="outline">{attendanceSummary.todayMode}</Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Check-in:</span>
-                    <span className="text-sm font-medium">
-                      {attendanceSummary.loginTime ? format(new Date(attendanceSummary.loginTime), 'hh:mm a') : '-'}
-                    </span>
-                  </div>
-                  {attendanceSummary.logoutTime && (
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Check-out:</span>
-                      <span className="text-sm font-medium">
-                        {format(new Date(attendanceSummary.logoutTime), 'hh:mm a')}
-                      </span>
-                    </div>
-                  )}
-                  {attendanceSummary.totalHours && (
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Total Hours:</span>
-                      <span className="text-sm font-medium">
-                        {attendanceSummary.totalHours.toFixed(2)} hrs
-                      </span>
-                    </div>
-                  )}
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
+                <dt className="text-sm text-muted-foreground">Check-in</dt>
+                <dd className="text-sm font-medium">{format(new Date(attendanceSummary.loginTime), 'h:mm a')}</dd>
+              </div>
+              {attendanceSummary.logoutTime ? (
+                <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
+                  <dt className="text-sm text-muted-foreground">Check-out</dt>
+                  <dd className="text-sm font-medium">{format(new Date(attendanceSummary.logoutTime), 'h:mm a')}</dd>
                 </div>
-                <Link href="/attendance">
-                  <Button variant="ghost" className="w-full rounded-xl">
-                    View Full Attendance
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              ) : null}
+              {attendanceSummary.totalHours ? (
+                <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5">
+                  <dt className="text-sm text-muted-foreground">Hours</dt>
+                  <dd className="text-sm font-medium">{attendanceSummary.totalHours.toFixed(2)}</dd>
+                </div>
+              ) : null}
+            </dl>
+          )}
+        </Panel>
       </div>
 
-      {/* Task Status Timeline */}
       <TaskStatusTimeline />
     </div>
   )
 }
-

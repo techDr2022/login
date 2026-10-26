@@ -5,6 +5,7 @@ import { UserRole } from '@prisma/client'
 import { canAccessDesignerWorkspace } from '@/lib/rbac'
 import { getMonthOverview } from './actions'
 import { DesignerWorkspacePage } from './_components/designer-workspace-page'
+import { TaskAssignmentAlerts } from '@/components/tasks/task-assignment-alerts'
 
 function getMonthKeyForDate(date: Date): string {
   const year = date.getFullYear()
@@ -12,11 +13,9 @@ function getMonthKeyForDate(date: Date): string {
   return `${year}-${month}`
 }
 
-function getInitialMonth(searchParams?: { month?: string }): string {
-  const monthParam = searchParams?.month
-  if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
-    return monthParam
-  }
+function getInitialMonth(monthParam?: string | string[]): string {
+  const month = Array.isArray(monthParam) ? monthParam[0] : monthParam
+  if (month && /^\d{4}-\d{2}$/.test(month)) return month
   return getMonthKeyForDate(new Date())
 }
 
@@ -25,7 +24,7 @@ export const dynamic = 'force-dynamic'
 export default async function DesignerPage({
   searchParams,
 }: {
-  searchParams?: { month?: string }
+  searchParams?: Promise<{ month?: string | string[] }>
 }) {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) {
@@ -37,11 +36,13 @@ export default async function DesignerPage({
     redirect('/dashboard')
   }
 
-  const monthKey = getInitialMonth(searchParams)
+  const query = searchParams ? await searchParams : undefined
+  const monthKey = getInitialMonth(query?.month)
   const overview = await getMonthOverview({ monthKey })
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
+      <TaskAssignmentAlerts />
       <DesignerWorkspacePage initialMonthKey={monthKey} initialOverview={overview} />
     </div>
   )

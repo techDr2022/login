@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Fragment, useState, useEffect } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { EMPLOYEE_DEPARTMENTS } from '@/lib/employee-departments'
 
 interface Employee {
   id: string
@@ -24,6 +25,7 @@ interface Employee {
   email: string
   payslipEmail?: string | null
   jobTitle?: string | null
+  department?: string | null
   role: string
   isActive: boolean
   createdAt: string
@@ -94,12 +96,6 @@ export function EmployeesTable({
     if (score >= 80) return 'text-green-600'
     if (score >= 60) return 'text-yellow-600'
     return 'text-red-600'
-  }
-
-  const getPerformanceBgColor = (score: number) => {
-    if (score >= 80) return 'bg-green-100 dark:bg-green-900/20'
-    if (score >= 60) return 'bg-yellow-100 dark:bg-yellow-900/20'
-    return 'bg-red-100 dark:bg-red-900/20'
   }
 
   const getStatusBadge = (employee: Employee) => {
@@ -181,6 +177,21 @@ export function EmployeesTable({
     }
   }
 
+  const visibleEmployees = showTodayOnly
+    ? employees.filter((employee) => (todayTasks[employee.id] || []).length > 0)
+    : employees
+
+  const departmentGroups = [
+    ...EMPLOYEE_DEPARTMENTS.map((department) => ({
+      department,
+      employees: visibleEmployees.filter((employee) => employee.department === department),
+    })),
+    {
+      department: 'Unassigned',
+      employees: visibleEmployees.filter((employee) => !employee.department),
+    },
+  ].filter((group) => group.employees.length > 0)
+
   if (loading) {
     return (
       <Card className="rounded-xl border shadow-sm">
@@ -214,24 +225,36 @@ export function EmployeesTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {employees.length === 0 ? (
+            {visibleEmployees.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="h-24 text-center">
                   <div className="flex flex-col items-center justify-center py-8">
                     <p className="text-sm font-medium text-muted-foreground">No employees found</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Get started by adding a new employee
+                      {showTodayOnly
+                        ? 'No employees have tasks scheduled for today'
+                        : 'Get started by adding a new employee'}
                     </p>
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
-              employees.map((employee) => (
-                <TableRow
-                  key={employee.id}
-                  className="cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => onEmployeeClick(employee)}
-                >
+              departmentGroups.map((group) => (
+                <Fragment key={group.department}>
+                  <TableRow className="bg-muted/60 hover:bg-muted/60">
+                    <TableCell colSpan={9} className="py-2">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <span>{group.department}</span>
+                        <Badge variant="secondary">{group.employees.length}</Badge>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {group.employees.map((employee) => (
+                    <TableRow
+                      key={employee.id}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => onEmployeeClick(employee)}
+                    >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
@@ -337,7 +360,9 @@ export function EmployeesTable({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
-                </TableRow>
+                    </TableRow>
+                  ))}
+                </Fragment>
               ))
             )}
           </TableBody>

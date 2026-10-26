@@ -27,10 +27,6 @@ export const ATTENDANCE_CONFIG = {
   ABSENT_HOUR: 14,
   ABSENT_MINUTE: 0, // After 2:00 PM is considered absent
   
-  // WFH Activity Tracking
-  WFH_ACTIVITY_PING_INTERVAL_MINUTES: 60, // Ping every 60 minutes
-  WFH_INACTIVITY_THRESHOLD_MINUTES: 120, // Flag if no activity for 2+ hours
-  
   // Minimum working hours for WFH to be considered Present
   WFH_MIN_HOURS_FOR_PRESENT: 8.5,
   
@@ -64,6 +60,34 @@ export function getISTDayStart(date: Date): Date {
  */
 export function getAttendanceDateForDB(date: Date): Date {
   return new Date(`${getISTDateKey(date)}T00:00:00.000Z`)
+}
+
+/** 6:00 PM IST on the calendar day of `date`. */
+export function endOfBusinessDayIST(date: Date): Date {
+  return dateAtISTWallClock(getISTDateKey(date), 18, 0, 0)
+}
+
+export function istHour(date: Date): number {
+  const hour = new Intl.DateTimeFormat('en-GB', {
+    timeZone: ATTENDANCE_TIMEZONE,
+    hour: '2-digit',
+    hour12: false,
+  }).format(date)
+  return Number(hour)
+}
+
+/** Date-only values and multi-day durations land at 6:00 PM IST. */
+export function normalizeTaskDueDate(start: Date, candidate: Date, durationHours?: number): Date {
+  const crossesDay =
+    durationHours === undefined
+      ? istHour(candidate) < 9
+      : durationHours >= 24 || getISTDateKey(candidate) !== getISTDateKey(start)
+  if (!crossesDay) return candidate
+  return endOfBusinessDayIST(candidate)
+}
+
+export function isBeforeIstToday(date: Date): boolean {
+  return getISTDateKey(date) < getISTDateKey(new Date())
 }
 
 /** Parse YYYY-MM-DD as the attendance DATE column value (UTC midnight). */

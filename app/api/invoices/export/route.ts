@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
 
     const [clients, officeExpenses] = await Promise.all([
       prisma.client.findMany({
+        where: { status: { not: 'PAUSED' } },
         select: {
           id: true,
           name: true,

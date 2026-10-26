@@ -8,7 +8,8 @@ import { prisma } from '@/lib/prisma'
 import { UserRole, AttendanceMode, AttendanceStatus } from '@prisma/client'
 import { parseDateLocal, formatDateLocal } from '@/lib/utils'
 import { parseAttendanceDateKey, getISTDateKey } from '@/lib/attendance-config'
-import { isAttendancePublicHoliday, getAttendanceHolidayDateKeys } from '@/lib/attendance-holidays'
+import { isAttendancePublicHoliday } from '@/lib/attendance-holidays'
+import { getAttendanceHolidayDateKeys } from '@/lib/attendance-holiday-db'
 
 export async function GET(request: NextRequest) {
   try {

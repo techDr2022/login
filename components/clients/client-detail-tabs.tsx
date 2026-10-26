@@ -20,6 +20,7 @@ import { UserRole } from '@prisma/client'
 import { canManageClients, canEditClient } from '@/lib/rbac'
 import { generateTasksForMonth } from '@/app/actions/client-onboarding-actions'
 import { EditClientDialog } from './edit-client-dialog'
+import { ClientPortalPanel } from './client-portal-panel'
 import { formatDateLocal } from '@/lib/utils'
 
 interface ClientDetailTabsProps {
@@ -458,6 +459,7 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
           <TabsTrigger value="approvals">Approvals</TabsTrigger>
           <TabsTrigger value="kpis">KPIs</TabsTrigger>
           <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="portal">Portal</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -1297,6 +1299,9 @@ export function ClientDetailTabs({ clientId }: ClientDetailTabsProps) {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+        <TabsContent value="portal" className="space-y-4">
+          <ClientPortalPanel clientId={clientId} />
         </TabsContent>
       </Tabs>
 

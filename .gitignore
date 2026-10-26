@@ -48,3 +48,4 @@ employee-credentials.txt
 *.swo
 *~
 .env
+.env*

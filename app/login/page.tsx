@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,7 +22,7 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (status === 'authenticated' && session) {
-      router.push('/dashboard')
+      router.push(session.user.role === 'CLIENT' ? '/portal' : '/dashboard')
     }
   }, [status, session, router])
 
@@ -48,7 +49,9 @@ export default function LoginPage() {
         setError('Invalid email or password')
         setLoading(false)
       } else {
-        router.push('/dashboard')
+        const sessionRes = await fetch('/api/auth/session')
+        const nextSession = await sessionRes.json().catch(() => null)
+        router.push(nextSession?.user?.role === 'CLIENT' ? '/portal' : '/dashboard')
         router.refresh()
       }
     } catch (err) {
@@ -138,6 +141,9 @@ export default function LoginPage() {
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Logging in...' : 'Login'}
               </Button>
+              <p className="text-center text-sm text-muted-foreground">
+                Client? <Link className="text-primary underline" href="/client-login">Sign in here</Link>
+              </p>
             </form>
           </CardContent>
         </Card>

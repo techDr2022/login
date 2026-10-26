@@ -32,8 +32,12 @@ export function setTaskSoundPath(path: string) {
   localStorage.setItem('taskSoundPath', path)
 }
 
+let soundInitialized = false
+
 // Initialize audio context after user interaction
 export function initChatSound() {
+  if (soundInitialized || typeof window === 'undefined') return
+  soundInitialized = true
   // Check localStorage for saved preferences
   // Default to false for chat sounds (disabled by default to prevent disturbing sounds)
   const chatSaved = localStorage.getItem('chatSoundEnabled')
@@ -77,7 +81,7 @@ export function initChatSound() {
 }
 
 // Play audio file
-function playAudioFile(path: string) {
+function playAudioFile(path: string, volume = 0.3) {
   if (typeof window === 'undefined') {
     console.warn('Cannot play audio: window is undefined')
     return
@@ -85,7 +89,7 @@ function playAudioFile(path: string) {
 
   try {
     const audio = new Audio(path)
-    audio.volume = 0.3 // Set volume to 30% (reduced from 70% to be less disturbing)
+    audio.volume = volume
     
     // Preload the audio
     audio.preload = 'auto'
@@ -144,6 +148,12 @@ export function playChatSound() {
   }
 }
 
+export function playAlertSound() {
+  if (typeof window === 'undefined' || !userInteracted) return
+  const path = getTaskSoundPath()
+  if (path) playAudioFile(path, 0.7)
+}
+
 // Play notification sound for tasks
 export function playTaskSound() {
   // Re-check enabled state from localStorage in case it changed
@@ -164,7 +174,7 @@ export function playTaskSound() {
   
   const soundPath = getTaskSoundPath()
   if (soundPath) {
-    playAudioFile(soundPath)
+    playAudioFile(soundPath, 0.7)
   } else {
     console.warn('No task sound path found')
   }

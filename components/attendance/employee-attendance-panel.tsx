@@ -17,16 +17,13 @@ import {
   LogOut,
   Home,
   Laptop,
-  Activity,
-  AlertTriangle,
-  TrendingUp
+  AlertTriangle
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { clockIn, clockOut } from '@/app/actions/attendance-actions'
 import { AttendanceMode } from '@prisma/client'
 import { formatDateLocal } from '@/lib/utils'
 import { getISTDateKey } from '@/lib/attendance-config'
-import { useWFHActivity } from '@/lib/hooks/use-wfh-activity'
 import { useRouter } from 'next/navigation'
 
 interface AttendanceRecord {
@@ -50,8 +47,6 @@ export function EmployeeAttendancePanel() {
   const [clockingIn, setClockingIn] = useState(false)
   const [clockingOut, setClockingOut] = useState(false)
   const [selectedMode, setSelectedMode] = useState<AttendanceMode>(AttendanceMode.OFFICE)
-  const [wfhMetrics, setWfhMetrics] = useState<any>(null)
-  const [inactivityWarning, setInactivityWarning] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
 
@@ -61,18 +56,6 @@ export function EmployeeAttendancePanel() {
       setSelectedMode(todayAttendance.mode as AttendanceMode)
     }
   }, [todayAttendance?.mode])
-
-  // Enable WFH activity tracking when in WFH mode and clocked in
-  const isWFHActive = todayAttendance?.mode === AttendanceMode.WFH && 
-                      todayAttendance?.loginTime && 
-                      !todayAttendance?.logoutTime
-
-  useWFHActivity({
-    enabled: !!isWFHActive,
-    onInactivityWarning: (minutes) => {
-      setInactivityWarning(minutes)
-    },
-  })
 
   const fetchTodayAttendance = useCallback(async (forceRefresh = false) => {
     try {
@@ -158,26 +141,6 @@ export function EmployeeAttendancePanel() {
     }
   }, [session?.user?.id, page])
 
-  const fetchWFHMetrics = useCallback(async () => {
-    if (!isWFHActive) {
-      setWfhMetrics(null)
-      return
-    }
-
-    try {
-      const res = await fetch(`/api/attendance/wfh-activity?userId=${session?.user?.id}`)
-      const data = await res.json()
-      setWfhMetrics(data.today)
-      if (data.today?.metrics?.inactivityWarning) {
-        setInactivityWarning(data.today.metrics.inactivityWarning.minutes)
-      } else {
-        setInactivityWarning(null)
-      }
-    } catch (err) {
-      console.error('Failed to fetch WFH metrics:', err)
-    }
-  }, [session?.user?.id, isWFHActive])
-
   useEffect(() => {
     const loadData = async () => {
       await Promise.all([fetchTodayAttendance(), fetchAttendanceHistory()])
@@ -188,16 +151,6 @@ export function EmployeeAttendancePanel() {
       loadData()
     }
   }, [session?.user?.id, fetchTodayAttendance, fetchAttendanceHistory])
-
-  // Fetch WFH metrics when in WFH mode
-  useEffect(() => {
-    if (isWFHActive) {
-      fetchWFHMetrics()
-      // Refresh metrics every 2 minutes
-      const interval = setInterval(fetchWFHMetrics, 2 * 60 * 1000)
-      return () => clearInterval(interval)
-    }
-  }, [isWFHActive, fetchWFHMetrics])
 
   const handleClockIn = async () => {
     try {
@@ -504,88 +457,6 @@ export function EmployeeAttendancePanel() {
           </div>
         </CardContent>
       </Card>
-
-      {/* WFH Activity Warning */}
-      {isWFHActive && inactivityWarning && (
-        <Card className="rounded-xl border-yellow-200 bg-yellow-50 shadow-sm">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-yellow-900">
-                  Inactivity Detected
-                </p>
-                <p className="text-xs text-yellow-700 mt-1">
-                  No activity detected for {Math.round(inactivityWarning)} minutes. 
-                  Please ensure you&apos;re actively working to maintain your attendance record.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* WFH Activity Metrics */}
-      {isWFHActive && wfhMetrics && (
-        <Card className="rounded-xl border shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              WFH Activity Monitor
-            </CardTitle>
-            <CardDescription>Your work activity is being tracked automatically</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Activity Score</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                  <p className={`font-medium ${
-                    (wfhMetrics.metrics?.activityScore || 0) >= 80 ? 'text-green-600' :
-                    (wfhMetrics.metrics?.activityScore || 0) >= 50 ? 'text-yellow-600' :
-                    'text-red-600'
-                  }`}>
-                    {wfhMetrics.metrics?.activityScore || 0}%
-                  </p>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Activity Pings</p>
-                <p className="mt-1 font-medium">
-                  {wfhMetrics.attendance?.wfhActivityPings || 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Tasks Completed</p>
-                <p className="mt-1 font-medium">
-                  {wfhMetrics.metrics?.tasksCompleted || 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Task Time</p>
-                <p className="mt-1 font-medium">
-                  {(wfhMetrics.metrics?.totalTaskTime || 0).toFixed(1)}h
-                </p>
-              </div>
-              {wfhMetrics.attendance?.lastActivityTime && (
-                <div className="col-span-2">
-                  <p className="text-sm text-muted-foreground">Last Activity</p>
-                  <p className="mt-1 font-medium text-xs">
-                    {formatTime(wfhMetrics.attendance.lastActivityTime)}
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="mt-4 p-3 bg-muted rounded-lg">
-              <p className="text-xs text-muted-foreground">
-                💡 Your activity is automatically tracked through mouse movements, keyboard input, 
-                and task updates. Stay active to maintain a good activity score.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Today's Status */}
       {todayAttendance && (

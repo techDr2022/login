@@ -22,6 +22,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
 
+const CLOSED_STATUSES = new Set(['Approved', 'Done', 'Cancelled', 'Rejected'])
+
+function isOpenDueToday(task: { dueDate?: string; status: string }) {
+  if (!task.dueDate || CLOSED_STATUSES.has(task.status)) return false
+  const due = new Date(task.dueDate)
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  const end = new Date()
+  end.setHours(23, 59, 59, 999)
+  return due >= start && due <= end
+}
+
 interface Task {
   id: string
   title: string
@@ -111,7 +123,10 @@ export function TasksList() {
     try {
       const res = await fetch('/api/clients?limit=1000')
       const data = await res.json()
-      setClients(data.clients || [])
+      const assignable = (data.clients || []).filter(
+        (client: { status?: string }) => client.status !== 'PAUSED'
+      )
+      setClients(assignable)
     } catch (err) {
       console.error('Failed to fetch clients:', err)
     }
@@ -638,6 +653,13 @@ export function TasksList() {
                               {c.name}
                             </SelectItem>
                           ))}
+                          {formData.clientId &&
+                            !clients.some((c) => c.id === formData.clientId) &&
+                            editingTask?.client?.id === formData.clientId && (
+                              <SelectItem value={editingTask.client.id}>
+                                {editingTask.client.name}
+                              </SelectItem>
+                            )}
                         </SelectContent>
                       </Select>
                   </div>
@@ -772,10 +794,12 @@ export function TasksList() {
                   </TableCell>
                 </TableRow>
               ) : (
-                tasks.map((task) => (
+                tasks.map((task) => {
+                  const dueToday = isOpenDueToday(task)
+                  return (
                   <TableRow 
                     key={task.id} 
-                    className="cursor-pointer hover:bg-muted/50 transition-colors" 
+                    className={dueToday ? 'cursor-pointer bg-amber-50 transition-colors hover:bg-amber-100' : 'cursor-pointer transition-colors hover:bg-muted/50'} 
                     onClick={() => router.push(`/tasks/${task.id}`)}
                   >
                     {canManage && (
@@ -829,8 +853,15 @@ export function TasksList() {
                         '-'
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}
+                    <TableCell className={dueToday ? 'text-amber-900' : 'text-muted-foreground'}>
+                      {task.dueDate ? (
+                        <div className="flex flex-col">
+                          <span className={dueToday ? 'font-medium' : undefined}>{new Date(task.dueDate).toLocaleDateString()}</span>
+                          {dueToday ? <span className="text-xs font-medium text-amber-700">Finish before the day ends</span> : null}
+                        </div>
+                      ) : (
+                        '-'
+                      )}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
                       <div className="flex justify-end gap-2">
@@ -895,18 +926,29 @@ export function TasksList() {
                             )}
                           </>
                         )}
-                        {/* Employee edit button for tasks they created */}
+                        {/* Creator can fix a task they made by mistake */}
                         {!canManage && task.assignedBy?.id === session?.user?.id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleEdit(task)
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEdit(task)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={isDeleting === task.id}
+                              onClick={() => handleDelete(task.id)}
+                              title="Delete task"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
                         )}
                         {/* Admin actions */}
                         {canManage && (
@@ -938,7 +980,8 @@ export function TasksList() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                  )
+                })
               )}
             </TableBody>
           </Table>

@@ -1,7 +1,7 @@
 /**
  * WhatsApp Notification Service
  * 
- * This service handles sending WhatsApp notifications for task assignments.
+ * This service handles sending WhatsApp notifications.
  * Supports multiple providers:
  * - Twilio WhatsApp API (recommended for production)
  * - Custom webhook-based services
@@ -65,7 +65,7 @@ async function sendViaTwilio(message: WhatsAppMessage): Promise<WhatsAppResponse
   const fromNumber = process.env.TWILIO_WHATSAPP_FROM
   // Use custom template SID if provided, otherwise use default
   const templateSid = message.templateSid || process.env.TWILIO_WHATSAPP_TEMPLATE_SID // Optional: Content Template SID
-  // Use approved Content when SID exists; explicit per-message SID (e.g. task) must work without TWILIO_USE_TEMPLATE
+  // Use approved Content when SID exists; an explicit per-message SID must work without TWILIO_USE_TEMPLATE
   const useTemplate =
     Boolean(templateSid) &&
     !message.forceFreeform &&
@@ -317,109 +317,6 @@ export async function sendWhatsAppNotification(
 }
 
 /**
- * Format task assignment message for WhatsApp
- * Returns both formatted message string and template variables
- */
-export function formatTaskAssignmentMessage(
-  taskTitle: string,
-  assignedByName: string,
-  priority?: string,
-  dueDate?: Date,
-  clientName?: string
-): string {
-  let message = `📋 *New Task Assigned*\n\n`
-  message += `*Task:* ${taskTitle}\n`
-  message += `*Assigned by:* ${assignedByName}\n`
-
-  if (priority) {
-    const priorityEmoji = {
-      Low: '🟢',
-      Medium: '🟡',
-      High: '🟠',
-      Urgent: '🔴',
-    }[priority] || '📌'
-    message += `*Priority:* ${priorityEmoji} ${priority}\n`
-  }
-
-  if (dueDate) {
-    const formattedDate = new Date(dueDate).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-    message += `*Due Date:* ${formattedDate}\n`
-  }
-
-  if (clientName) {
-    message += `*Client:* ${clientName}\n`
-  }
-
-  message += `\nPlease check your dashboard for more details.`
-
-  return message
-}
-
-/**
- * Twilio / Meta Content Template SID for task assignment notifications.
- * Prefer TWILIO_WHATSAPP_TASK_TEMPLATE_SID so task copy never shares the attendance template SID.
- */
-export function getTaskWhatsAppContentTemplateSid(): string | undefined {
-  const sid = process.env.TWILIO_WHATSAPP_TASK_TEMPLATE_SID || process.env.TWILIO_WHATSAPP_TEMPLATE_SID
-  return sid && sid.trim() ? sid.trim() : undefined
-}
-
-/**
- * Get template variables for WhatsApp template
- * Returns variables in the order: [taskTitle, assignedByName, priority, dueDate, clientName]
- *
- * The approved template body must use exactly five placeholders (Twilio variables 1–5), e.g.:
- * Task: {{1}} / Assigned by: {{2}} / Priority: {{3}} / Due: {{4}} / Client: {{5}}
- * Do not paste documentation like "{{3}} = Priority" into the template — that text is sent verbatim.
- */
-export function getTaskAssignmentTemplateVariables(
-  taskTitle: string,
-  assignedByName: string,
-  priority?: string,
-  dueDate?: Date,
-  clientName?: string
-): string[] {
-  // Format priority with emoji
-  let priorityText = ''
-  if (priority) {
-    const priorityEmoji = {
-      Low: '🟢',
-      Medium: '🟡',
-      High: '🟠',
-      Urgent: '🔴',
-    }[priority] || '📌'
-    priorityText = `${priorityEmoji} ${priority}`
-  }
-
-  // Format due date
-  let dueDateText = ''
-  if (dueDate) {
-    dueDateText = new Date(dueDate).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
-
-  // Return variables in order: taskTitle, assignedByName, priority, dueDate, clientName
-  return [
-    taskTitle,
-    assignedByName,
-    priorityText || 'Not set',
-    dueDateText || 'Not set',
-    clientName || 'Not assigned',
-  ]
-}
-
-/**
  * Format attendance notification message for WhatsApp
  */
 export function formatAttendanceNotificationMessage(
@@ -539,84 +436,6 @@ export function getAttendanceReminderTemplateVariables(employeeName: string): st
   return [
     employeeName,
     currentTime,
-  ]
-}
-
-/**
- * Format WFH inactivity warning message for WhatsApp
- * Sent to admins when an employee becomes inactive during WFH
- */
-export function formatWFHInactivityWarningMessage(
-  employeeName: string,
-  minutesInactive: number,
-  lastActivityTime?: Date,
-  activityScore?: number
-): string {
-  const formattedLastActivity = lastActivityTime
-    ? new Date(lastActivityTime).toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      })
-    : 'Unknown'
-
-  const hoursInactive = Math.floor(minutesInactive / 60)
-  const remainingMinutes = minutesInactive % 60
-  const inactiveDuration = hoursInactive > 0
-    ? `${hoursInactive}h ${remainingMinutes}m`
-    : `${remainingMinutes}m`
-
-  let message = `⚠️ *WFH Inactivity Alert*\n\n`
-  message += `*Employee:* ${employeeName}\n`
-  message += `*Status:* Inactive for ${inactiveDuration}\n`
-  message += `*Last Activity:* ${formattedLastActivity}\n`
-  
-  if (activityScore !== undefined) {
-    message += `*Activity Score:* ${activityScore}%\n`
-  }
-  
-  message += `\nPlease check the WFH Activity Monitor for details.`
-
-  return message
-}
-
-/**
- * Get template variables for WFH inactivity warning template
- * Returns variables in the order: [employeeName, inactiveDuration, lastActivityTime, activityScore]
- */
-export function getWFHInactivityWarningTemplateVariables(
-  employeeName: string,
-  minutesInactive: number,
-  lastActivityTime?: Date,
-  activityScore?: number
-): string[] {
-  const hoursInactive = Math.floor(minutesInactive / 60)
-  const remainingMinutes = minutesInactive % 60
-  const inactiveDuration = hoursInactive > 0
-    ? `${hoursInactive} hours ${remainingMinutes} minutes`
-    : `${remainingMinutes} minutes`
-
-  const formattedLastActivity = lastActivityTime
-    ? new Date(lastActivityTime).toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      })
-    : 'Unknown'
-
-  const activityScoreText = activityScore !== undefined ? `${activityScore}%` : 'Not available'
-
-  return [
-    employeeName,
-    inactiveDuration,
-    formattedLastActivity,
-    activityScoreText,
   ]
 }
 

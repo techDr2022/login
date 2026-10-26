@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -31,7 +31,6 @@ import {
 import {
   getActiveEmployees,
   getCurrentMonthSalaries,
-  upsertCurrentMonthEmployeeSalary,
   ActiveEmployee,
   EmployeeSalaryItem,
 } from '@/app/actions/employee-salary-actions'
@@ -41,16 +40,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 
+type DashboardSnapshot = {
+  invoices: ClientInvoice[]
+  officeExpenses: OfficeExpenseItem[]
+  employees: ActiveEmployee[]
+  employeeSalaries: EmployeeSalaryItem[]
+}
+
+let dashboardSnapshot: DashboardSnapshot | null = null
+
 export function InvoicesDashboard() {
-  const [invoices, setInvoices] = useState<ClientInvoice[]>([])
-  const [officeExpenses, setOfficeExpenses] = useState<OfficeExpenseItem[]>([])
-  const [employees, setEmployees] = useState<ActiveEmployee[]>([])
-  const [employeeSalaries, setEmployeeSalaries] = useState<EmployeeSalaryItem[]>([])
+  const [invoices, setInvoices] = useState<ClientInvoice[]>(dashboardSnapshot?.invoices ?? [])
+  const [officeExpenses, setOfficeExpenses] = useState<OfficeExpenseItem[]>(dashboardSnapshot?.officeExpenses ?? [])
+  const [employees, setEmployees] = useState<ActiveEmployee[]>(dashboardSnapshot?.employees ?? [])
+  const [employeeSalaries, setEmployeeSalaries] = useState<EmployeeSalaryItem[]>(dashboardSnapshot?.employeeSalaries ?? [])
   const [salaryInputs, setSalaryInputs] = useState<Record<string, string>>({})
+  const dirtySalaryUserIds = useRef<Set<string>>(new Set())
   const [adsBudgetInputs, setAdsBudgetInputs] = useState<Record<string, string>>({})
   const [savingSalaryUserId, setSavingSalaryUserId] = useState<string | null>(null)
   const [savingAdsBudgetClientId, setSavingAdsBudgetClientId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(dashboardSnapshot === null)
   const [editingInvoice, setEditingInvoice] = useState<ClientInvoice | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [planFilter, setPlanFilter] = useState<'ALL' | 'ONE_MONTH' | 'THREE_MONTHS' | 'SIX_MONTHS'>('ALL')
@@ -78,12 +87,12 @@ export function InvoicesDashboard() {
   })
 
   useEffect(() => {
-    loadInvoices()
+    loadInvoices(dashboardSnapshot !== null)
   }, [])
 
-  const loadInvoices = async () => {
+  const loadInvoices = async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       setLoadError(null)
       const [invoiceData, expenseData, employeeData, salaryData] = await Promise.all([
         getClientInvoices(),
@@ -91,6 +100,12 @@ export function InvoicesDashboard() {
         getActiveEmployees(),
         getCurrentMonthSalaries(),
       ])
+      dashboardSnapshot = {
+        invoices: invoiceData,
+        officeExpenses: expenseData,
+        employees: employeeData,
+        employeeSalaries: salaryData,
+      }
       setInvoices(invoiceData)
       setOfficeExpenses(expenseData)
       setEmployees(employeeData)
@@ -99,22 +114,27 @@ export function InvoicesDashboard() {
       console.error('Error loading client invoices:', error)
       const message = error instanceof Error ? error.message : 'Failed to load client data.'
       setLoadError(message)
-      setInvoices([])
-      setOfficeExpenses([])
-      setEmployees([])
-      setEmployeeSalaries([])
+      if (!silent) {
+        setInvoices([])
+        setOfficeExpenses([])
+        setEmployees([])
+        setEmployeeSalaries([])
+      }
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    const nextInputs: Record<string, string> = {}
-    for (const employee of employees) {
-      const salary = employeeSalaries.find((s) => s.userId === employee.id && s.isActive)
-      nextInputs[employee.id] = salary ? String(salary.amount) : ''
-    }
-    setSalaryInputs(nextInputs)
+    setSalaryInputs((prev) => {
+      const nextInputs = { ...prev }
+      for (const employee of employees) {
+        if (dirtySalaryUserIds.current.has(employee.id)) continue
+        const salary = employeeSalaries.find((s) => s.userId === employee.id && s.isActive)
+        nextInputs[employee.id] = salary ? String(salary.amount) : (prev[employee.id] ?? '')
+      }
+      return nextInputs
+    })
   }, [employees, employeeSalaries])
 
   useEffect(() => {
@@ -370,6 +390,7 @@ export function InvoicesDashboard() {
   }
 
   const handleSalaryInputChange = (userId: string, value: string) => {
+    dirtySalaryUserIds.current.add(userId)
     setSalaryInputs((prev) => ({ ...prev, [userId]: value }))
   }
 
@@ -383,8 +404,22 @@ export function InvoicesDashboard() {
 
     try {
       setSavingSalaryUserId(userId)
-      await upsertCurrentMonthEmployeeSalary(userId, amount)
-      await loadInvoices()
+      const response = await fetch('/api/invoices/employee-salary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, amount }),
+      })
+      const saved = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(saved.error || 'Failed to save salary.')
+      }
+      dirtySalaryUserIds.current.delete(userId)
+      setEmployeeSalaries((prev) => {
+        const next = [...prev.filter((salary) => salary.userId !== userId), saved as EmployeeSalaryItem]
+        if (dashboardSnapshot) dashboardSnapshot = { ...dashboardSnapshot, employeeSalaries: next }
+        return next
+      })
+      setSalaryInputs((prev) => ({ ...prev, [userId]: String(saved.amount) }))
     } catch (error: any) {
       alert(error.message || 'Failed to save salary.')
     } finally {
@@ -731,7 +766,7 @@ export function InvoicesDashboard() {
               <div className="min-w-0">
                 <CardTitle className="text-sm">Employees Salary</CardTitle>
                 <CardDescription className="text-xs">
-                  Monthly salary entries for active employees.
+                  Stays on each employee. A new month keeps the last saved amount.
                 </CardDescription>
               </div>
             </div>
@@ -756,6 +791,7 @@ export function InvoicesDashboard() {
                       placeholder="Salary"
                     />
                     <Button
+                      type="button"
                       size="sm"
                       className="h-8 text-xs"
                       disabled={savingSalaryUserId === employee.id}

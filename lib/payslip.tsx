@@ -1,18 +1,12 @@
 import React from 'react'
 import { renderToBuffer, Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
-import { AttendanceStatus, UserRole } from '@prisma/client'
+import { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { buildEmployeeCodeMap } from '@/lib/employee-code'
-import { getISTDateKey, dateAtISTWallClock } from '@/lib/attendance-config'
-import { isAttendanceNonWorkingCalendarDay, getAttendanceHolidayDateKeys } from '@/lib/attendance-holidays'
-import {
-  applyPaidLeaveCarryForward,
-  compareMonthKeys,
-  getEmployeePaidLeaveStartMonthKey,
-  getMonthKey,
-  getMonthKeysBetween,
-} from '@/lib/payroll-paid-leave'
-import { countWorkingDaysInMonth, getTodayISTDateKey } from '@/lib/payroll-calculations'
+import { dateAtISTWallClock } from '@/lib/attendance-config'
+import { getAttendanceHolidayDateKeys } from '@/lib/attendance-holiday-db'
+import { computeEmployeePayroll, countWorkingDaysInMonth } from '@/lib/payroll-calculations'
+import { parseDateLocal } from '@/lib/utils'
 
 export interface PayslipData {
   employeeId: string
@@ -39,8 +33,8 @@ function monthKeyToLabel(monthKey: string): string {
   })
 }
 
-function formatDateKey(date: Date): string {
-  return getISTDateKey(date)
+function roundMoney(amount: number): number {
+  return Math.round(amount * 100) / 100
 }
 
 function getMonthDateRange(monthKey: string): { start: Date; end: Date } {
@@ -270,6 +264,10 @@ function PayslipPdf({ data }: { data: PayslipData }) {
                 <Text style={styles.value}>{formatCurrency(data.perDaySalary)}</Text>
               </View>
               <View style={styles.row}>
+                <Text style={styles.label}>Paid Leave Pay</Text>
+                <Text style={styles.value}>{formatCurrency(roundMoney(data.paidLeaveDays * data.perDaySalary))}</Text>
+              </View>
+              <View style={styles.row}>
                 <Text style={styles.label}>LOP Deduction</Text>
                 <Text style={styles.value}>{formatCurrency(data.deductionAmount)}</Text>
               </View>
@@ -284,20 +282,22 @@ function PayslipPdf({ data }: { data: PayslipData }) {
               <Text style={[styles.label, styles.cellAmount]}>Amount</Text>
             </View>
             <View style={styles.tableRow}>
-              <Text style={styles.cellParticular}>Gross Salary</Text>
-              <Text style={styles.cellFormula}>Monthly Fixed</Text>
-              <Text style={styles.cellAmount}>{formatCurrency(data.grossSalary)}</Text>
-            </View>
-            <View style={styles.tableRow}>
-              <Text style={styles.cellParticular}>Deduction (LOP)</Text>
+              <Text style={styles.cellParticular}>Attendance Pay</Text>
               <Text style={styles.cellFormula}>
-                {data.absentDays.toFixed(2)} x {formatCurrency(data.perDaySalary)}
+                {data.presentDays.toFixed(2)} x {formatCurrency(data.perDaySalary)}
               </Text>
-              <Text style={styles.cellAmount}>- {formatCurrency(data.deductionAmount)}</Text>
+              <Text style={styles.cellAmount}>{formatCurrency(roundMoney(data.presentDays * data.perDaySalary))}</Text>
             </View>
             <View style={styles.tableRow}>
-              <Text style={styles.cellParticular}>Net Before Rounding</Text>
-              <Text style={styles.cellFormula}>Gross - Deduction</Text>
+              <Text style={styles.cellParticular}>Paid Leave</Text>
+              <Text style={styles.cellFormula}>
+                {data.paidLeaveDays.toFixed(2)} x {formatCurrency(data.perDaySalary)}
+              </Text>
+              <Text style={styles.cellAmount}>{formatCurrency(roundMoney(data.paidLeaveDays * data.perDaySalary))}</Text>
+            </View>
+            <View style={styles.tableRow}>
+              <Text style={styles.cellParticular}>Payable Total</Text>
+              <Text style={styles.cellFormula}>Attendance + Paid Leave</Text>
               <Text style={styles.cellAmount}>{formatCurrency(data.payableSalary)}</Text>
             </View>
             <View style={styles.netPayWrap}>
@@ -339,91 +339,50 @@ export async function buildPayslipData(userId: string, monthKey: string): Promis
 
   const holidayDates = await getAttendanceHolidayDateKeys()
   const formattedEmployeeCode = await getFormattedEmployeeCode(userId)
-  const { start, end } = getMonthDateRange(monthKey)
+  const { end } = getMonthDateRange(monthKey)
   const workingDays = getWorkingDaysInMonth(monthKey, holidayDates)
   if (workingDays <= 0) return null
 
+  const [yearStr, monthStr] = monthKey.split('-')
+  const lastDay = new Date(Number(yearStr), Number(monthStr), 0).getDate()
+  const rangeStart = parseDateLocal(`${monthKey}-01`)
+  const rangeEnd = parseDateLocal(`${monthKey}-${String(lastDay).padStart(2, '0')}`)
+  rangeEnd.setHours(23, 59, 59, 999)
+
   const simulationStart = employee.joiningDate
     ? new Date(employee.joiningDate.getFullYear(), employee.joiningDate.getMonth(), 1)
-    : start
+    : rangeStart
 
   const attendances = await prisma.attendances.findMany({
     where: { userId, date: { gte: simulationStart, lte: end } },
     select: { date: true, status: true },
   })
 
-  const attendanceByDay = new Map(attendances.map((a) => [formatDateKey(a.date), a.status]))
-  const todayKey = getTodayISTDateKey()
-  const isWorkingDay = (date: Date) => !isAttendanceNonWorkingCalendarDay(date, holidayDates)
-  const joinKey = employee.joiningDate ? getISTDateKey(employee.joiningDate) : null
-
-  let presentDays = 0
-  let rawAbsentDays = 0
-  const absentDaysByMonth = new Map<string, number>()
-  const cursor = new Date(start)
-  const endCopy = new Date(end)
-
-  while (cursor <= endCopy) {
-    const dayKey = formatDateKey(cursor)
-    if (joinKey && dayKey < joinKey) {
-      cursor.setDate(cursor.getDate() + 1)
-      continue
-    }
-    if (!isWorkingDay(cursor)) {
-      cursor.setDate(cursor.getDate() + 1)
-      continue
-    }
-    if (dayKey >= todayKey) {
-      cursor.setDate(cursor.getDate() + 1)
-      continue
-    }
-
-    const status = attendanceByDay.get(dayKey) ?? AttendanceStatus.Absent
-    if (status === AttendanceStatus.Present || status === AttendanceStatus.Late) {
-      presentDays += 1
-    } else if (status === AttendanceStatus.HalfDay) {
-      presentDays += 0.5
-    } else if (status === AttendanceStatus.Absent) {
-      rawAbsentDays += 1
-      const mk = getMonthKey(cursor)
-      absentDaysByMonth.set(mk, (absentDaysByMonth.get(mk) ?? 0) + 1)
-    }
-
-    cursor.setDate(cursor.getDate() + 1)
-  }
-
-  const employeeJoinMonthKey = getEmployeePaidLeaveStartMonthKey(employee.joiningDate)
-  const simulationEnd = new Date(end.getFullYear(), end.getMonth(), 1)
-  const simulationMonths = getMonthKeysBetween(simulationStart, simulationEnd).filter((mk) => {
-    if (employeeJoinMonthKey && compareMonthKeys(mk, employeeJoinMonthKey) < 0) return false
-    return true
+  const payroll = computeEmployeePayroll({
+    employee: {
+      id: employee.id,
+      name: employee.name,
+      joiningDate: employee.joiningDate,
+    },
+    rangeStart,
+    rangeEnd,
+    rangeStartMonthKey: monthKey,
+    rangeEndMonthKey: monthKey,
+    monthKeysInRange: [monthKey],
+    holidayDates,
+    attendanceInRange: attendances,
+    attendanceForCarryForward: attendances,
+    salaryByMonth: new Map([[monthKey, salary.amount]]),
+    simulationStart,
   })
 
-  const priorAbsentDaysByMonth = new Map<string, number>()
-  for (const record of attendances) {
-    const dayKey = formatDateKey(record.date)
-    if (dayKey >= `${monthKey}-01`) continue
-    if (joinKey && dayKey < joinKey) continue
-    const date = record.date
-    if (!isWorkingDay(date)) continue
-    if (dayKey >= todayKey) continue
-    if (record.status !== AttendanceStatus.Absent) continue
-    const mk = getMonthKey(date)
-    priorAbsentDaysByMonth.set(mk, (priorAbsentDaysByMonth.get(mk) ?? 0) + 1)
-  }
-
-  const allAbsentDaysByMonth = new Map(priorAbsentDaysByMonth)
-  for (const [mk, count] of absentDaysByMonth) {
-    allAbsentDaysByMonth.set(mk, (allAbsentDaysByMonth.get(mk) ?? 0) + count)
-  }
-
-  const { paidLeaveByMonth } = applyPaidLeaveCarryForward(simulationMonths, allAbsentDaysByMonth)
-  const paidLeaveDays = paidLeaveByMonth.get(monthKey) ?? 0
-  const payableDays = presentDays + paidLeaveDays
-  const absentDays = Math.max(0, rawAbsentDays - paidLeaveDays)
+  const paidLeaveDays = payroll.paidLeaveDays
+  const presentDays = Number(Math.max(0, payroll.payableDays - paidLeaveDays).toFixed(2))
   const perDay = salary.amount / workingDays
-  const payableSalary = perDay * payableDays
-  const deductionAmount = salary.amount - payableSalary
+  const attendancePay = roundMoney(perDay * presentDays)
+  const paidLeavePay = roundMoney(perDay * paidLeaveDays)
+  const payableSalary = roundMoney(attendancePay + paidLeavePay)
+  const deductionAmount = roundMoney(salary.amount - payableSalary)
 
   return {
     employeeId: formattedEmployeeCode,
@@ -434,7 +393,7 @@ export async function buildPayslipData(userId: string, monthKey: string): Promis
     workingDays,
     presentDays,
     paidLeaveDays,
-    absentDays,
+    absentDays: payroll.unpaidAbsentDays,
     perDaySalary: perDay,
     deductionAmount,
     grossSalary: salary.amount,

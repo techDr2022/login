@@ -893,42 +893,6 @@ export async function endLunchBreak() {
   return updated
 }
 
-export async function pingWFHActivity() {
-  const session = await getServerSession(authOptions)
-  if (!session) throw new Error('Unauthorized')
-
-  if (!session.user?.id) {
-    throw new Error('Invalid session: user ID not found')
-  }
-
-  if (!canClockInOut(session.user.role as UserRole)) {
-    throw new Error('Only employees can ping WFH activity')
-  }
-
-  const now = new Date()
-  const attendance = await findTodaysAttendance(session.user.id, now)
-
-  if (!attendance || attendance.mode !== AttendanceMode.WFH || !attendance.loginTime) {
-    throw new Error('WFH attendance not found or not in WFH mode')
-  }
-
-  if (attendance.logoutTime) {
-    throw new Error('Already clocked out')
-  }
-
-  const updated = await prisma.attendances.update({
-    where: { id: attendance.id },
-    data: {
-      lastActivityTime: now,
-      wfhActivityPings: {
-        increment: 1,
-      },
-    },
-  })
-
-  return updated
-}
-
 export async function markAllAttendanceForDay(date: Date, mode: AttendanceMode = AttendanceMode.OFFICE) {
   const session = await getServerSession(authOptions)
   if (!session) throw new Error('Unauthorized')

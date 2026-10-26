@@ -6,12 +6,9 @@ import { prisma } from '@/lib/prisma'
 import { verifyExtensionToken } from '@/lib/extension-auth'
 import { createTaskSchema } from '@/lib/validations'
 import { logActivity } from '@/lib/activity-log'
-import {
-  formatTaskAssignmentMessage,
-  getTaskAssignmentTemplateVariables,
-  getTaskWhatsAppContentTemplateSid,
-  sendWhatsAppNotification,
-} from '@/lib/whatsapp'
+import { notifyTaskAssignment } from '@/lib/notification-service'
+import { isBeforeIstToday, normalizeTaskDueDate } from '@/lib/attendance-config'
+import { Prisma } from '@prisma/client'
 
 function readToken(request: NextRequest): string {
   const auth = request.headers.get('authorization') || ''
@@ -20,10 +17,29 @@ function readToken(request: NextRequest): string {
 }
 
 export async function POST(request: NextRequest) {
+  let actorId = ''
+  let idempotencykey = ''
   try {
     const token = readToken(request)
     const auth = verifyExtensionToken(token)
+    const actor = await prisma.user.findUnique({
+      where: { id: auth.uid },
+      select: { id: true, isActive: true, role: true, name: true },
+    })
+    if (!actor?.isActive || !['EMPLOYEE', 'MANAGER', 'SUPER_ADMIN'].includes(actor.role)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    actorId = actor.id
     const body = await request.json()
+    idempotencykey =
+      typeof body.idempotencykey === 'string' ? body.idempotencykey.trim().slice(0, 120) : ''
+    delete body.idempotencykey
+    if (idempotencykey) {
+      const existing = await prisma.task.findFirst({
+        where: { assignedById: actor.id, idempotencykey },
+      })
+      if (existing) return NextResponse.json(existing)
+    }
 
     if (body.dueDate && typeof body.dueDate === 'string') {
       const parsed = new Date(body.dueDate)
@@ -36,18 +52,21 @@ export async function POST(request: NextRequest) {
     if (body.assignedToId) {
       const target = await prisma.user.findUnique({
         where: { id: body.assignedToId },
-        select: { id: true, isActive: true },
+        select: { id: true, isActive: true, role: true },
       })
-      if (!target || !target.isActive) {
+      if (!target || !target.isActive || target.role === 'CLIENT') {
         return NextResponse.json({ error: 'Assigned user not found or inactive' }, { status: 400 })
       }
     }
     if (body.clientId) {
       const c = await prisma.client.findUnique({
         where: { id: body.clientId },
-        select: { id: true },
+        select: { id: true, status: true },
       })
       if (!c) return NextResponse.json({ error: 'Client not found' }, { status: 400 })
+      if (c.status === 'PAUSED') {
+        return NextResponse.json({ error: 'Cannot assign a task to a paused client' }, { status: 400 })
+      }
     }
 
     const validated = createTaskSchema.parse(body)
@@ -72,26 +91,13 @@ export async function POST(request: NextRequest) {
         )
       }
       const calculated = new Date(startDate.getTime() + template.durationHours * 60 * 60 * 1000)
-      if (template.durationHours >= 24 || calculated.getDate() !== startDate.getDate()) {
-        calculated.setHours(18, 0, 0, 0)
-      }
-      dueDate = calculated
+      dueDate = normalizeTaskDueDate(startDate, calculated, template.durationHours)
     } else if (validated.dueDate) {
-      const provided = new Date(validated.dueDate)
-      if (provided.getHours() === 0 || provided.getHours() < 9) {
-        provided.setHours(18, 0, 0, 0)
-      }
-      dueDate = provided
+      dueDate = normalizeTaskDueDate(startDate, new Date(validated.dueDate))
     }
 
-    if (dueDate) {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const dueDateOnly = new Date(dueDate)
-      dueDateOnly.setHours(0, 0, 0, 0)
-      if (dueDateOnly < today) {
-        return NextResponse.json({ error: 'Due date cannot be in the past' }, { status: 400 })
-      }
+    if (dueDate && isBeforeIstToday(dueDate)) {
+      return NextResponse.json({ error: 'Due date cannot be in the past' }, { status: 400 })
     }
 
     const taskData: any = {
@@ -101,59 +107,51 @@ export async function POST(request: NextRequest) {
       status: 'Pending',
       startDate,
       dueDate,
+      idempotencykey: idempotencykey || null,
+      clientvisible: false,
     }
     if (taskData.assignedToId === '') taskData.assignedToId = null
     if (taskData.clientId === '') taskData.clientId = null
     if (taskData.taskType === '') taskData.taskType = null
 
-    const task = await prisma.task.create({
-      data: taskData,
-      include: {
-        User_Task_assignedByIdToUser: { select: { name: true } },
-        User_Task_assignedToIdToUser: {
-          select: { id: true, name: true, phoneNumber: true, notifyTaskUpdates: true },
+    const assignedAt = new Date()
+    const task = await prisma.$transaction(async (tx) => {
+      const created = await tx.task.create({
+        data: taskData,
+        include: {
+          User_Task_assignedByIdToUser: { select: { name: true } },
+          User_Task_assignedToIdToUser: {
+            select: { id: true, name: true },
+          },
+          Client: { select: { name: true } },
         },
-        Client: { select: { name: true } },
-      },
+      })
+      await notifyTaskAssignment(tx, {
+        taskId: created.id,
+        title: created.title,
+        actorId: auth.uid,
+        actorName: actor.name,
+        nextAssigneeId: created.assignedToId,
+        nextAssigneeName: created.User_Task_assignedToIdToUser?.name,
+        clientName: created.Client?.name,
+        priority: created.priority,
+        assignedAt,
+      })
+      return created
     })
 
     await logActivity(auth.uid, 'CREATE', 'Task', task.id)
-
-    if (task.assignedToId && task.User_Task_assignedToIdToUser) {
-      const assignedToUser = task.User_Task_assignedToIdToUser
-      if (assignedToUser.phoneNumber && assignedToUser.notifyTaskUpdates) {
-        try {
-          const message = formatTaskAssignmentMessage(
-            task.title,
-            task.User_Task_assignedByIdToUser.name,
-            task.priority,
-            task.dueDate || undefined,
-            task.Client?.name
-          )
-          const templateVars = getTaskAssignmentTemplateVariables(
-            task.title,
-            task.User_Task_assignedByIdToUser.name,
-            task.priority,
-            task.dueDate || undefined,
-            task.Client?.name
-          )
-          await sendWhatsAppNotification(
-            assignedToUser.phoneNumber,
-            message,
-            templateVars,
-            undefined,
-            getTaskWhatsAppContentTemplateSid()
-          )
-        } catch (err) {
-          console.error('Extension task WhatsApp notify failed:', err)
-        }
-      }
-    }
 
     return NextResponse.json(task, { status: 201 })
   } catch (error: any) {
     if (error?.name === 'ZodError') {
       return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 })
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' && idempotencykey) {
+      const existing = await prisma.task.findFirst({
+        where: { assignedById: actorId, idempotencykey },
+      })
+      if (existing) return NextResponse.json(existing)
     }
     if (error?.message?.includes('token') || error?.message?.includes('bearer')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

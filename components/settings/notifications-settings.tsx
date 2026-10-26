@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { setSoundEnabled, setTaskSoundEnabled } from '@/lib/chat-sound'
+import { requestDesktopNotificationPermission } from '@/lib/desktop-notification'
 
 interface NotificationPreferences {
   notifyTaskUpdates: boolean
@@ -21,9 +23,15 @@ export function NotificationsSettings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [desktopPermission, setDesktopPermission] = useState<NotificationPermission | 'unsupported'>('default')
 
   useEffect(() => {
     loadPreferences()
+    setDesktopPermission(
+      typeof window !== 'undefined' && 'Notification' in window
+        ? Notification.permission
+        : 'unsupported'
+    )
   }, [])
 
   const loadPreferences = async () => {
@@ -53,6 +61,13 @@ export function NotificationsSettings() {
     setSuccess(null)
     
     const previousValue = preferences[key]
+
+    if (value && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      void requestDesktopNotificationPermission().then(setDesktopPermission)
+    }
+
+    if (key === 'notifyTaskUpdates') setTaskSoundEnabled(value)
+    if (key === 'notifyChatMentions') setSoundEnabled(value)
     
     try {
       // Optimistically update UI
@@ -75,14 +90,15 @@ export function NotificationsSettings() {
       }
 
       setSuccess('Notification preference updated successfully')
-      // Clear success message after 3 seconds
+      window.dispatchEvent(new Event('techdr-notification-prefs'))
       setTimeout(() => setSuccess(null), 3000)
     } catch (error) {
       console.error('Error updating preference:', error)
       const errorMessage = error instanceof Error ? error.message : 'Failed to update notification preference. Please try again.'
       setError(errorMessage)
-      // Revert state on error
       setPreferences({ ...preferences, [key]: previousValue })
+      if (key === 'notifyTaskUpdates') setTaskSoundEnabled(previousValue)
+      if (key === 'notifyChatMentions') setSoundEnabled(previousValue)
       // Clear error message after 5 seconds (unless it's a login-related error)
       if (!errorMessage.includes('log in')) {
         setTimeout(() => setError(null), 5000)
@@ -110,9 +126,16 @@ export function NotificationsSettings() {
       <div>
         <h2 className="text-lg font-semibold">Notifications</h2>
         <p className="text-sm text-muted-foreground">
-          Control which alerts you receive.
+          Each option sends its own Chrome popup.
         </p>
       </div>
+      {desktopPermission === 'denied' && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Chrome is blocking popups. Allow notifications from the lock icon in the address bar.
+          </AlertDescription>
+        </Alert>
+      )}
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -128,7 +151,7 @@ export function NotificationsSettings() {
           <div className="space-y-1">
             <p className="text-sm font-medium">Task updates</p>
             <p className="text-xs text-muted-foreground">
-              Get notified when tasks assigned to you change.
+              Popup and sound when a task is assigned, created, or completed.
             </p>
           </div>
           <Checkbox
@@ -145,7 +168,7 @@ export function NotificationsSettings() {
           <div className="space-y-1">
             <p className="text-sm font-medium">Client changes</p>
             <p className="text-xs text-muted-foreground">
-              Alerts for new clients or major onboarding updates.
+              Popup when a client is added or onboarding is completed.
             </p>
           </div>
           <Checkbox
@@ -162,7 +185,7 @@ export function NotificationsSettings() {
           <div className="space-y-1">
             <p className="text-sm font-medium">Chat mentions</p>
             <p className="text-xs text-muted-foreground">
-              Notifications when someone mentions you in team chat.
+              Popup and sound for new team chat messages.
             </p>
           </div>
           <Checkbox

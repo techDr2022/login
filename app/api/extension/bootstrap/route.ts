@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
         orderBy: { name: 'asc' },
       }),
       prisma.client.findMany({
+        where: { status: { not: 'PAUSED' } },
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       }),

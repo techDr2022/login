@@ -61,6 +61,11 @@ model Client {
   monthlyProductions            MonthlyProduction[]
   clientVideoMonths             ClientVideoMonth[]
   clientRequests                ClientRequest[]
+  clientportalaccesses          Clientportalaccess[]
+  weeklyreports                 Clientweeklyreport[]
+  recurrencerules               Recurrencerule[]
+  workflowtemplates             Workflowtemplate[]
+  projects                      Project[]
   brandName                     String?
   primaryWhatsAppGroupLink      String?
 
@@ -123,21 +128,58 @@ model Task {
   timeSpent                    Float?        @default(0)
   rejectionFeedback            String?
   createdAt                    DateTime      @default(now())
+  clientvisible                Boolean       @default(false)
+  clientrequestid              String?
+  deliverableurl               String?
+  workflowrunid                String?
+  workflowtemplateid           String?
+  stageorder                   Int?
+  dependstaskid                String?
+  recurrenceperiodkey          String?
+  idempotencykey               String?
+  templateid                   String?
+  projectid                    String?
+  periodkey                    String?
+  revisioncount                Int           @default(0)
+  startedat                    DateTime?
+  completedat                  DateTime?
+  approvedbyid                 String?
+  noinputflag                  Boolean       @default(false)
+  waitingonuserid              String?
+  enginekey                    String?       @unique
   User_Task_assignedByIdToUser User          @relation("Task_assignedByIdToUser", fields: [assignedById], references: [id], onDelete: Cascade)
   User_Task_assignedToIdToUser User?         @relation("Task_assignedToIdToUser", fields: [assignedToId], references: [id])
   Client                       Client?       @relation(fields: [clientId], references: [id])
+  worktemplate                 Worktemplate? @relation(fields: [templateid], references: [id], onDelete: SetNull)
+  project                      Project?      @relation(fields: [projectid], references: [id], onDelete: SetNull)
+  approvedby                   User?         @relation("TaskApprovedBy", fields: [approvedbyid], references: [id], onDelete: SetNull)
+  waitingon                    User?         @relation("TaskWaitingOn", fields: [waitingonuserid], references: [id], onDelete: SetNull)
   chat_threads                 chat_threads?
+  clientRequest                ClientRequest? @relation(fields: [clientrequestid], references: [id], onDelete: SetNull)
+  workflowtemplate             Workflowtemplate? @relation(fields: [workflowtemplateid], references: [id], onDelete: SetNull)
+  dependsOn                    Task?         @relation("TaskDependency", fields: [dependstaskid], references: [id], onDelete: SetNull)
+  dependents                   Task[]        @relation("TaskDependency")
 
+  @@unique([assignedById, idempotencykey])
   @@index([assignedToId])
   @@index([clientId])
+  @@index([clientId, clientvisible])
   @@index([status])
   @@index([taskType])
+  @@index([clientrequestid])
+  @@index([workflowrunid])
+  @@index([templateid])
+  @@index([projectid])
+  @@index([periodkey])
+  @@index([assignedToId, status, dueDate])
+  @@index([templateid, clientId, periodkey])
 }
 
 model User {
   id                                      String          @id
   name                                    String
   email                                   String          @unique
+  username                                String?         @unique
   payslipEmail                            String?
   passwordHash                            String
   role                                    UserRole
@@ -146,6 +188,9 @@ model User {
   joiningDate                             DateTime?
   adminNotes                              String?
   jobTitle                                String?
+  department                              String?
+  teamid                                  String?
+  escalatestouserid                       String?
   phoneNumber                             String?
   notifyChatMentions                      Boolean         @default(true)
   notifyClientChanges                     Boolean         @default(true)
@@ -171,9 +216,24 @@ model User {
   attendance_holidays                     attendance_holidays[]
   clientRequestsCreated                   ClientRequest[]        @relation("ClientRequest_createdBy")
   clientRequestAssignees                  ClientRequestAssignee[]
+  clientportalaccesses                    Clientportalaccess[]
+  recurrenceAssigned                      Recurrencerule[]       @relation("RecurrenceAssignee")
+  recurrenceCreated                       Recurrencerule[]       @relation("RecurrenceCreator")
+  workflowstages                          Workflowstage[]
+  notificationsReceived                   Notification[]  @relation("NotificationRecipient")
+  notificationsSent                       Notification[]  @relation("NotificationActor")
+  team                                    Team?           @relation(fields: [teamid], references: [id], onDelete: SetNull)
+  escalatesto                             User?           @relation("UserEscalation", fields: [escalatestouserid], references: [id], onDelete: SetNull)
+  escalationof                            User[]          @relation("UserEscalation")
+  approvedtasks                           Task[]          @relation("TaskApprovedBy")
+  waitingtasks                            Task[]          @relation("TaskWaitingOn")
+  templateassignees                       Worktemplateassignee[]
 
   @@index([isActive])
   @@index([role])
+  @@index([department])
+  @@index([teamid])
+  @@index([escalatestouserid])
 }
 
 enum ClientRequestType {
@@ -207,6 +267,7 @@ model ClientRequest {
   Client       Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
   createdBy    User                    @relation("ClientRequest_createdBy", fields: [createdById], references: [id], onDelete: Cascade)
   assignees    ClientRequestAssignee[]
+  tasks        Task[]
 
   @@index([status])
   @@index([receivedAt])
@@ -242,12 +303,40 @@ model EmployeeSalary {
   @@index([userId])
 }
 
+model Notification {
+  id             String    @id
+  recipientid    String
+  actorid        String?
+  type           String
+  entitytype     String
+  entityid       String
+  title          String
+  message        String
+  data           Json?
+  link           String?
+  isread         Boolean   @default(false)
+  readat         DateTime?
+  isarchived     Boolean   @default(false)
+  priority       String    @default("normal")
+  groupkey       String?
+  idempotencykey String    @unique
+  createdat      DateTime  @default(now())
+  recipient      User      @relation("NotificationRecipient", fields: [recipientid], references: [id], onDelete: Cascade)
+  actor          User?     @relation("NotificationActor", fields: [actorid], references: [id], onDelete: SetNull)
+
+  @@index([recipientid, isread, createdat])
+  @@index([recipientid, createdat])
+  @@map("Notification")
+}
+
 model activity_logs {
   id         String   @id
   userId     String
   action     String
   entityType String
   entityId   String
+  oldvalue   String?
+  newvalue   String?
   timestamp  DateTime @default(now())
   User       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -488,11 +577,14 @@ model client_marketing_requirements {
   Client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
+// Postgres type is WebsiteRequirement. Labels differ from the app names.
 enum WebsiteRequirementStatus {
   NEEDED
   NOT_NEEDED
-  HAS_OLD_WEBSITE
-  REVAMP
+  HAS_OLD_WEBSITE @map("OLD_WEBSITE")
+  REVAMP         @map("REWAMP")
+
+  @@map("WebsiteRequirement")
 }
 
 enum PresenceStatus {
@@ -683,12 +775,117 @@ enum TaskStatus {
   Review
   Approved
   Rejected
+  Locked
+  ToDo
+  WaitingOnInput
+  InReview
+  Done
+  Cancelled
 }
 
 enum UserRole {
   SUPER_ADMIN
   MANAGER
   EMPLOYEE
+  CLIENT
+  COORDINATOR
+}
+
+model Clientportalaccess {
+  id        String   @id @default(cuid())
+  userid    String
+  clientid  String
+  createdat DateTime @default(now())
+  user      User     @relation(fields: [userid], references: [id], onDelete: Cascade)
+  client    Client   @relation(fields: [clientid], references: [id], onDelete: Cascade)
+
+  @@unique([userid, clientid])
+  @@index([clientid])
+}
+
+model Clientweeklyreport {
+  id        String   @id @default(cuid())
+  clientid  String
+  weekstart DateTime
+  weekend   DateTime
+  timezone  String   @default("Asia/Kolkata")
+  snapshot  Json
+  status    String   @default("ready")
+  createdat DateTime @default(now())
+  client    Client   @relation(fields: [clientid], references: [id], onDelete: Cascade)
+
+  @@unique([clientid, weekstart, weekend])
+  @@index([clientid])
+}
+
+model Workflowtemplate {
+  id        String           @id @default(cuid())
+  name      String
+  clientid  String?
+  active    Boolean          @default(true)
+  createdat DateTime         @default(now())
+  client    Client?          @relation(fields: [clientid], references: [id], onDelete: Cascade)
+  stages    Workflowstage[]
+  rules     Recurrencerule[]
+  tasks     Task[]
+
+  @@index([clientid])
+  @@index([active])
+}
+
+model Workflowstage {
+  id               String           @id @default(cuid())
+  templateid       String
+  stageorder       Int
+  title            String
+  tasktype         String?
+  offsethours      Int              @default(24)
+  assigneeuserid   String?
+  template         Workflowtemplate @relation(fields: [templateid], references: [id], onDelete: Cascade)
+  assignee         User?            @relation(fields: [assigneeuserid], references: [id], onDelete: SetNull)
+
+  @@unique([templateid, stageorder])
+  @@index([assigneeuserid])
+}
+
+model Recurrencerule {
+  id                 String            @id @default(cuid())
+  clientid           String?
+  title              String
+  description        String?
+  priority           TaskPriority      @default(Medium)
+  tasktype           String?
+  cadence            String
+  weekday            Int?
+  assigneeuserid     String?
+  workflowtemplateid String?
+  active             Boolean           @default(true)
+  timezone           String            @default("Asia/Kolkata")
+  createdbyid        String
+  createdat          DateTime          @default(now())
+  client             Client?           @relation(fields: [clientid], references: [id], onDelete: Cascade)
+  assignee           User?             @relation("RecurrenceAssignee", fields: [assigneeuserid], references: [id], onDelete: SetNull)
+  createdby          User              @relation("RecurrenceCreator", fields: [createdbyid], references: [id], onDelete: Cascade)
+  workflow           Workflowtemplate? @relation(fields: [workflowtemplateid], references: [id], onDelete: SetNull)
+  runs               Recurrencerun[]
+
+  @@index([active])
+  @@index([clientid])
+  @@index([assigneeuserid])
+}
+
+model Recurrencerun {
+  id        String         @id @default(cuid())
+  ruleid    String
+  periodkey String
+  taskid    String?
+  status    String
+  error     String?
+  createdat DateTime       @default(now())
+  rule      Recurrencerule @relation(fields: [ruleid], references: [id], onDelete: Cascade)
+
+  @@unique([ruleid, periodkey])
+  @@index([status])
 }
 
 enum InvoicePlanDuration {
@@ -859,4 +1056,100 @@ model ChatNotification {
   @@index([userId])
   @@index([roomId])
   @@index([readAt])
+}
+
+model Team {
+  id         String         @id
+  name       String         @unique
+  createdat  DateTime       @default(now())
+  users      User[]
+  templates  Worktemplate[]
+}
+
+model Worktemplate {
+  id                String                 @id
+  title             String
+  teamid            String?
+  section           String?
+  triggertype       String
+  startswhen        String?
+  repeat            String?
+  timeorday         String?
+  inputfrom         String?
+  inputneeded       String?
+  handoffto         String?
+  donewhen          String?
+  priority          String                 @default("Medium")
+  perclient         Boolean                @default(false)
+  istimelock        Boolean                @default(false)
+  needsconfirmation Boolean                @default(false)
+  source            String?
+  notes             String?
+  active            Boolean                @default(true)
+  createdat         DateTime               @default(now())
+  updatedat         DateTime               @updatedAt
+  team              Team?                  @relation(fields: [teamid], references: [id], onDelete: SetNull)
+  assignees         Worktemplateassignee[]
+  dependencies      Templatedependency[]   @relation("DepTemplate")
+  requiredby        Templatedependency[]   @relation("DepRequires")
+  tasks             Task[]
+
+  @@index([active])
+  @@index([teamid])
+  @@index([triggertype])
+}
+
+model Worktemplateassignee {
+  id         String       @id
+  templateid String
+  userid     String
+  template   Worktemplate @relation(fields: [templateid], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userid], references: [id], onDelete: Cascade)
+
+  @@unique([templateid, userid])
+  @@index([userid])
+}
+
+model Templatedependency {
+  id          String       @id
+  templateid  String
+  dependsonid String
+  kind        String
+  mode        String
+  template    Worktemplate @relation("DepTemplate", fields: [templateid], references: [id], onDelete: Cascade)
+  dependson   Worktemplate @relation("DepRequires", fields: [dependsonid], references: [id], onDelete: Cascade)
+
+  @@unique([templateid, dependsonid, kind])
+  @@index([templateid])
+  @@index([dependsonid])
+}
+
+model Project {
+  id              String   @id
+  projecttemplate String
+  clientid        String?
+  status          String   @default("active")
+  startedon       DateTime @default(now())
+  client          Client?  @relation(fields: [clientid], references: [id], onDelete: SetNull)
+  tasks           Task[]
+
+  @@index([clientid])
+  @@index([status])
+}
+
+model Appsetting {
+  id        String   @id
+  value     String
+  updatedat DateTime @updatedAt
+}
+
+model Enginerun {
+  id        String   @id
+  kind      String
+  created   Int      @default(0)
+  skipped   Int      @default(0)
+  errors    String?
+  createdat DateTime @default(now())
+
+  @@index([createdat])
 }

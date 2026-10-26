@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@prisma/client'
 import { canViewAllTasks } from '@/lib/rbac'
+import { taskEngineDetail } from '@/lib/engine/query'
 
 export async function GET(
   request: NextRequest,
@@ -45,6 +46,13 @@ export async function GET(
             name: true,
           },
         },
+        worktemplate: {
+          select: {
+            istimelock: true,
+            donewhen: true,
+            needsconfirmation: true,
+          },
+        },
       },
     })
 
@@ -54,18 +62,47 @@ export async function GET(
 
     // For non-admin users, check if they have access to this task
     if (!canViewAll && userId) {
-      const hasAccess = task.assignedToId === userId || task.assignedById === userId
+      const onTemplate = task.templateid
+        ? await prisma.worktemplateassignee.findFirst({
+            where: { templateid: task.templateid, userid: userId },
+            select: { id: true },
+          })
+        : null
+      const hasAccess =
+        task.assignedToId === userId ||
+        task.assignedById === userId ||
+        task.waitingonuserid === userId ||
+        !!onTemplate
       if (!hasAccess) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
     }
 
-    // Transform task to map Prisma relation names to expected field names
+    const engine = await taskEngineDetail(task.id, task.templateid)
     const transformedTask = {
-      ...task,
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      status: task.status,
+      dueDate: task.dueDate,
+      startDate: task.startDate,
+      createdAt: task.createdAt,
+      timeSpent: task.timeSpent,
+      rejectionFeedback: task.rejectionFeedback,
+      assignedToId: task.assignedToId,
+      assignedById: task.assignedById,
+      templateid: task.templateid,
+      revisioncount: task.revisioncount,
+      noinputflag: task.noinputflag,
+      istimelock: task.worktemplate?.istimelock ?? false,
+      donewhen: task.worktemplate?.donewhen ?? null,
+      needsconfirmation: task.worktemplate?.needsconfirmation ?? false,
       assignedTo: task.User_Task_assignedToIdToUser || null,
       assignedBy: task.User_Task_assignedByIdToUser || null,
-      client: task.Client || null,
+      client: task.Client ? { id: task.Client.id, name: task.Client.name } : null,
+      history: engine.history,
+      dependencies: engine.dependencies,
     }
 
     return NextResponse.json(transformedTask)

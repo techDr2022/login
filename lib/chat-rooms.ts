@@ -14,7 +14,7 @@ export async function checkRoomAccess(roomId: string, userId: string, userRole: 
       members: { include: { user: { select: { id: true, role: true } } } },
     },
   })
-  if (!room) return { allowed: false, error: 'Room not found' }
+  if (!room || userRole === UserRole.CLIENT) return { allowed: false, error: 'Access denied' }
 
   const isMember = room.members.some((m) => m.userId === userId)
   if (room.type === ChatRoomType.TEAM) {

@@ -8,13 +8,10 @@ import { createTaskSchema, updateTaskSchema, updateTaskStatusSchema } from '@/li
 import { logActivity } from '@/lib/activity-log'
 import { canManageTasks, canApproveTasks } from '@/lib/rbac'
 import { UserRole, TaskStatus } from '@prisma/client'
-import {
-  sendWhatsAppNotification,
-  formatTaskAssignmentMessage,
-  getTaskAssignmentTemplateVariables,
-  getTaskWhatsAppContentTemplateSid,
-} from '@/lib/whatsapp'
 import { revalidatePath } from 'next/cache'
+import { isBeforeIstToday, normalizeTaskDueDate } from '@/lib/attendance-config'
+import { advanceWorkflow } from '@/lib/automation'
+import { notifyTaskAssignment } from '@/lib/notification-service'
 
 // Helper function to handle task dependencies - creates/assigns next task when a task is completed
 async function handleTaskDependencies(completedTaskId: string, clientId: string | null, clientName: string, doctorOrHospitalName: string, assignedById: string) {
@@ -116,27 +113,55 @@ async function handleTaskDependencies(completedTaskId: string, clientId: string 
   if (existingTask) {
     // If task exists but not assigned, assign it now
     if (!existingTask.assignedToId) {
-      await prisma.task.update({
-        where: { id: existingTask.id },
-        data: { assignedToId: nextTaskAssignee.id, assignedById },
+      const assignedAt = new Date()
+      await prisma.$transaction(async (tx) => {
+        await tx.task.update({
+          where: { id: existingTask.id },
+          data: { assignedToId: nextTaskAssignee.id, assignedById },
+        })
+        await notifyTaskAssignment(tx, {
+          taskId: existingTask.id,
+          title: existingTask.title,
+          actorId: assignedById,
+          actorName: 'Workflow',
+          previousAssigneeId: null,
+          nextAssigneeId: nextTaskAssignee.id,
+          nextAssigneeName: nextTaskAssignee.name,
+          clientName,
+          assignedAt,
+        })
       })
       await logActivity(assignedById, 'UPDATE', 'Task', existingTask.id)
       console.log(`Auto-assigned existing task "${nextTaskTitle}" to ${nextTaskAssignee.name}`)
     }
   } else {
-    // Create new task
-    const newTask = await prisma.task.create({
-      data: {
-        id: randomUUID(),
-        title: nextTaskTitle,
-        description: `${nextTaskTitle.replace(` for ${clientName}`, '')} task for ${doctorOrHospitalName}`,
-        priority: 'Medium' as const,
-        status: 'Pending' as const,
-        assignedById,
-        assignedToId: nextTaskAssignee.id,
-        clientId,
-        startDate: new Date(),
-      },
+    const assignedAt = new Date()
+    const newTask = await prisma.$transaction(async (tx) => {
+      const created = await tx.task.create({
+        data: {
+          id: randomUUID(),
+          title: nextTaskTitle,
+          description: `${nextTaskTitle.replace(` for ${clientName}`, '')} task for ${doctorOrHospitalName}`,
+          priority: 'Medium' as const,
+          status: 'Pending' as const,
+          assignedById,
+          assignedToId: nextTaskAssignee.id,
+          clientId,
+          startDate: assignedAt,
+        },
+      })
+      await notifyTaskAssignment(tx, {
+        taskId: created.id,
+        title: created.title,
+        actorId: assignedById,
+        actorName: 'Workflow',
+        nextAssigneeId: nextTaskAssignee.id,
+        nextAssigneeName: nextTaskAssignee.name,
+        clientName,
+        priority: 'Medium',
+        assignedAt,
+      })
+      return created
     })
     await logActivity(assignedById, 'CREATE', 'Task', newTask.id)
     console.log(`Auto-created and assigned task "${nextTaskTitle}" to ${nextTaskAssignee.name}`)
@@ -198,10 +223,13 @@ export async function createTask(data: {
   if (data.clientId) {
     const client = await prisma.client.findUnique({
       where: { id: data.clientId },
-      select: { id: true },
+      select: { id: true, status: true },
     })
     if (!client) {
       throw new Error('Client not found')
+    }
+    if (client.status === 'PAUSED') {
+      throw new Error('Cannot assign a task to a paused client')
     }
   }
 
@@ -230,31 +258,13 @@ export async function createTask(data: {
     // Calculate due date: startDate + durationHours
     // Ensure the result is at end of business day (6 PM) if it's a full day calculation
     const calculatedDate = new Date(startDate.getTime() + template.durationHours * 60 * 60 * 1000)
-    // If duration results in a date (not just hours), set to end of business day
-    if (template.durationHours >= 24 || calculatedDate.getDate() !== startDate.getDate()) {
-      calculatedDate.setHours(18, 0, 0, 0) // 6:00 PM
-    }
-    dueDate = calculatedDate
+    dueDate = normalizeTaskDueDate(startDate, calculatedDate, template.durationHours)
   } else if (validated.dueDate) {
-    // If no taskType but dueDate provided, use it (backward compatibility)
-    // Ensure it's set to end of business day if it's a date-only value
-    const providedDate = new Date(validated.dueDate)
-    // Check if time is midnight or early morning (likely a date-only selection)
-    if (providedDate.getHours() === 0 || providedDate.getHours() < 9) {
-      providedDate.setHours(18, 0, 0, 0) // 6:00 PM
-    }
-    dueDate = providedDate
+    dueDate = normalizeTaskDueDate(startDate, new Date(validated.dueDate))
   }
 
-  // Due date must not be in the past (date-level check in local timezone).
-  if (dueDate) {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const dueDateOnly = new Date(dueDate)
-    dueDateOnly.setHours(0, 0, 0, 0)
-    if (dueDateOnly < today) {
-      throw new Error('Due date cannot be in the past')
-    }
+  if (dueDate && isBeforeIstToday(dueDate)) {
+    throw new Error('Due date cannot be in the past')
   }
   
   // Convert empty string to undefined for optional fields
@@ -284,19 +294,34 @@ export async function createTask(data: {
     taskData.taskType = null
   }
   
-  const task = await prisma.task.create({
-    data: taskData,
-    include: {
-      User_Task_assignedByIdToUser: {
-        select: { name: true },
+  const assignedAt = new Date()
+  const task = await prisma.$transaction(async (tx) => {
+    const created = await tx.task.create({
+      data: taskData,
+      include: {
+        User_Task_assignedByIdToUser: {
+          select: { name: true },
+        },
+        User_Task_assignedToIdToUser: {
+          select: { id: true, name: true },
+        },
+        Client: {
+          select: { name: true },
+        },
       },
-      User_Task_assignedToIdToUser: {
-        select: { id: true, name: true, phoneNumber: true, notifyTaskUpdates: true },
-      },
-      Client: {
-        select: { name: true },
-      },
-    },
+    })
+    await notifyTaskAssignment(tx, {
+      taskId: created.id,
+      title: created.title,
+      actorId: userId,
+      actorName: session.user.name || 'Someone',
+      nextAssigneeId: created.assignedToId,
+      nextAssigneeName: created.User_Task_assignedToIdToUser?.name,
+      clientName: created.Client?.name,
+      priority: created.priority,
+      assignedAt,
+    })
+    return created
   })
 
   await logActivity(userId, 'CREATE', 'Task', task.id)
@@ -305,62 +330,6 @@ export async function createTask(data: {
   revalidatePath('/tasks')
   revalidatePath('/dashboard')
   revalidatePath(`/tasks/${task.id}`)
-
-  // Send WhatsApp notification if task is assigned to an employee
-  if (task.assignedToId && task.User_Task_assignedToIdToUser) {
-    const assignedToUser = task.User_Task_assignedToIdToUser
-    
-    console.log(`[WhatsApp] Task assigned to user: ${assignedToUser.name} (${assignedToUser.id})`)
-    console.log(`[WhatsApp] Phone number: ${assignedToUser.phoneNumber || 'NOT SET'}`)
-    console.log(`[WhatsApp] Notify task updates: ${assignedToUser.notifyTaskUpdates}`)
-    
-    // Only send if user has phone number and notifications enabled
-    if (!assignedToUser.phoneNumber) {
-      console.warn(`[WhatsApp] Skipping notification: User ${assignedToUser.name} does not have a phone number`)
-    } else if (!assignedToUser.notifyTaskUpdates) {
-      console.warn(`[WhatsApp] Skipping notification: User ${assignedToUser.name} has task notifications disabled`)
-    } else {
-      try {
-        const message = formatTaskAssignmentMessage(
-          task.title,
-          task.User_Task_assignedByIdToUser.name,
-          task.priority,
-          task.dueDate || undefined,
-          task.Client?.name
-        )
-
-        // Get template variables for template-based messages
-        const templateVariables = getTaskAssignmentTemplateVariables(
-          task.title,
-          task.User_Task_assignedByIdToUser.name,
-          task.priority,
-          task.dueDate || undefined,
-          task.Client?.name
-        )
-
-        console.log(`[WhatsApp] Attempting to send notification to ${assignedToUser.phoneNumber}`)
-        const result = await sendWhatsAppNotification(
-          assignedToUser.phoneNumber,
-          message,
-          templateVariables,
-          undefined,
-          getTaskWhatsAppContentTemplateSid()
-        )
-        
-        if (result.success) {
-          console.log(`[WhatsApp] ✅ Notification sent successfully. Message ID: ${result.messageId || 'N/A'}`)
-        } else {
-          console.error(`[WhatsApp] ❌ Failed to send notification: ${result.error}`)
-          // Don't throw error - task creation should succeed even if notification fails
-        }
-      } catch (error) {
-        console.error('[WhatsApp] ❌ Error sending WhatsApp notification:', error)
-        // Don't throw error - task creation should succeed even if notification fails
-      }
-    }
-  } else {
-    console.log('[WhatsApp] Task not assigned to any user, skipping notification')
-  }
 
   return task
 }
@@ -385,6 +354,17 @@ export async function updateTask(id: string, data: {
   })
 
   if (!task) throw new Error('Task not found')
+
+  if (data.clientId) {
+    const client = await prisma.client.findUnique({
+      where: { id: data.clientId },
+      select: { id: true, status: true },
+    })
+    if (!client) throw new Error('Client not found')
+    if (client.status === 'PAUSED' && data.clientId !== task.clientId) {
+      throw new Error('Cannot assign a task to a paused client')
+    }
+  }
 
   // Validate assignedToId if provided
   if (data.assignedToId !== undefined) {
@@ -472,20 +452,40 @@ export async function updateTask(id: string, data: {
     }
   }
   
-  const updatedTask = await prisma.task.update({
-    where: { id },
-    data: updateData,
-    include: {
-      User_Task_assignedByIdToUser: {
-        select: { name: true },
+  const nextAssigneeId = updateData.assignedToId === undefined ? task.assignedToId : updateData.assignedToId
+  const assigneeChanged = (nextAssigneeId || null) !== (task.assignedToId || null)
+  const assignedAt = new Date()
+  const updatedTask = await prisma.$transaction(async (tx) => {
+    const updated = await tx.task.update({
+      where: { id },
+      data: updateData,
+      include: {
+        User_Task_assignedByIdToUser: {
+          select: { name: true },
+        },
+        User_Task_assignedToIdToUser: {
+          select: { id: true, name: true },
+        },
+        Client: {
+          select: { name: true },
+        },
       },
-      User_Task_assignedToIdToUser: {
-        select: { id: true, name: true, phoneNumber: true, notifyTaskUpdates: true },
-      },
-      Client: {
-        select: { name: true },
-      },
-    },
+    })
+    if (assigneeChanged) {
+      await notifyTaskAssignment(tx, {
+        taskId: updated.id,
+        title: updated.title,
+        actorId: session.user.id,
+        actorName: session.user.name || 'Someone',
+        previousAssigneeId: task.assignedToId,
+        nextAssigneeId: updated.assignedToId,
+        nextAssigneeName: updated.User_Task_assignedToIdToUser?.name,
+        clientName: updated.Client?.name,
+        priority: updated.priority,
+        assignedAt,
+      })
+    }
+    return updated
   })
 
   await logActivity(session.user.id, 'UPDATE', 'Task', updatedTask.id)
@@ -494,74 +494,6 @@ export async function updateTask(id: string, data: {
   revalidatePath('/tasks')
   revalidatePath('/dashboard')
   revalidatePath(`/tasks/${id}`)
-
-  // Send WhatsApp notification if task assignment changed to a new employee
-  // This handles both: initial assignment (null -> employee) and reassignment (employee -> employee)
-  const assignmentChanged = 
-    data.assignedToId !== undefined && 
-    data.assignedToId !== null && 
-    data.assignedToId !== '' &&
-    data.assignedToId !== task.assignedToId
-  
-  if (assignmentChanged) {
-    const assignedToUser = updatedTask.User_Task_assignedToIdToUser
-    
-    if (assignedToUser) {
-      const isInitialAssignment = !task.assignedToId
-      const isReassignment = task.assignedToId && task.assignedToId !== data.assignedToId
-      
-      console.log(`[WhatsApp] Task ${isInitialAssignment ? 'assigned' : 'reassigned'} to user: ${assignedToUser.name} (${assignedToUser.id})`)
-      console.log(`[WhatsApp] Phone number: ${assignedToUser.phoneNumber || 'NOT SET'}`)
-      console.log(`[WhatsApp] Notify task updates: ${assignedToUser.notifyTaskUpdates}`)
-      
-      // Only send if user has phone number and notifications enabled
-      if (!assignedToUser.phoneNumber) {
-        console.warn(`[WhatsApp] Skipping notification: User ${assignedToUser.name} does not have a phone number`)
-      } else if (!assignedToUser.notifyTaskUpdates) {
-        console.warn(`[WhatsApp] Skipping notification: User ${assignedToUser.name} has task notifications disabled`)
-      } else {
-        try {
-          const message = formatTaskAssignmentMessage(
-            updatedTask.title,
-            updatedTask.User_Task_assignedByIdToUser.name,
-            updatedTask.priority,
-            updatedTask.dueDate || undefined,
-            updatedTask.Client?.name
-          )
-
-          // Get template variables for template-based messages
-          const templateVariables = getTaskAssignmentTemplateVariables(
-            updatedTask.title,
-            updatedTask.User_Task_assignedByIdToUser.name,
-            updatedTask.priority,
-            updatedTask.dueDate || undefined,
-            updatedTask.Client?.name
-          )
-
-          console.log(`[WhatsApp] Attempting to send notification to ${assignedToUser.phoneNumber}`)
-          const result = await sendWhatsAppNotification(
-            assignedToUser.phoneNumber,
-            message,
-            templateVariables,
-            undefined,
-            getTaskWhatsAppContentTemplateSid()
-          )
-            
-          if (result.success) {
-            console.log(`[WhatsApp] ✅ Notification sent successfully. Message ID: ${result.messageId || 'N/A'}`)
-          } else {
-            console.error(`[WhatsApp] ❌ Failed to send notification: ${result.error}`)
-            // Don't throw error - task update should succeed even if notification fails
-          }
-        } catch (error) {
-          console.error('[WhatsApp] ❌ Error sending WhatsApp notification:', error)
-          // Don't throw error - task update should succeed even if notification fails
-        }
-      }
-    } else {
-      console.warn('[WhatsApp] Assigned user not found, skipping notification')
-    }
-  }
 
   return updatedTask
 }
@@ -578,6 +510,7 @@ export async function updateTaskStatus(id: string, data: {
   })
 
   if (!task) throw new Error('Task not found')
+  if (task.templateid) throw new Error('Scheduled tasks are updated from My Day')
 
   const userRole = session.user.role as UserRole
   const isEmployee = userRole === UserRole.EMPLOYEE
@@ -636,6 +569,18 @@ export async function updateTaskStatus(id: string, data: {
       // Log error but don't fail the status update
       console.error('Error handling task dependencies:', error)
     }
+    try {
+      await advanceWorkflow({
+        id: updatedTask.id,
+        clientId: updatedTask.clientId,
+        assignedById: session.user.id,
+        workflowtemplateid: updatedTask.workflowtemplateid,
+        workflowrunid: updatedTask.workflowrunid,
+        stageorder: updatedTask.stageorder,
+      })
+    } catch (error) {
+      console.error('Error advancing workflow:', error)
+    }
   }
 
   // Revalidate paths to refresh UI
@@ -646,13 +591,32 @@ export async function updateTaskStatus(id: string, data: {
   return updatedTask
 }
 
+function canDeleteOwnTask(role: UserRole): boolean {
+  return role === UserRole.EMPLOYEE || role === UserRole.MANAGER
+}
+
+async function assertCanDeleteTasks(userId: string, role: UserRole, ids: string[]) {
+  if (canManageTasks(role)) return
+
+  if (!canDeleteOwnTask(role)) {
+    throw new Error('You can only delete tasks that you created')
+  }
+
+  const owned = await prisma.task.findMany({
+    where: { id: { in: ids }, assignedById: userId },
+    select: { id: true },
+  })
+
+  if (owned.length !== ids.length) {
+    throw new Error('You can only delete tasks that you created')
+  }
+}
+
 export async function deleteTask(id: string) {
   const session = await getServerSession(authOptions)
   if (!session) throw new Error('Unauthorized')
 
-  if (!canManageTasks(session.user.role as UserRole)) {
-    throw new Error('Forbidden')
-  }
+  await assertCanDeleteTasks(session.user.id, session.user.role as UserRole, [id])
 
   await prisma.task.delete({
     where: { id },
@@ -671,13 +635,11 @@ export async function deleteTasks(ids: string[]) {
   const session = await getServerSession(authOptions)
   if (!session) throw new Error('Unauthorized')
 
-  if (!canManageTasks(session.user.role as UserRole)) {
-    throw new Error('Forbidden')
-  }
-
   if (!ids || ids.length === 0) {
     throw new Error('No tasks selected')
   }
+
+  await assertCanDeleteTasks(session.user.id, session.user.role as UserRole, ids)
 
   // Delete all tasks in a transaction
   await prisma.$transaction(

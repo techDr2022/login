@@ -12,16 +12,28 @@ export function canApproveTasks(userRole: UserRole): boolean {
   return userRole === UserRole.SUPER_ADMIN
 }
 
+export function canCoordinate(userRole: UserRole): boolean {
+  return userRole === UserRole.SUPER_ADMIN || userRole === UserRole.COORDINATOR
+}
+
+function isStaff(userRole: UserRole): boolean {
+  return (
+    userRole === UserRole.SUPER_ADMIN ||
+    userRole === UserRole.MANAGER ||
+    userRole === UserRole.EMPLOYEE
+  )
+}
+
 export function canManageClients(userRole: UserRole): boolean {
-  return userRole === UserRole.SUPER_ADMIN
+  return isStaff(userRole)
 }
 
 export function canEditClient(userRole: UserRole): boolean {
-  return userRole === UserRole.SUPER_ADMIN || userRole === UserRole.EMPLOYEE
+  return isStaff(userRole)
 }
 
 export function canCreateClient(userRole: UserRole): boolean {
-  return userRole === UserRole.SUPER_ADMIN || userRole === UserRole.EMPLOYEE
+  return isStaff(userRole)
 }
 
 export function canManageTasks(userRole: UserRole): boolean {
@@ -29,7 +41,7 @@ export function canManageTasks(userRole: UserRole): boolean {
 }
 
 export function canViewAllTasks(userRole: UserRole): boolean {
-  return userRole === UserRole.SUPER_ADMIN
+  return userRole === UserRole.SUPER_ADMIN || userRole === UserRole.COORDINATOR
 }
 
 export function canClockInOut(userRole: UserRole): boolean {

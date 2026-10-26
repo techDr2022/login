@@ -80,8 +80,7 @@ export function PhoneNumberForm({ currentPhoneNumber, onUpdate }: PhoneNumberFor
           className="max-w-md"
         />
         <p className="text-xs text-muted-foreground">
-          Used for WhatsApp notifications when employees clock in/out and when tasks are assigned to you.
-          Leave empty to remove.
+          Used for WhatsApp attendance notifications. Leave empty to remove.
         </p>
       </div>
 

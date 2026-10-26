@@ -15,15 +15,21 @@ function createPrismaClient() {
   })
 }
 
-// Drop stale dev singleton after schema changes (HMR keeps an old PrismaClient without new models)
+// HMR keeps the first PrismaClient on globalThis. After prisma generate, that
+// instance still has the old schema and rejects new fields and unique keys.
 if (process.env.NODE_ENV !== 'production' && globalForPrisma.prisma) {
   const client = globalForPrisma.prisma as PrismaClient & {
     clientRequest?: unknown
     attendance_holidays?: unknown
+    clientweeklyreport?: unknown
+    notification?: unknown
   }
   if (
+    !(client instanceof PrismaClient) ||
     typeof client.clientRequest === 'undefined' ||
-    typeof client.attendance_holidays === 'undefined'
+    typeof client.attendance_holidays === 'undefined' ||
+    typeof client.clientweeklyreport === 'undefined' ||
+    typeof client.notification === 'undefined'
   ) {
     void client.$disconnect().catch(() => {})
     globalForPrisma.prisma = undefined

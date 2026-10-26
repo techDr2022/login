@@ -95,12 +95,16 @@ export async function GET(request: NextRequest) {
       // Poll for new messages every 1.5 seconds for better real-time responsiveness
       let lastCheck = new Date(Date.now() - 2000) // Start 2 seconds back to catch recent changes
       let lastUnreadCount = 0
-      const pollInterval = setInterval(async () => {
+      let polling = false
+      const pollInterval = setInterval(() => {
         if (isClosed) {
           clearInterval(pollInterval)
           return
         }
+        if (polling) return
+        polling = true
 
+        void (async () => {
         try {
           const now = new Date()
           // Use a slightly earlier timestamp to ensure we don't miss any messages
@@ -154,8 +158,11 @@ export async function GET(request: NextRequest) {
           lastCheck = now
         } catch (error) {
           console.error('Error in SSE poll:', error)
+        } finally {
+          polling = false
         }
-      }, 1500) // Poll every 1.5 seconds for better real-time responsiveness
+        })()
+      }, 1500)
 
       // Cleanup function
       let timeout: NodeJS.Timeout | null = null

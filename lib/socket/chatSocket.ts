@@ -1,7 +1,9 @@
 import { io, Socket } from 'socket.io-client'
 import { useChatStore } from '@/store/chatStore'
 import { Message } from '@/store/chatStore'
-import { playChatSound } from '@/lib/chat-sound'
+import { getSoundEnabled, playChatSound } from '@/lib/chat-sound'
+import { showDesktopNotification } from '@/lib/desktop-notification'
+import { getNotificationPreferences } from '@/lib/task-notification-stream'
 
 let socket: Socket | null = null
 let reconnectAttempts = 0
@@ -323,57 +325,26 @@ export function connectSocket(userId: string, token?: string) {
       // Track when message was received
       messageReceivedTimes.set(data.id, now)
       
-      if (shouldNotify) {
-        // Play sound (will check if enabled internally)
+      if (!getNotificationPreferences().notifyChatMentions) return
+
+      const messageBody = `${data.sender?.name || 'Someone'}: ${data.content.substring(0, 140)}`
+      const soundOn = shouldNotify && getSoundEnabled()
+      if (soundOn) {
         try {
           playChatSound()
         } catch (error) {
           console.error('Error playing chat sound:', error)
         }
-        
-        // Show browser notification (always show, even if tab is hidden)
-        if ('Notification' in window) {
-          if (Notification.permission === 'granted') {
-            try {
-              new Notification('New Message', {
-                body: `${data.sender?.name || 'Someone'}: ${data.content.substring(0, 100)}`,
-                icon: '/favicon.ico',
-                badge: '/favicon.ico',
-                tag: `chat-${data.threadId}-${data.id}`, // Prevent duplicate notifications
-                requireInteraction: false,
-              })
-            } catch (error) {
-              console.error('Error showing notification:', error)
-            }
-          } else if (Notification.permission === 'default') {
-            // Request permission if not yet asked
-            Notification.requestPermission().then((permission) => {
-              if (permission === 'granted') {
-                new Notification('New Message', {
-                  body: `${data.sender?.name || 'Someone'}: ${data.content.substring(0, 100)}`,
-                  icon: '/favicon.ico',
-                  badge: '/favicon.ico',
-                })
-              }
-            })
-          }
-        }
-      } else if (!isTabVisible) {
-        // If tab is not visible, still show notification but don't play sound
-        // This way user knows there's a message when they come back
-        if ('Notification' in window && Notification.permission === 'granted' && isRecentMessage) {
-          try {
-            new Notification('New Message', {
-              body: `${data.sender?.name || 'Someone'}: ${data.content.substring(0, 100)}`,
-              icon: '/favicon.ico',
-              badge: '/favicon.ico',
-              tag: `chat-${data.threadId}-${data.id}`,
-              requireInteraction: false,
-            })
-          } catch (error) {
-            console.error('Error showing notification:', error)
-          }
-        }
+      }
+
+      if ((shouldNotify || !isTabVisible) && isRecentMessage) {
+        void showDesktopNotification({
+          title: 'New message',
+          body: messageBody,
+          tag: `chat-${data.threadId}`,
+          url: '/chat',
+          silent: soundOn,
+        })
       }
     }
   })

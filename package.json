@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "import:tasks": "tsx scripts/import-master-tasks.ts",
+    "test:engine": "tsx --test lib/engine/rules.test.ts",
     "db:studio": "prisma studio",
     "create-credentials": "tsx prisma/create-employee-credentials.ts",
     "generate:encryption-key": "node scripts/generate-encryption-key.js"
@@ -38,7 +40,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
-    "exceljs": "^4.4.0",
+    "exceljs": "^3.4.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.427.0",
     "next": "^16.1.1",
@@ -61,6 +63,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.12",
     "@types/qrcode": "^1.5.6",
@@ -68,15 +71,24 @@
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
     "eslint": "9.39.2",
-    "eslint-config-next": "^16.1.1",
+    "eslint-config-next": "^16.4.2",
     "postcss": "^8.4.39",
     "prisma": "^5.19.0",
-    "tailwindcss": "^3.4.6",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.50.1"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true,
+    "esbuild@0.27.2": true,
+    "fsevents@2.3.3": true,
+    "unrs-resolver@1.11.1": true,
+    "core-js@3.47.0": true
   }
 }

@@ -1,7 +1,7 @@
 import js from "@eslint/js";
 import nextPlugin from "@next/eslint-plugin-next";
-import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
+import tseslint from "typescript-eslint";
 
 export default [
   js.configs.recommended,
@@ -44,6 +44,7 @@ export default [
     languageOptions: {
       globals: {
         chrome: "readonly",
+        crypto: "readonly",
         document: "readonly",
         window: "readonly",
         fetch: "readonly",
@@ -58,7 +59,17 @@ export default [
       "out/**",
       "dist/**",
       "build/**",
+      "recycle/**",
     ],
+  },
+  {
+    files: ["public/**/*.js"],
+    languageOptions: {
+      globals: {
+        self: "readonly",
+        URL: "readonly",
+      },
+    },
   },
   {
     files: ["**/*.{js,jsx,ts,tsx}"],

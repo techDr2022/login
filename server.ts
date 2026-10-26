@@ -1,7 +1,10 @@
+import { loadEnvConfig } from '@next/env'
 import { createServer } from 'http'
 import { parse } from 'url'
 import next from 'next'
-import { initializeSocketIO } from './lib/socket/server'
+
+// Socket (and Prisma) load after env files. Next's bundler must not import @next/env.
+loadEnvConfig(process.cwd(), process.env.NODE_ENV !== 'production')
 
 const dev = process.env.NODE_ENV !== 'production'
 const hostname = process.env.HOSTNAME || 'localhost'
@@ -10,7 +13,7 @@ const port = parseInt(process.env.PORT || '3000', 10)
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
 
-app.prepare().then(() => {
+app.prepare().then(async () => {
   const httpServer = createServer(async (req, res) => {
     try {
       const parsedUrl = parse(req.url!, true)
@@ -22,7 +25,7 @@ app.prepare().then(() => {
     }
   })
 
-  // Initialize Socket.IO
+  const { initializeSocketIO } = await import('./lib/socket/server')
   initializeSocketIO(httpServer)
 
   httpServer

@@ -19,6 +19,10 @@ export async function GET(request: NextRequest) {
   const userId = session.user.id
   const userRole = session.user.role as UserRole
   const canViewAll = canViewAllTasks(userRole)
+  const isStaff =
+    userRole === UserRole.EMPLOYEE ||
+    userRole === UserRole.MANAGER ||
+    userRole === UserRole.SUPER_ADMIN
 
   // Create a readable stream for SSE
   const stream = new ReadableStream({
@@ -79,7 +83,8 @@ export async function GET(request: NextRequest) {
 
       // Track last known task statuses for detecting changes
       const taskStatusMap = new Map<string, string>()
-      
+      const announcedNotifications = new Set<string>()
+
       // Initialize task status map with user-specific filtering
       try {
         const initialTasksWhere: any = {}
@@ -111,124 +116,167 @@ export async function GET(request: NextRequest) {
         }
       }, 30000)
 
-      // Poll for new tasks every 1.5 seconds for better real-time responsiveness
-      let lastCheck = new Date(Date.now() - 2000) // Start 2 seconds back to catch recent changes
+      // One poll serves new-task and assignment alerts. Count checks are slower than task alerts.
+      let lastCheck = new Date(Date.now() - 2000)
       let lastTaskCount = 0
+      let lastCountCheck = 0
+      let lastClientCheck = new Date(Date.now() - 2000)
+      const announcedClients = new Set<string>()
       let consecutiveErrors = 0
+      let polling = false
+      const announcedNewTasks = new Set<string>()
+      const announcedUpdates = new Set<string>()
       const MAX_CONSECUTIVE_ERRORS = 5
-      
-      pollInterval = setInterval(async () => {
-        if (isClosed) {
-          return
-        }
 
+      const taskPayload = (task: any) => ({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        status: task.status,
+        assignedToId: task.assignedToId,
+        assignedById: task.assignedById,
+        clientId: task.clientId,
+        dueDate: task.dueDate,
+        createdAt: task.createdAt,
+        assignedTo: task.User_Task_assignedToIdToUser
+          ? {
+              id: task.User_Task_assignedToIdToUser.id,
+              name: task.User_Task_assignedToIdToUser.name,
+              email: task.User_Task_assignedToIdToUser.email,
+            }
+          : null,
+        assignedBy: task.User_Task_assignedByIdToUser
+          ? {
+              id: task.User_Task_assignedByIdToUser.id,
+              name: task.User_Task_assignedByIdToUser.name,
+              email: task.User_Task_assignedByIdToUser.email,
+            }
+          : null,
+        client: task.Client ? { id: task.Client.id, name: task.Client.name } : null,
+      })
+      
+      pollInterval = setInterval(() => {
+        if (isClosed || polling) return
+        polling = true
+
+        void (async () => {
         try {
-          consecutiveErrors = 0 // Reset on success
           const now = new Date()
           // Use a slightly earlier timestamp to ensure we don't miss any tasks
           const checkFrom = new Date(lastCheck.getTime() - 1000) // Check 1 second before last check
           
-          // Build query based on user role
-          const where: any = {
-            createdAt: { gt: checkFrom },
-          }
-          
-          // For non-admin users, only show tasks assigned to them or assigned by them
-          if (!canViewAll && userId) {
-            where.OR = [
-              { assignedToId: userId },
-              { assignedById: userId },
-            ]
+          const createdWhere: any = { createdAt: { gt: checkFrom } }
+          if (!isStaff && !canViewAll && userId) {
+            createdWhere.OR = [{ assignedToId: userId }, { assignedById: userId }]
           }
 
-          // Check for new tasks created after lastCheck
-          const newTasks = await prisma.task.findMany({
-            where,
+          const createdTasks = await prisma.task.findMany({
+            where: createdWhere,
             include: {
-              User_Task_assignedByIdToUser: {
-                select: { id: true, name: true, email: true },
-              },
-              User_Task_assignedToIdToUser: {
-                select: { id: true, name: true, email: true },
-              },
-              Client: {
-                select: { id: true, name: true },
-              },
+              User_Task_assignedByIdToUser: { select: { id: true, name: true, email: true } },
+              User_Task_assignedToIdToUser: { select: { id: true, name: true, email: true } },
+              Client: { select: { id: true, name: true } },
             },
             orderBy: { createdAt: 'asc' },
+            take: 100,
           })
 
-          // Filter tasks that should notify this user
-          const tasksToNotify = newTasks.filter((task) => {
-            // Don't notify if user created the task themselves
-            if (task.assignedById === userId) {
-              return false
+          for (const task of createdTasks) {
+            const shouldNotify =
+              task.assignedById !== userId && (task.assignedToId === userId || canViewAll)
+            if (shouldNotify && !announcedNewTasks.has(task.id)) {
+              announcedNewTasks.add(task.id)
+              sendEvent({ type: 'new_task', task: taskPayload(task) })
             }
-            
-            // Notify if:
-            // 1. Task is assigned to this user
-            // 2. User is a super admin (they see all tasks created by others)
-            if (task.assignedToId === userId) {
-              return true
-            }
-            if (canViewAll) {
-              return true
-            }
-            return false
-          })
+          }
+          if (announcedNewTasks.size > 400) announcedNewTasks.clear()
 
-          if (tasksToNotify.length > 0) {
-            for (const task of tasksToNotify) {
-              sendEvent({
-                type: 'new_task',
-                task: {
-                  id: task.id,
-                  title: task.title,
-                  description: task.description,
-                  priority: task.priority,
-                  status: task.status,
-                  assignedToId: task.assignedToId,
-                  assignedById: task.assignedById,
-                  clientId: task.clientId,
-                  dueDate: task.dueDate,
-                  createdAt: task.createdAt,
-                  assignedTo: task.User_Task_assignedToIdToUser
-                    ? {
-                        id: task.User_Task_assignedToIdToUser.id,
-                        name: task.User_Task_assignedToIdToUser.name,
-                        email: task.User_Task_assignedToIdToUser.email,
-                      }
-                    : null,
-                  assignedBy: task.User_Task_assignedByIdToUser
-                    ? {
-                        id: task.User_Task_assignedByIdToUser.id,
-                        name: task.User_Task_assignedByIdToUser.name,
-                        email: task.User_Task_assignedByIdToUser.email,
-                      }
-                    : null,
-                  client: task.Client
-                    ? {
-                        id: task.Client.id,
-                        name: task.Client.name,
-                      }
-                    : null,
-                },
-              })
+          const storedNotifications = await prisma.notification.findMany({
+            where: {
+              recipientid: userId,
+              createdat: { gt: checkFrom },
+              isarchived: false,
+            },
+            orderBy: { createdat: 'asc' },
+            take: 50,
+          })
+          for (const item of storedNotifications) {
+            if (announcedNotifications.has(item.id)) continue
+            announcedNotifications.add(item.id)
+            sendEvent({
+              type: 'notification',
+              notification: {
+                id: item.id,
+                type: item.type,
+                title: item.title,
+                message: item.message,
+                link: item.link,
+                priority: item.priority,
+                entityid: item.entityid,
+                createdat: item.createdat.toISOString(),
+                data: item.data,
+              },
+            })
+          }
+          if (announcedNotifications.size > 400) announcedNotifications.clear()
+
+          if (Date.now() - lastCountCheck > 6000) {
+            lastCountCheck = Date.now()
+            const unreadTasksCount = await prisma.task.count({
+              where: {
+                assignedToId: userId,
+                status: { in: ['Pending', 'InProgress'] },
+              },
+            })
+            if (unreadTasksCount !== lastTaskCount) {
+              sendEvent({ type: 'task_count_update', count: unreadTasksCount })
+              lastTaskCount = unreadTasksCount
             }
           }
 
-          // Check for unread task notifications count
-          // Count tasks assigned to user that are pending or in progress
-          const unreadTasksCount = await prisma.task.count({
-            where: {
-              assignedToId: userId,
-              status: { in: ['Pending', 'InProgress'] },
-            },
-          })
-
-          if (unreadTasksCount !== lastTaskCount) {
-            sendEvent({ type: 'task_count_update', count: unreadTasksCount })
-            lastTaskCount = unreadTasksCount
+          if (isStaff && Date.now() - lastClientCheck.getTime() > 6000) {
+            const clientSince = lastClientCheck
+            lastClientCheck = new Date()
+            const clientLogs = await prisma.activity_logs.findMany({
+              where: {
+                entityType: 'Client',
+                action: { in: ['CREATE', 'UPDATE'] },
+                timestamp: { gt: clientSince },
+                userId: { not: userId },
+              },
+              select: { id: true, action: true, entityId: true },
+              orderBy: { timestamp: 'asc' },
+              take: 20,
+            })
+            const unseenClientLogs = clientLogs.filter((log) => !announcedClients.has(log.id))
+            if (unseenClientLogs.length > 0) {
+              const clients = await prisma.client.findMany({
+                where: { id: { in: [...new Set(unseenClientLogs.map((log) => log.entityId))] } },
+                select: { id: true, name: true, onboardingCompletedAt: true },
+              })
+              const clientById = new Map(clients.map((client) => [client.id, client]))
+              for (const log of unseenClientLogs) {
+                announcedClients.add(log.id)
+                const client = clientById.get(log.entityId)
+                if (!client) continue
+                const onboardingFinished = Boolean(
+                  log.action === 'UPDATE' &&
+                    client.onboardingCompletedAt &&
+                    client.onboardingCompletedAt > clientSince
+                )
+                if (log.action !== 'CREATE' && !onboardingFinished) continue
+                sendEvent({
+                  type: 'client_change',
+                  client: {
+                    id: client.id,
+                    name: client.name,
+                    kind: log.action === 'CREATE' ? 'created' : 'onboarding',
+                  },
+                })
+              }
+            }
+            if (announcedClients.size > 200) announcedClients.clear()
           }
 
           // Check for status changes - use same checkFrom timestamp
@@ -247,19 +295,42 @@ export async function GET(request: NextRequest) {
             take: 10,
           })
 
-          // Check each updated task for status changes
-          for (const update of recentTaskUpdates) {
-            const task = await prisma.task.findUnique({
-              where: { id: update.entityId },
-              include: {
-                User_Task_assignedToIdToUser: {
-                  select: { id: true, name: true, email: true },
-                },
-                User_Task_assignedByIdToUser: {
-                  select: { id: true, name: true, email: true },
-                },
+          const unseenUpdates = recentTaskUpdates.filter((update) => !announcedUpdates.has(update.id))
+          const updatedTaskIds = [...new Set(unseenUpdates.map((update) => update.entityId))]
+
+          const updatedTasksWhere: any = { id: { in: updatedTaskIds } }
+          if (!canViewAll && userId) {
+            updatedTasksWhere.AND = [
+              { id: { in: updatedTaskIds } },
+              {
+                OR: [
+                  { assignedToId: userId },
+                  { assignedById: userId },
+                ],
               },
-            })
+            ]
+          }
+          const updatedTasks = updatedTaskIds.length
+            ? await prisma.task.findMany({
+                where: updatedTasksWhere,
+                include: {
+                  User_Task_assignedByIdToUser: {
+                    select: { id: true, name: true, email: true },
+                  },
+                  User_Task_assignedToIdToUser: {
+                    select: { id: true, name: true, email: true },
+                  },
+                  Client: {
+                    select: { id: true, name: true },
+                  },
+                },
+              })
+            : []
+          const taskById = new Map(updatedTasks.map((task) => [task.id, task]))
+
+          for (const update of unseenUpdates) {
+            announcedUpdates.add(update.id)
+            const task = taskById.get(update.entityId)
 
             // Check if user has access to this task
             if (task && (canViewAll || task.assignedToId === userId || task.assignedById === userId)) {
@@ -320,80 +391,52 @@ export async function GET(request: NextRequest) {
             }
           }
 
-          // Also send task_update event for any task changes
-          if (recentTaskUpdates.length > 0) {
-            const updatedTaskIds = [...new Set(recentTaskUpdates.map((u) => u.entityId))]
-            const updatedTasksWhere: any = { id: { in: updatedTaskIds } }
-            if (!canViewAll && userId) {
-              updatedTasksWhere.AND = [
-                { id: { in: updatedTaskIds } },
-                {
-                  OR: [
-                    { assignedToId: userId },
-                    { assignedById: userId },
-                  ]
-                }
-              ]
-            }
-            
-            const updatedTasks = await prisma.task.findMany({
-              where: updatedTasksWhere,
-              include: {
-                User_Task_assignedByIdToUser: {
-                  select: { id: true, name: true, email: true },
-                },
-                User_Task_assignedToIdToUser: {
-                  select: { id: true, name: true, email: true },
-                },
-                Client: {
-                  select: { id: true, name: true },
-                },
+          for (const task of updatedTasks) {
+            const updateKey = `task:${task.id}:${task.status}:${task.assignedToId || ''}`
+            if (announcedUpdates.has(updateKey)) continue
+            announcedUpdates.add(updateKey)
+            sendEvent({
+              type: 'task_update',
+              task: {
+                id: task.id,
+                title: task.title,
+                status: task.status,
+                assignedTo: task.User_Task_assignedToIdToUser,
+                assignedBy: task.User_Task_assignedByIdToUser,
+                client: task.Client,
               },
             })
-
-            for (const task of updatedTasks) {
-              sendEvent({
-                type: 'task_update',
-                task: {
-                  id: task.id,
-                  title: task.title,
-                  status: task.status,
-                  assignedTo: task.User_Task_assignedToIdToUser,
-                  assignedBy: task.User_Task_assignedByIdToUser,
-                  client: task.Client,
-                },
-              })
-            }
           }
+          if (announcedUpdates.size > 400) announcedUpdates.clear()
 
           lastCheck = now
+          consecutiveErrors = 0
         } catch (error) {
           consecutiveErrors++
           console.error(`[SSE] Error in task SSE poll (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, error)
-          
-          // If too many consecutive errors, close the connection
+
           if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
             console.error('[SSE] Too many consecutive errors, closing connection')
             cleanup()
             return
           }
-          
-          // Send error event to client (but don't close connection)
+
           if (!isClosed) {
             try {
-              sendEvent({ 
-                type: 'error', 
+              sendEvent({
+                type: 'error',
                 message: 'Error polling for tasks',
-                error: error instanceof Error ? error.message : 'Unknown error'
               })
             } catch (sendError) {
-              // If we can't send error, connection is likely dead
               console.error('[SSE] Cannot send error event, closing connection')
               cleanup()
             }
           }
+        } finally {
+          polling = false
         }
-      }, 1500) // Poll every 1.5 seconds for better real-time responsiveness
+        })()
+      }, 2000)
 
       // Handle client disconnect
       if (request.signal) {

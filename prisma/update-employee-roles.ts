@@ -5,14 +5,19 @@ import crypto from 'crypto'
 const prisma = new PrismaClient()
 
 // Employee roles mapping - full name to job title
-const employeeRoles: Array<{ name: string; jobTitle: string; email?: string }> = [
-  { name: 'Chaithanya', jobTitle: 'Graphic Designer' },
-  { name: 'Rohith', jobTitle: 'Video Editor' },
-  { name: 'Raghu', jobTitle: 'Web Developer' },
-  { name: 'Gowthami', jobTitle: 'Digital Marketing Executive' },
-  { name: 'Jagadeesh', jobTitle: 'Digital Marketing Executive' },
-  { name: 'Shaheena', jobTitle: 'Content Writer' },
-  { name: 'Shiva Prasad', jobTitle: 'Full Stack Developer' },
+const employeeRoles: Array<{
+  name: string
+  jobTitle: string
+  department: string
+  email?: string
+}> = [
+  { name: 'Chaithanya', jobTitle: 'Graphic Designer', department: 'Graphic Design' },
+  { name: 'Rohith', jobTitle: 'Video Editor', department: 'Video Editing' },
+  { name: 'Raghu', jobTitle: 'Web Developer', department: 'Website Development' },
+  { name: 'Gowthami', jobTitle: 'Digital Marketing Executive', department: 'Marketing' },
+  { name: 'Jagadeesh', jobTitle: 'Digital Marketing Executive', department: 'Marketing' },
+  { name: 'Shaheena', jobTitle: 'Content Writer', department: 'Content Writing' },
+  { name: 'Shiva Prasad', jobTitle: 'Full Stack Developer', department: 'Website Development' },
 ]
 
 function generateEmail(name: string): string {
@@ -33,7 +38,7 @@ async function main() {
 
   for (const employeeData of employeeRoles) {
     try {
-      const { name, jobTitle, email } = employeeData
+      const { name, jobTitle, department, email } = employeeData
       const employeeEmail = email || generateEmail(name)
 
       // Try to find employee by name (case-insensitive, partial match) or email
@@ -63,9 +68,9 @@ async function main() {
         // Update existing employee
         await prisma.user.update({
           where: { id: existingEmployee.id },
-          data: { jobTitle },
+          data: { jobTitle, department },
         })
-        console.log(`✓ Updated ${existingEmployee.name} → ${jobTitle}`)
+        console.log(`✓ Updated ${existingEmployee.name} → ${department} / ${jobTitle}`)
         updatedCount++
       } else {
         // Create new employee
@@ -80,11 +85,12 @@ async function main() {
             passwordHash,
             role: UserRole.EMPLOYEE,
             jobTitle,
+            department,
             isActive: true,
             joiningDate: new Date(),
           },
         })
-        console.log(`✓ Created ${newEmployee.name} → ${jobTitle}`)
+        console.log(`✓ Created ${newEmployee.name} → ${department} / ${jobTitle}`)
         console.log(`  Email: ${employeeEmail}`)
         console.log(`  Password: ${password}`)
         createdCount++

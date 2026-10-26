@@ -4,7 +4,6 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { UserRole } from '@prisma/client'
 import { getISTDayStart, getISTDateKey } from '@/lib/attendance-config'
-import { invalidateAttendanceHolidayCache } from '@/lib/attendance-holidays'
 import {
   ensureAttendanceHolidaysTable,
   findAttendanceHolidayByDateKey,
@@ -13,6 +12,7 @@ import {
   listAttendanceHolidayRows,
   seedDefaultAttendanceHolidaysIfEmpty,
   toAttendanceHolidayDateKey,
+  invalidateAttendanceHolidayCache,
 } from '@/lib/attendance-holiday-db'
 import { formatDateLocal, parseDateLocal } from '@/lib/utils'
 import { revalidatePath } from 'next/cache'

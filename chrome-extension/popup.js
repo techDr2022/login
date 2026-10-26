@@ -87,18 +87,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     sessionHint.textContent = `Session: ${token ? 'saved' : 'not saved'}`
   }
 
+  let idempotencykey = crypto.randomUUID()
+
   async function prefillFromWhatsApp() {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-      if (!tab?.id || !tab.url?.startsWith('https://web.whatsapp.com/')) return
-      const injected = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => window.getSelection()?.toString() || '',
-      })
-      const text = (injected[0]?.result || '').trim()
-      if (text) titleInput.value = text
-    } catch {
-      // ignore
+    const saved = await chrome.storage.local.get(['pendingSelection'])
+    const text = String(saved.pendingSelection || '').trim()
+    if (text) {
+      titleInput.value = text
+      idempotencykey = crypto.randomUUID()
+      await chrome.storage.local.remove(['pendingSelection'])
     }
   }
 
@@ -202,7 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       token = data.token
       user = data.user
       await chrome.storage.local.set({ extensionToken: token, extensionUser: user })
-      await chrome.storage.sync.set({ extensionToken: token, extensionUser: user })
+      await chrome.storage.sync.remove(['extensionToken', 'extensionUser'])
       if (sessionHint) sessionHint.textContent = 'Session: saved'
       await showTaskFlow()
     } catch (err) {
@@ -225,6 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       clientId: clientEl.value || undefined,
       taskType: taskTypeEl.value || undefined,
       dueDate: taskTypeEl.value ? undefined : dueDateToIso(dueDateEl.value),
+      idempotencykey,
     }
 
     try {
@@ -239,6 +237,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       })
       show(taskMsg, 'Task created successfully.', true)
       titleInput.value = ''
+      idempotencykey = crypto.randomUUID()
     } catch (err) {
       show(taskMsg, err.message || String(err), false)
     }

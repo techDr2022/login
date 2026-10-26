@@ -116,11 +116,55 @@ export async function getCurrentMonthSalaries(): Promise<EmployeeSalaryItem[]> {
   await ensureEmployeeSalaryTable()
 
   const monthKey = getCurrentMonthKey()
-  const salaries = await prisma.employeeSalary.findMany({
-    where: { monthKey },
+  const employees = await prisma.user.findMany({
+    where: { role: UserRole.EMPLOYEE, isActive: true },
+    select: { id: true },
+  })
+  const employeeIds = employees.map((employee) => employee.id)
+  if (employeeIds.length === 0) return []
+
+  const current = await prisma.employeeSalary.findMany({
+    where: { monthKey, userId: { in: employeeIds } },
     orderBy: { createdAt: 'asc' },
   })
-  return salaries
+
+  const savedUserIds = new Set(current.map((salary) => salary.userId))
+  const missingUserIds = employeeIds.filter((id) => !savedUserIds.has(id))
+  if (missingUserIds.length === 0) return current
+
+  const previous = await prisma.employeeSalary.findMany({
+    where: {
+      userId: { in: missingUserIds },
+      isActive: true,
+      monthKey: { lt: monthKey },
+    },
+    orderBy: { monthKey: 'desc' },
+    select: { userId: true, amount: true },
+  })
+
+  const latestAmountByUser = new Map<string, number>()
+  for (const salary of previous) {
+    if (!latestAmountByUser.has(salary.userId)) {
+      latestAmountByUser.set(salary.userId, salary.amount)
+    }
+  }
+
+  if (latestAmountByUser.size > 0) {
+    await prisma.employeeSalary.createMany({
+      data: [...latestAmountByUser.entries()].map(([userId, amount]) => ({
+        userId,
+        monthKey,
+        amount,
+        isActive: true,
+      })),
+      skipDuplicates: true,
+    })
+  }
+
+  return prisma.employeeSalary.findMany({
+    where: { monthKey, userId: { in: employeeIds } },
+    orderBy: { createdAt: 'asc' },
+  })
 }
 
 export async function upsertCurrentMonthEmployeeSalary(userId: string, amount: number): Promise<EmployeeSalaryItem> {

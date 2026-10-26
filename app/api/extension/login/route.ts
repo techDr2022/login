@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       where: { email },
       select: { id: true, name: true, email: true, role: true, isActive: true, passwordHash: true },
     })
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || user.role === 'CLIENT') {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 

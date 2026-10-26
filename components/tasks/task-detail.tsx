@@ -21,16 +21,19 @@ import {
   Timer,
   MessageSquare,
   PlayCircle,
-  CheckCircle
+  CheckCircle,
+  Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { updateTaskStatus } from '@/app/actions/task-actions'
+import { deleteTask, updateTaskStatus } from '@/app/actions/task-actions'
 import { useSession } from 'next-auth/react'
-import { canApproveTasks } from '@/lib/rbac'
+import { canApproveTasks, canManageTasks } from '@/lib/rbac'
+import { EngineStatusButtons } from '@/components/engine/status-buttons'
+import { STATUS_LABEL, actionsFor, type Actor } from '@/lib/engine/rules'
 import { UserRole } from '@prisma/client'
 
 interface TaskDetailProps {
@@ -50,9 +53,17 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
   const [error, setError] = useState('')
   const [isUpdating, setIsUpdating] = useState(false)
   const [isQuickUpdating, setIsQuickUpdating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const canApprove = session?.user.role && canApproveTasks(session.user.role as UserRole)
+  const canManage = session?.user.role && canManageTasks(session.user.role as UserRole)
   const isAssignedToMe = task && task.assignedToId === session?.user.id
+  const canDelete =
+    !!task &&
+    !!session?.user?.id &&
+    (canManage || task.assignedById === session.user.id)
+  const actor: Actor =
+    session?.user.role === 'SUPER_ADMIN' ? 'admin' : session?.user.role === 'COORDINATOR' ? 'coordinator' : 'assignee'
 
   useEffect(() => {
     if (taskId) {
@@ -264,7 +275,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                 className={`${getStatusColor()} flex items-center gap-1.5 px-3 py-1`}
               >
                 {getStatusIcon()}
-                {task.status}
+                {STATUS_LABEL[task.status] || task.status}
               </Badge>
             </div>
             {task.description && (
@@ -273,8 +284,14 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
           </div>
           
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Employee quick status updates */}
-            {isAssignedToMe && !canApprove && (
+            {task.templateid && (
+              <EngineStatusButtons
+                taskId={task.id}
+                status={task.status}
+                actions={actionsFor(task.status, actor, !!task.istimelock)}
+              />
+            )}
+            {isAssignedToMe && !canApprove && !task.templateid && (
               <>
                 {task.status === 'Pending' && (
                   <Button 
@@ -314,8 +331,31 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                 )}
               </>
             )}
+            {canDelete && (
+              <Button
+                variant="outline"
+                disabled={isDeleting}
+                onClick={async () => {
+                  if (!confirm('Are you sure you want to delete this task?')) return
+                  setIsDeleting(true)
+                  setError('')
+                  try {
+                    await deleteTask(taskId)
+                    router.push('/tasks')
+                    router.refresh()
+                  } catch (err: any) {
+                    setError(err.message || 'Failed to delete task')
+                    setIsDeleting(false)
+                  }
+                }}
+                className="rounded-xl text-destructive hover:text-destructive"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            )}
             {/* Admin full status update */}
-            {canApprove && (
+            {canApprove && !task.templateid && (
               <Button 
                 onClick={() => {
                   setStatusFormData({
@@ -373,6 +413,37 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                   <div className="p-4 bg-muted/30 rounded-lg border">
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{task.description}</p>
                   </div>
+                </div>
+              )}
+              {task.donewhen && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">Done when</p>
+                  <p className="text-sm">{task.donewhen}</p>
+                </div>
+              )}
+              {Array.isArray(task.dependencies) && task.dependencies.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">Dependencies</p>
+                  {task.dependencies.map((dep: { templateid: string; dependsonid: string; kind: string; mode: string; template?: { title: string }; dependson?: { title: string } }) => (
+                    <p key={`${dep.kind}-${dep.templateid}-${dep.dependsonid}`} className="text-sm">
+                      {dep.templateid === task.templateid
+                        ? `Waits on ${dep.dependson?.title || dep.dependsonid}`
+                        : `Unlocks ${dep.template?.title || dep.templateid}`}
+                      {` (${dep.kind}, ${dep.mode})`}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {Array.isArray(task.history) && task.history.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">History</p>
+                  {task.history.map((row: { id: string; timestamp: string; action: string; oldvalue?: string | null; newvalue?: string | null; User?: { name: string } }) => (
+                    <p key={row.id} className="text-sm">
+                      {new Date(row.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                      {' · '}{row.User?.name || 'Someone'}
+                      {' · '}{row.oldvalue || row.action}{row.newvalue ? ` → ${row.newvalue}` : ''}
+                    </p>
+                  ))}
                 </div>
               )}
 
