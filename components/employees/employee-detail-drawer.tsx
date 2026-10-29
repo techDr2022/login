@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { updateTaskStatus } from '@/app/actions/task-actions'
 import { useSession } from 'next-auth/react'
-import { canManageTasks, canApproveTasks } from '@/lib/rbac'
+import { canManageTasks } from '@/lib/rbac'
 import { UserRole } from '@prisma/client'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
@@ -125,7 +125,6 @@ export function EmployeeDetailDrawer({
   const [error, setError] = useState('')
 
   const canManage = session?.user.role && canManageTasks(session.user.role as UserRole)
-  const canApprove = session?.user.role && canApproveTasks(session.user.role as UserRole)
 
   useEffect(() => {
     if (employee && open) {
@@ -635,13 +634,7 @@ export function EmployeeDetailDrawer({
                     <SelectContent>
                       <SelectItem value="Pending">Pending</SelectItem>
                       <SelectItem value="InProgress">In Progress</SelectItem>
-                      <SelectItem value="Review">Review</SelectItem>
-                      {canApprove && (
-                        <>
-                          <SelectItem value="Approved">Approved</SelectItem>
-                          <SelectItem value="Rejected">Rejected</SelectItem>
-                        </>
-                      )}
+                      <SelectItem value="Approved">Done</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

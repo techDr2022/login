@@ -199,6 +199,7 @@ export function EmployeesManagementPage() {
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
                 <SelectItem value="MANAGER">Manager</SelectItem>
+                <SelectItem value="COORDINATOR">Coordinator</SelectItem>
                 <SelectItem value="EMPLOYEE">Employee</SelectItem>
               </SelectContent>
             </Select>

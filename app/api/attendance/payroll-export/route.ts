@@ -21,6 +21,7 @@ import {
   getMonthKeysBetween,
 } from '@/lib/payroll-paid-leave'
 import ExcelJS from 'exceljs'
+import { CLOCK_IN_ROLES } from '@/lib/rbac'
 
 function getWorkingDaysInMonth(monthKey: string, holidayDates: ReadonlySet<string>): number {
   const [yearStr, monthStr] = monthKey.split('-')
@@ -149,7 +150,7 @@ export async function GET(request: NextRequest) {
     // Get all employees to include absent records
     const allEmployees = await prisma.user.findMany({
       where: {
-        role: UserRole.EMPLOYEE,
+        role: { in: CLOCK_IN_ROLES },
         isActive: true,
         ...(userId && { id: userId }),
       },

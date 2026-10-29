@@ -5,6 +5,7 @@ import { UserRole } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isInvoicesUnlockedForUser } from '@/lib/invoices-unlock'
+import { CLOCK_IN_ROLES } from '@/lib/rbac'
 
 export interface ActiveEmployee {
   id: string
@@ -98,7 +99,7 @@ export async function getActiveEmployees(): Promise<ActiveEmployee[]> {
   await requireSuperAdminOnly()
   const users = await prisma.user.findMany({
     where: {
-      role: UserRole.EMPLOYEE,
+      role: { in: CLOCK_IN_ROLES },
       isActive: true,
     },
     select: {
@@ -117,7 +118,7 @@ export async function getCurrentMonthSalaries(): Promise<EmployeeSalaryItem[]> {
 
   const monthKey = getCurrentMonthKey()
   const employees = await prisma.user.findMany({
-    where: { role: UserRole.EMPLOYEE, isActive: true },
+    where: { role: { in: CLOCK_IN_ROLES }, isActive: true },
     select: { id: true },
   })
   const employeeIds = employees.map((employee) => employee.id)

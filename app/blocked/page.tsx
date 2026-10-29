@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { LayoutWrapper } from '@/components/layout-wrapper'
 import { EngineTaskCards } from '@/components/engine/engine-task-cards'
 import { imWaitingOn } from '@/lib/engine/query'
-import type { Actor } from '@/lib/engine/rules'
+import { engineActor } from '@/lib/engine/rules'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +12,7 @@ export default async function BlockedPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) redirect('/login')
   const tasks = await imWaitingOn(session.user.id)
-  const actor: Actor = session.user.role === 'SUPER_ADMIN' ? 'admin' : session.user.role === 'COORDINATOR' ? 'coordinator' : 'assignee'
+  const actor = engineActor(session.user.role, true) || 'assignee'
 
   return (
     <LayoutWrapper>

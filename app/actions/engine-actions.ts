@@ -7,7 +7,7 @@ import { TaskStatus } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logActivity } from '@/lib/activity-log'
-import { canTransition, type Actor } from '@/lib/engine/rules'
+import { canTransition, engineActor } from '@/lib/engine/rules'
 import { engineEnabled, runScheduler, unlockDependents } from '@/lib/engine/run'
 
 async function requireAdmin() {
@@ -65,8 +65,7 @@ export async function updateEngineStatus(
     select: { id: true },
   })
   const isAssignee = task.assignedToId === session.user.id || (!task.assignedToId && !!onTemplate)
-  const actor: Actor | null =
-    role === 'SUPER_ADMIN' ? 'admin' : role === 'COORDINATOR' ? 'coordinator' : isAssignee ? 'assignee' : null
+  const actor = engineActor(role, isAssignee)
   if (!actor || !canTransition(task.status, to, actor, !!task.worktemplate?.istimelock)) {
     throw new Error('That status change is not allowed')
   }
@@ -97,7 +96,7 @@ export async function updateEngineStatus(
       startedat: to === 'InProgress' ? task.startedat ?? new Date() : undefined,
       assignedToId: to === 'InProgress' && !task.assignedToId ? session.user.id : undefined,
       completedat: to === 'Done' ? new Date() : to === 'ToDo' ? null : undefined,
-      approvedbyid: to === 'Done' && (role === 'SUPER_ADMIN' || role === 'COORDINATOR') ? session.user.id : undefined,
+      approvedbyid: to === 'Done' && role === 'COORDINATOR' ? session.user.id : undefined,
       revisioncount: task.status === 'InReview' && to === 'ToDo' ? { increment: 1 } : undefined,
       waitingonuserid,
       noinputflag: to === 'ToDo' ? false : undefined,

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { UserRole } from '@prisma/client'
+import { CLOCK_IN_ROLES } from '@/lib/rbac'
 import { sendWhatsAppNotification, formatAttendanceReminderMessage, getAttendanceReminderTemplateVariables } from '@/lib/whatsapp'
 import { formatDateLocal } from '@/lib/utils'
 import { isCronRequestAuthorized } from '@/lib/cron-auth'
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     // Get all active employees
     const employees = await prisma.user.findMany({
       where: {
-        role: UserRole.EMPLOYEE,
+        role: { in: CLOCK_IN_ROLES },
         isActive: true,
         phoneNumber: { not: null }, // Only employees with phone numbers
       },

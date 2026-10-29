@@ -10,6 +10,7 @@ import { parseDateLocal, formatDateLocal } from '@/lib/utils'
 import { parseAttendanceDateKey, getISTDateKey } from '@/lib/attendance-config'
 import { isAttendancePublicHoliday } from '@/lib/attendance-holidays'
 import { getAttendanceHolidayDateKeys } from '@/lib/attendance-holiday-db'
+import { CLOCK_IN_ROLES } from '@/lib/rbac'
 
 export async function GET(request: NextRequest) {
   try {
@@ -193,7 +194,7 @@ export async function GET(request: NextRequest) {
           // 2. Generate absent records for employees (not super admins)
           const allEmployees = await prisma.user.findMany({
             where: {
-              role: UserRole.EMPLOYEE,
+              role: { in: CLOCK_IN_ROLES },
               isActive: true,
               ...(userId && { id: userId }),
             },

@@ -21,6 +21,7 @@ import {
   type AttendanceHolidayItem,
 } from '@/app/actions/attendance-holiday-actions'
 import { AttendanceMode } from '@prisma/client'
+import { CLOCK_IN_ROLES } from '@/lib/rbac'
 import { 
   Users, 
   TrendingUp, 
@@ -143,6 +144,19 @@ export function SuperAdminAttendancePanel() {
 
   const [employees, setEmployees] = useState<Array<{ id: string; name: string }>>([])
 
+  const loadClockInStaff = useCallback(async () => {
+    const responses = await Promise.all(
+      CLOCK_IN_ROLES.map((role) => fetch(`/api/users?role=${role}`).then((res) => res.json()))
+    )
+    const byId = new Map<string, { id: string; name: string }>()
+    for (const data of responses) {
+      for (const user of data.users || []) {
+        byId.set(user.id, { id: user.id, name: user.name })
+      }
+    }
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [])
+
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<AttendanceLog | null>(null)
   const [editCreateUserId, setEditCreateUserId] = useState('')
@@ -174,10 +188,8 @@ export function SuperAdminAttendancePanel() {
       const res = await fetch(`/api/attendance?startDate=${today}&endDate=${today}&limit=1000`)
       const data = await res.json()
       
-      // Fetch all employees
-      const employeesRes = await fetch('/api/users?role=EMPLOYEE')
-      const employeesData = await employeesRes.json()
-      const totalEmployees = employeesData.users?.length || 0
+      const clockInStaff = await loadClockInStaff()
+      const totalEmployees = clockInStaff.length
       
       const attendances = data.attendances || []
       const presentCount = attendances.filter((a: any) => a.status === 'Present').length
@@ -195,7 +207,7 @@ export function SuperAdminAttendancePanel() {
     } catch (err) {
       console.error('Failed to fetch global stats:', err)
     }
-  }, [])
+  }, [loadClockInStaff])
 
   // Fetch attendance logs
   const fetchAttendanceLogs = useCallback(async () => {
@@ -265,13 +277,11 @@ export function SuperAdminAttendancePanel() {
   // Fetch employees
   const fetchUsers = useCallback(async () => {
     try {
-      const employeesRes = await fetch('/api/users?role=EMPLOYEE')
-      const employeesData = await employeesRes.json()
-      setEmployees(employeesData.users || [])
+      setEmployees(await loadClockInStaff())
     } catch (err) {
       console.error('Failed to fetch users:', err)
     }
-  }, [])
+  }, [loadClockInStaff])
 
   const fetchHolidays = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) {

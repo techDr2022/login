@@ -1,5 +1,6 @@
 import { prisma } from './prisma'
 import { AttendanceStatus, AttendanceMode } from '@prisma/client'
+import { CLOCK_IN_ROLES } from '@/lib/rbac'
 
 export async function getSuperAdminDashboardData(userId?: string) {
   const today = new Date()
@@ -28,7 +29,6 @@ export async function getSuperAdminDashboardData(userId?: string) {
     loggedInToday,
     tasksCompletedToday,
     lateLogins,
-    pendingApprovals,
     totalClients,
     recentTasks,
     todaysTasks,
@@ -44,7 +44,7 @@ export async function getSuperAdminDashboardData(userId?: string) {
           lt: istTomorrowStart,
         },
         User: {
-          role: 'EMPLOYEE',
+          role: { in: CLOCK_IN_ROLES },
           isActive: true,
         },
       },
@@ -69,13 +69,6 @@ export async function getSuperAdminDashboardData(userId?: string) {
         },
         status: AttendanceStatus.Late,
         mode: AttendanceMode.OFFICE,
-      },
-    }),
-
-    // Pending approvals
-    prisma.task.count({
-      where: {
-        status: 'Review',
       },
     }),
 
@@ -205,7 +198,6 @@ export async function getSuperAdminDashboardData(userId?: string) {
     loggedInToday,
     tasksCompletedToday,
     lateLogins,
-    pendingApprovals,
     totalClients,
     recentTasks,
     todaysTasks,

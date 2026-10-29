@@ -383,6 +383,7 @@ export function AddEmployeeDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="EMPLOYEE">Employee</SelectItem>
+                  <SelectItem value="COORDINATOR">Coordinator</SelectItem>
                   <SelectItem value="MANAGER">Manager</SelectItem>
                 </SelectContent>
               </Select>

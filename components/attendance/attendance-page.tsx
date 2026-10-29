@@ -2,6 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { UserRole } from '@prisma/client'
+import { canClockInOut } from '@/lib/rbac'
 import { SuperAdminAttendancePanel } from './super-admin-attendance-panel'
 import { EmployeeAttendancePanel } from './employee-attendance-panel'
 
@@ -14,8 +15,8 @@ export function AttendancePage() {
     return <SuperAdminAttendancePanel />
   }
 
-  // Show employee panel for employees
-  if (role === UserRole.EMPLOYEE) {
+  // Employees and coordinators clock in and out on the same panel
+  if (canClockInOut(role)) {
     return <EmployeeAttendancePanel />
   }
 

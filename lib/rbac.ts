@@ -44,8 +44,10 @@ export function canViewAllTasks(userRole: UserRole): boolean {
   return userRole === UserRole.SUPER_ADMIN || userRole === UserRole.COORDINATOR
 }
 
+export const CLOCK_IN_ROLES: UserRole[] = [UserRole.EMPLOYEE, UserRole.COORDINATOR]
+
 export function canClockInOut(userRole: UserRole): boolean {
-  return userRole === UserRole.EMPLOYEE
+  return CLOCK_IN_ROLES.includes(userRole)
 }
 
 export function canAccessDesignerWorkspace(userRole: UserRole): boolean {

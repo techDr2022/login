@@ -13,6 +13,7 @@ import {
   countWorkingDaysInRange,
   getTodayISTDateKey,
 } from '@/lib/payroll-calculations'
+import { CLOCK_IN_ROLES } from '@/lib/rbac'
 
 function buildDateRange(searchParams: URLSearchParams): { start: Date; end: Date; startKey: string; endKey: string } {
   const now = new Date()
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     const employees = await prisma.user.findMany({
       where: {
-        role: UserRole.EMPLOYEE,
+        role: { in: CLOCK_IN_ROLES },
         isActive: true,
         ...(userId && { id: userId }),
       },

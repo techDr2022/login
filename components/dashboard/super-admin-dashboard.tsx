@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getSuperAdminDashboardData } from '@/lib/dashboard-queries'
-import { Users, CheckSquare2, Clock, AlertCircle, Briefcase, Calendar, TrendingUp, UserPlus, ClipboardList } from 'lucide-react'
+import { Users, CheckSquare2, Clock, Briefcase, Calendar, TrendingUp, UserPlus, ClipboardList } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { TaskStatusTimeline } from './task-status-timeline'
@@ -51,7 +51,7 @@ export async function SuperAdminDashboard() {
       <WelcomeBanner
         kicker={`${timeGreeting()} · ${todayLabel}`}
         title="Here's how the team is doing"
-        subtitle="Who is in today, what is due, and which reviews are still waiting."
+        subtitle="Who is in today and what is due."
       >
         <QuickLink href="/tasks" icon={ClipboardList}>
           Tasks
@@ -67,11 +67,10 @@ export async function SuperAdminDashboard() {
         </QuickLink>
       </WelcomeBanner>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Logged in today" value={data.loggedInToday} hint="People already in" icon={Users} tone="emerald" />
-        <StatCard label="Completed today" value={data.tasksCompletedToday} hint="Tasks approved" icon={TrendingUp} tone="sky" />
+        <StatCard label="Completed today" value={data.tasksCompletedToday} hint="Finished today" icon={TrendingUp} tone="sky" />
         <StatCard label="Late logins" value={data.lateLogins} hint="Office arrivals" icon={Clock} tone="amber" />
-        <StatCard label="Needs review" value={data.pendingApprovals} hint="Waiting on you" icon={AlertCircle} tone="orange" />
         <StatCard label="Clients" value={data.totalClients} hint="Active accounts" icon={Briefcase} tone="violet" />
       </div>
 

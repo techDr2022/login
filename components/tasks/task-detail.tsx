@@ -33,7 +33,7 @@ import { deleteTask, updateTaskStatus } from '@/app/actions/task-actions'
 import { useSession } from 'next-auth/react'
 import { canApproveTasks, canManageTasks } from '@/lib/rbac'
 import { EngineStatusButtons } from '@/components/engine/status-buttons'
-import { STATUS_LABEL, actionsFor, type Actor } from '@/lib/engine/rules'
+import { STATUS_LABEL, actionsFor, engineActor, type Actor } from '@/lib/engine/rules'
 import { UserRole } from '@prisma/client'
 
 interface TaskDetailProps {
@@ -62,8 +62,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
     !!task &&
     !!session?.user?.id &&
     (canManage || task.assignedById === session.user.id)
-  const actor: Actor =
-    session?.user.role === 'SUPER_ADMIN' ? 'admin' : session?.user.role === 'COORDINATOR' ? 'coordinator' : 'assignee'
+  const actor: Actor = engineActor(session?.user.role || '', !!isAssignedToMe) || 'assignee'
 
   useEffect(() => {
     if (taskId) {
@@ -291,7 +290,7 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                 actions={actionsFor(task.status, actor, !!task.istimelock)}
               />
             )}
-            {isAssignedToMe && !canApprove && !task.templateid && (
+            {isAssignedToMe && !task.templateid && (
               <>
                 {task.status === 'Pending' && (
                   <Button 
@@ -638,17 +637,8 @@ export function TaskDetail({ taskId }: TaskDetailProps) {
                   <SelectContent>
                     <SelectItem value="Pending">Pending</SelectItem>
                     <SelectItem value="InProgress">In Progress</SelectItem>
-                    {canApprove && (
-                      <>
-                        <SelectItem value="Review">Review</SelectItem>
-                        <SelectItem value="Approved">Approved</SelectItem>
-                        <SelectItem value="Rejected">Rejected</SelectItem>
-                      </>
-                    )}
-                    {isAssignedToMe && !canApprove && (
-                      <>
-                        <SelectItem value="Approved">Approved (Completed)</SelectItem>
-                      </>
+                    {(canApprove || isAssignedToMe) && (
+                      <SelectItem value="Approved">Done</SelectItem>
                     )}
                   </SelectContent>
                 </Select>

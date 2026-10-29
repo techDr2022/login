@@ -911,17 +911,8 @@ export function TasksList() {
                   <SelectContent>
                     <SelectItem value="Pending">Pending</SelectItem>
                     <SelectItem value="InProgress">In Progress</SelectItem>
-                    {canManage && (
-                      <>
-                        <SelectItem value="Review">Review</SelectItem>
-                        <SelectItem value="Approved">Approved</SelectItem>
-                        <SelectItem value="Rejected">Rejected</SelectItem>
-                      </>
-                    )}
-                    {!canManage && updatingStatusTask?.assignedToId === session?.user?.id && (
-                      <>
-                        <SelectItem value="Approved">Approved (Completed)</SelectItem>
-                      </>
+                    {(canManage || updatingStatusTask?.assignedToId === session?.user?.id) && (
+                      <SelectItem value="Approved">Done</SelectItem>
                     )}
                   </SelectContent>
                 </Select>

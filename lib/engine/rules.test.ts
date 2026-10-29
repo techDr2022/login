@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   addWorkingDays,
+  canTransition,
   datesToCheck,
   dueClock,
+  engineActor,
   engineKey,
   escalationTarget,
   initialStatus,
@@ -216,5 +218,15 @@ describe('escalation', () => {
     const due = Date.parse('2026-10-26T10:00:00+05:30')
     const later = Date.parse('2026-10-28T16:00:00+05:30')
     assert.equal(escalationTarget({ dueAtMs: due, nowMs: later, priority: 'High', istimelock: true, status: 'ToDo', holidays }), 'none')
+  })
+})
+
+describe('task completion', () => {
+  it('lets the assignee finish a review without an admin', () => {
+    assert.equal(canTransition('InReview', 'Done', 'assignee'), true)
+    assert.equal(canTransition('InReview', 'Done', 'coordinator'), true)
+    assert.equal(canTransition('InReview', 'Done', 'admin'), false)
+    assert.equal(engineActor('SUPER_ADMIN', true), 'assignee')
+    assert.equal(engineActor('SUPER_ADMIN', false), 'admin')
   })
 })

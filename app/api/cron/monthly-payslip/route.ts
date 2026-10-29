@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { buildPayslipData, generatePayslipPDF } from '@/lib/payslip'
 import { sendMail } from '@/lib/mailer'
 import { isCronRequestAuthorized } from '@/lib/cron-auth'
+import { CLOCK_IN_ROLES } from '@/lib/rbac'
 
 /** Calendar month immediately before the given instant, in Asia/Kolkata (YYYY-MM). */
 function getPreviousMonthKeyInIST(date = new Date()): string {
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
 
     let employees = await prisma.user.findMany({
       where: {
-        role: UserRole.EMPLOYEE,
+        role: { in: CLOCK_IN_ROLES },
         isActive: true,
         OR: [{ payslipEmail: { not: null } }, { email: { not: '' } }],
       },

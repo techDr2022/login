@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logActivity } from '@/lib/activity-log'
-import { canClockInOut } from '@/lib/rbac'
+import { canClockInOut, CLOCK_IN_ROLES } from '@/lib/rbac'
 import { UserRole, AttendanceStatus, AttendanceMode } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { 
@@ -153,7 +153,7 @@ export async function clockIn(mode: AttendanceMode | string = AttendanceMode.OFF
   }
 
   if (!canClockInOut(session.user.role as UserRole)) {
-    throw new Error('Only employees can clock in/out')
+    throw new Error('Clock in and clock out are for employees and coordinators')
   }
 
   // Verify user exists in database and get name
@@ -539,7 +539,7 @@ export async function clockOut() {
   }
 
   if (!canClockInOut(session.user.role as UserRole)) {
-    throw new Error('Only employees can clock in/out')
+    throw new Error('Clock in and clock out are for employees and coordinators')
   }
 
   // Verify user exists in database and get name
@@ -820,7 +820,7 @@ export async function startLunchBreak() {
   }
 
   if (!canClockInOut(session.user.role as UserRole)) {
-    throw new Error('Only employees can manage lunch breaks')
+    throw new Error('Lunch breaks are for employees and coordinators')
   }
 
   const now = new Date()
@@ -859,7 +859,7 @@ export async function endLunchBreak() {
   }
 
   if (!canClockInOut(session.user.role as UserRole)) {
-    throw new Error('Only employees can manage lunch breaks')
+    throw new Error('Lunch breaks are for employees and coordinators')
   }
 
   const now = new Date()
@@ -910,7 +910,7 @@ export async function markAllAttendanceForDay(date: Date, mode: AttendanceMode =
   // Get all active employees
   const employees = await prisma.user.findMany({
     where: {
-      role: UserRole.EMPLOYEE,
+      role: { in: CLOCK_IN_ROLES },
       isActive: true,
     },
     select: {

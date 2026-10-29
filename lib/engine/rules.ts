@@ -6,6 +6,13 @@ export type RepeatKind = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'manual'
 export type DepMode = 'all' | 'any'
 export type Actor = 'assignee' | 'coordinator' | 'admin' | 'system'
 
+export function engineActor(role: string, isAssignee: boolean): Actor | null {
+  if (role === 'COORDINATOR') return 'coordinator'
+  if (role === 'SUPER_ADMIN') return isAssignee ? 'assignee' : 'admin'
+  if (isAssignee) return 'assignee'
+  return null
+}
+
 export type DepLink = {
   dependsonid: string
   kind: string
@@ -399,8 +406,8 @@ export function canTransition(from: string, to: string, actor: Actor, istimelock
     ],
     WaitingOnInput: [{ to: 'ToDo', actors: ['system', 'coordinator', 'admin'] }],
     InReview: [
-      { to: 'Done', actors: ['coordinator', 'admin'] },
-      { to: 'ToDo', actors: ['coordinator', 'admin'] },
+      { to: 'Done', actors: ['assignee', 'coordinator'] },
+      { to: 'ToDo', actors: ['assignee', 'coordinator'] },
     ],
     Done: [{ to: 'ToDo', actors: ['admin'] }],
   }
