@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyExtensionToken } from '@/lib/extension-auth'
-import { UserRole } from '@prisma/client'
+import { EXTENSION_STAFF_ROLES } from '@/lib/rbac'
 
 function readToken(request: NextRequest): string {
   const auth = request.headers.get('authorization') || ''
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       prisma.user.findMany({
         where: {
           isActive: true,
-          role: { in: [UserRole.EMPLOYEE, UserRole.MANAGER, UserRole.SUPER_ADMIN] },
+          role: { in: EXTENSION_STAFF_ROLES },
         },
         select: { id: true, name: true, email: true, role: true },
         orderBy: { name: 'asc' },

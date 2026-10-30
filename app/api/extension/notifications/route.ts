@@ -1,15 +1,11 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { verifyExtensionToken } from '@/lib/extension-auth'
+import { EXTENSION_STAFF_ROLES } from '@/lib/rbac'
 
-const STAFF_ROLES = new Set<string>([
-  UserRole.EMPLOYEE,
-  UserRole.MANAGER,
-  UserRole.SUPER_ADMIN,
-])
+const STAFF_ROLES = new Set<string>(EXTENSION_STAFF_ROLES)
 const MAX_LOOKBACK_MS = 10 * 60 * 1000
 
 function readToken(request: NextRequest): string {

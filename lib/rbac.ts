@@ -46,6 +46,14 @@ export function canViewAllTasks(userRole: UserRole): boolean {
 
 export const CLOCK_IN_ROLES: UserRole[] = [UserRole.EMPLOYEE, UserRole.COORDINATOR]
 
+/** Staff who can sign in to the extension and create or receive tasks. */
+export const EXTENSION_STAFF_ROLES: UserRole[] = [
+  UserRole.SUPER_ADMIN,
+  UserRole.MANAGER,
+  UserRole.EMPLOYEE,
+  UserRole.COORDINATOR,
+]
+
 export function canClockInOut(userRole: UserRole): boolean {
   return CLOCK_IN_ROLES.includes(userRole)
 }

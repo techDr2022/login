@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { verifyExtensionToken } from '@/lib/extension-auth'
+import { EXTENSION_STAFF_ROLES } from '@/lib/rbac'
 import { createTaskSchema } from '@/lib/validations'
 import { logActivity } from '@/lib/activity-log'
 import { notifyTaskAssignment } from '@/lib/notification-service'
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       where: { id: auth.uid },
       select: { id: true, isActive: true, role: true, name: true },
     })
-    if (!actor?.isActive || !['EMPLOYEE', 'MANAGER', 'SUPER_ADMIN'].includes(actor.role)) {
+    if (!actor?.isActive || !EXTENSION_STAFF_ROLES.includes(actor.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     actorId = actor.id
